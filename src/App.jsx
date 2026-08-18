@@ -1767,15 +1767,51 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(getUsername() || null);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  const handleLoginSuccess = (username) => {
+  const handleLoginSuccess = async (username) => {
     setCurrentUser(username);
     setShowAuthModal(false);
-    loadDataFromServer();
+    
+    // Migration logic
+    try {
+      const localLiked = localStorage.getItem("amyMusicLiked");
+      const localDislikedIds = localStorage.getItem("amyMusicDislikedIds");
+      const localHistory = localStorage.getItem("amyMusicHistory");
+      
+      let needsSync = false;
+      
+      if (localLiked || localDislikedIds || localHistory) {
+        if (localLiked) {
+          await syncCollections({ likedTracks: JSON.parse(localLiked) });
+          localStorage.removeItem("amyMusicLiked");
+          needsSync = true;
+        }
+        
+        let waveData = {};
+        if (localDislikedIds) waveData.dislikedTrackIds = JSON.parse(localDislikedIds);
+        if (localHistory) waveData.playHistory = JSON.parse(localHistory);
+        
+        if (Object.keys(waveData).length > 0) {
+          await syncWave(waveData);
+          localStorage.removeItem("amyMusicDislikedIds");
+          localStorage.removeItem("amyMusicHistory");
+          localStorage.removeItem("amyMusicDisliked");
+          needsSync = true;
+        }
+      }
+      
+      await loadDataFromServer();
+    } catch (err) {
+      console.error("Migration failed:", err);
+    }
   };
 
   const handleLogout = () => {
     removeAuthToken();
     setCurrentUser(null);
+    localStorage.removeItem("amyMusicLiked");
+    localStorage.removeItem("amyMusicDislikedIds");
+    localStorage.removeItem("amyMusicHistory");
+    localStorage.removeItem("amyMusicDisliked");
   };
 
   const loadDataFromServer = async () => {
@@ -1844,10 +1880,28 @@ export default function App() {
     setActiveTab(previousTab || "wave");
   };
 
+  const renderAuthRequired = (title, message) => (
+    <div className="flex h-full flex-col items-center justify-center rounded-[17.76px] border border-white/[0.04] bg-[#121212] p-10 text-center shadow-2xl">
+      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#8341EF]/20 to-transparent border border-[#8341EF]/30 shadow-[0_0_50px_rgba(131,65,239,0.2)]">
+        <img src="/logo.png" alt="" className="h-12 w-12 object-cover opacity-50 grayscale" />
+      </div>
+      <h2 className="text-2xl font-black text-white mb-3">{title}</h2>
+      <p className="text-sm font-semibold text-white/40 max-w-sm mb-8">{message}</p>
+      <button
+        onClick={() => setShowAuthModal(true)}
+        className="rounded-full bg-[#8341EF] px-8 py-3.5 text-sm font-bold text-white shadow-[0_0_20px_rgba(131,65,239,0.3)] transition-all hover:scale-105 hover:shadow-[0_0_30px_rgba(131,65,239,0.5)]"
+      >
+        Войти в аккаунт
+      </button>
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
-      case "wave": return <WaveView requestId={waveRequestId} onOpenFull={() => setIsFullOpen(true)} />;
-      case "collection": return <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
+      case "wave": 
+        return currentUser ? <WaveView requestId={waveRequestId} onOpenFull={() => setIsFullOpen(true)} /> : renderAuthRequired("Моя волна недоступна", "Авторизуйтесь, чтобы слушать вашу персональную музыкальную волну и сохранять историю.");
+      case "collection": 
+        return currentUser ? <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} /> : renderAuthRequired("Коллекция недоступна", "Войдите в свой аккаунт, чтобы сохранять любимые треки в облако и слушать их на любом устройстве.");
       case "trends": return <TrendsPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
       case "artist":
         return activeArtist ? (
