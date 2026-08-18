@@ -7,6 +7,8 @@ import { ArtistView, AlbumView } from "./components/ArtistView";
 import { FullPlayerOverlay } from "./components/FullPlayerOverlay";
 import { AudioProvider, useAudioPlayer } from "./audio/AudioPlayerContext";
 import { TrackMenuButton } from "./components/TrackContextMenu";
+import AuthModal from "./components/AuthModal";
+import { getUsername, removeAuthToken, getCollections, syncCollections, getWave, syncWave } from "./api";
 import {
   buildArtistsFromTracks,
   getAlbumDetails,
@@ -338,7 +340,7 @@ function formatDuration(seconds) {
   return `${mins}:${secs}`;
 }
 
-function Sidebar({ activeTab, setActiveTab }) {
+function Sidebar({ activeTab, setActiveTab, currentUser, onLoginClick, onLogout }) {
   const { playHistory, totalListenedSeconds } = useAudioPlayer();
   const [settings, setSettings] = useState(() => getProfileSettings());
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -364,7 +366,7 @@ function Sidebar({ activeTab, setActiveTab }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [settings.appMinimizeToTray]);
 
   useEffect(() => {
     const handleOpenProfile = () => setIsProfileOpen(true);
@@ -394,24 +396,63 @@ function Sidebar({ activeTab, setActiveTab }) {
       </div>
 
       <div className="mb-4 w-full space-y-3">
+        {currentUser ? (
+          <div className="group flex w-full flex-col gap-2 rounded-2xl py-2.5 px-[18px] text-sm text-white/50 transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden">
+            <div className="flex items-center gap-3.5">
+              <img src="/user.svg" alt="" className="h-9 w-9 shrink-0 rounded-full bg-[var(--player-accent)] object-cover opacity-85 transition group-hover:opacity-100 p-1" />
+              <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
+                <span className="flex flex-col whitespace-nowrap">
+                  <span className="block truncate font-bold text-[#8341EF] max-w-[100px]">
+                    {currentUser}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-white/40">Облако включено</span>
+                </span>
+              </span>
+            </div>
+            {!isCollapsed && (
+              <button onClick={onLogout} className="text-xs text-red-400 hover:text-red-300 w-fit">
+                Выйти
+              </button>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onLoginClick}
+            className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden"
+            title={isCollapsed ? "Войти в аккаунт" : undefined}
+          >
+            <div className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center bg-white/5 border border-white/10 group-hover:bg-[#8341EF]/20 group-hover:border-[#8341EF]/50 transition-colors">
+              <img src="/user.svg" alt="" className="h-5 w-5 opacity-50 group-hover:opacity-100 group-hover:text-[#8341EF]" style={{ filter: 'brightness(0) invert(1)' }} />
+            </div>
+            <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
+              <span className="font-semibold text-white/70 group-hover:text-white">Войти в аккаунт</span>
+            </span>
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent("amymusic:open-profile"))}
           className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden"
-          title={isCollapsed ? (settings.displayName || "Local profile") : undefined}
+          title={isCollapsed ? "Настройки" : undefined}
         >
-          <img src={settings.avatarUrl || "/user.svg"} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover opacity-85 transition group-hover:opacity-100" />
+          <div
+            className="h-6 w-6 shrink-0 bg-current transition-transform group-hover:rotate-90 ml-1.5"
+            style={{
+              maskImage: `url(/settings.svg)`,
+              WebkitMaskImage: `url(/settings.svg)`,
+              maskRepeat: "no-repeat",
+              WebkitMaskRepeat: "no-repeat",
+              maskSize: "contain",
+              WebkitMaskSize: "contain",
+              maskPosition: "center",
+              WebkitMaskPosition: "center"
+            }}
+          />
           <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
-            <span className="flex items-center gap-1.5 whitespace-nowrap">
-              <span className="block truncate font-medium text-inherit max-w-[70px]">
-                {settings.displayName || "Local profile"}
-              </span>
-              {totalListenedSeconds >= 60 && (
-                <>
-                  <span className="text-[10px] opacity-40">•</span>
-                  <span className="text-[11px] font-semibold opacity-60">{timeString}</span>
-                </>
-              )}
+            <span className="block truncate font-medium max-w-[100px]">
+              Настройки
             </span>
           </span>
         </button>
@@ -1722,6 +1763,49 @@ export default function App() {
   const [waveRequestId, setWaveRequestId] = useState(0);
   const [apiSettingsVersion, setApiSettingsVersion] = useState(0);
 
+  // --- Auth State ---
+  const [currentUser, setCurrentUser] = useState(getUsername() || null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  const handleLoginSuccess = (username) => {
+    setCurrentUser(username);
+    setShowAuthModal(false);
+    loadDataFromServer();
+  };
+
+  const handleLogout = () => {
+    removeAuthToken();
+    setCurrentUser(null);
+  };
+
+  const loadDataFromServer = async () => {
+    try {
+      if (getUsername()) {
+        const collections = await getCollections();
+        if (collections.likedTracks) {
+          localStorage.setItem("amyMusicLiked", JSON.stringify(collections.likedTracks));
+        }
+        
+        const wave = await getWave();
+        if (wave.dislikedTrackIds) {
+          localStorage.setItem("amyMusicDislikedIds", JSON.stringify(wave.dislikedTrackIds));
+        }
+        if (wave.playHistory) {
+          localStorage.setItem("amyMusicHistory", JSON.stringify(wave.playHistory));
+        }
+        
+        // Force reload by changing app settings version
+        setApiSettingsVersion((version) => version + 1);
+      }
+    } catch(e) {
+      console.error("Failed to load server data", e);
+    }
+  };
+
+  useEffect(() => {
+    loadDataFromServer();
+  }, []);
+
   useEffect(
     () => subscribeProfileSettings(() => {
       setApiSettingsVersion((version) => version + 1);
@@ -1798,7 +1882,13 @@ export default function App() {
         className="absolute left-0 right-0 top-0 h-[36px] bg-transparent" 
         style={{ WebkitAppRegion: "drag" }}
       />
-      <Sidebar activeTab={activeTab} setActiveTab={selectTab} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={selectTab}
+        currentUser={currentUser}
+        onLoginClick={() => setShowAuthModal(true)}
+        onLogout={handleLogout}
+      />
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
         <div key={`${activeTab}-${activeArtist?.id || "none"}-${activeAlbum?.id || "noalbum"}-${apiSettingsVersion}`} className="contents">
           {renderContent()}
@@ -1815,6 +1905,12 @@ export default function App() {
           onClose={() => setIsFullOpen(false)}
           onOpenArtist={openArtist}
           onOpenAlbum={openAlbum}
+        />
+      )}
+      {showAuthModal && (
+        <AuthModal 
+          onClose={() => setShowAuthModal(false)}
+          onLoginSuccess={handleLoginSuccess}
         />
       )}
     </main>
