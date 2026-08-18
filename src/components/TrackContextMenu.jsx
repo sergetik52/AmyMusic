@@ -5,7 +5,8 @@ export function TrackContextMenu({
   track,
   onClose,
   onOpenArtist,
-  onOpenAlbum
+  onOpenAlbum,
+  placement = "bottom"
 }) {
   const {
     likedTrackIds,
@@ -67,7 +68,9 @@ export function TrackContextMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute right-0 top-full z-[100] mt-1 w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md animate-slide-up-fade pointer-events-auto"
+      className={`absolute right-0 z-[100] w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md animate-slide-up-fade pointer-events-auto ${
+        placement === "top" ? "bottom-full mb-2" : "top-full mt-1"
+      }`}
       style={{
         boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
       }}
@@ -137,7 +140,9 @@ export function TrackContextMenu({
         </button>
 
         {/* Submenu */}
-        <div className="absolute right-full top-0 mr-1 hidden w-48 overflow-hidden rounded-xl border border-white/10 bg-[#141414]/95 shadow-2xl backdrop-blur-md group-hover/sub:block py-1">
+        <div className={`absolute right-full mr-1 hidden w-48 overflow-hidden rounded-xl border border-white/10 bg-[#141414]/95 shadow-2xl backdrop-blur-md group-hover/sub:block py-1 ${
+          placement === "top" ? "bottom-0" : "top-0"
+        }`}>
           <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-white/30 border-b border-white/[0.04] mb-1">
             Мои плейлисты
           </div>
@@ -199,7 +204,8 @@ export function TrackContextMenu({
 export function TrackMenuButton({
   track,
   onOpenArtist,
-  onOpenAlbum
+  onOpenAlbum,
+  placement = "bottom"
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -223,6 +229,7 @@ export function TrackMenuButton({
           onClose={() => setIsOpen(false)}
           onOpenArtist={onOpenArtist}
           onOpenAlbum={onOpenAlbum}
+          placement={placement}
         />
       )}
     </div>

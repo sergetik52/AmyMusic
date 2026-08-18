@@ -1235,30 +1235,7 @@ function TrendsPanel({ onOpenArtist }) {
 }
 
 function TrackInfo({ onOpenFull, onOpenArtist }) {
-  const { currentTrack, seek } = useAudioPlayer();
-  const [isMoreOpen, setIsMoreOpen] = useState(false);
-  const primaryArtist = getTrackArtists(currentTrack)[0];
-
-  useEscapeKey(isMoreOpen, () => setIsMoreOpen(false));
-
-  const openPrimaryArtist = (event) => {
-    event.stopPropagation();
-    setIsMoreOpen(false);
-    if (!primaryArtist) return;
-    onOpenArtist?.({
-      id: primaryArtist.id || "",
-      name: primaryArtist.name || primaryArtist.username,
-      username: primaryArtist.username || primaryArtist.name,
-      avatar: primaryArtist.avatar || currentTrack.artistAvatar || currentTrack.cover || "/logo.png",
-      permalinkUrl: primaryArtist.permalinkUrl || "",
-      followers: 0,
-      followings: 0,
-      trackCount: 0,
-      city: "",
-      country: "",
-      tags: []
-    });
-  };
+  const { currentTrack } = useAudioPlayer();
 
   return (
     <div onClick={onOpenFull} className="group flex w-[300px] cursor-pointer items-center gap-3">
@@ -1281,57 +1258,11 @@ function TrackInfo({ onOpenFull, onOpenArtist }) {
           </p>
           <span className="rounded bg-white/10 px-1 text-[10px] text-white/50">67+</span>
           <div className="relative">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setIsMoreOpen((value) => !value);
-              }}
-              className="text-sm leading-none text-white/50 transition hover:text-white"
-              aria-label="Еще"
-              aria-expanded={isMoreOpen}
-            >
-              ...
-            </button>
-            {isMoreOpen && (
-              <div
-                onClick={(event) => event.stopPropagation()}
-                className="absolute bottom-6 left-0 z-50 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#151515]/95 p-1.5 text-left shadow-2xl backdrop-blur-md"
-              >
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setIsMoreOpen(false);
-                    onOpenFull?.();
-                  }}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.07] hover:text-white"
-                >
-                  <img src="/lyrics.svg" alt="" className="h-4 w-4 brightness-200 opacity-80" />
-                  <span>Full open</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={openPrimaryArtist}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.07] hover:text-white"
-                >
-                  <img src="/user.svg" alt="" className="h-4 w-4 opacity-80" />
-                  <span className="truncate">Открыть артиста</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    seek(0);
-                    setIsMoreOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.07] hover:text-white"
-                >
-                  <img src="/prev.svg" alt="" className="h-4 w-4 brightness-200 opacity-80" />
-                  <span>В начало трека</span>
-                </button>
-              </div>
-            )}
+            <TrackMenuButton
+              track={currentTrack}
+              onOpenArtist={onOpenArtist}
+              placement="top"
+            />
           </div>
         </div>
         <ArtistLinks
