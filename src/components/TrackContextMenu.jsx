@@ -24,6 +24,7 @@ export function TrackContextMenu({
   const menuRef = useRef(null);
   const isLiked = likedTrackIds.has(track.id);
   const isDisliked = dislikedTrackIds.has(track.id);
+  const [isSubOpen, setIsSubOpen] = useState(false);
 
   // Close when clicking outside
   useEffect(() => {
@@ -127,9 +128,17 @@ export function TrackContextMenu({
       </button>
 
       {/* 6. Добавить в плейлист */}
-      <div className="group/sub relative">
+      <div
+        className="relative"
+        onMouseEnter={() => setIsSubOpen(true)}
+        onMouseLeave={() => setIsSubOpen(false)}
+      >
         <button
           type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsSubOpen(!isSubOpen);
+          }}
           className="flex w-full items-center justify-between px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
         >
           <div className="flex items-center gap-3">
@@ -140,35 +149,37 @@ export function TrackContextMenu({
         </button>
 
         {/* Submenu */}
-        <div
-          className={`absolute left-full ml-2 hidden w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md group-hover/sub:block pointer-events-auto animate-slide-up-fade ${
-            placement === "top" ? "bottom-0" : "top-0"
-          }`}
-          style={{
-            boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
-          }}
-        >
-          <div className="px-4 py-1.5 text-[9px] font-black uppercase tracking-wider text-white/30 border-b border-white/[0.04] mb-1">
-            Мои плейлисты
+        {isSubOpen && (
+          <div
+            className={`absolute left-full ml-2 w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md pointer-events-auto animate-slide-up-fade ${
+              placement === "top" ? "bottom-0" : "top-0"
+            }`}
+            style={{
+              boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
+            }}
+          >
+            <div className="px-4 py-1.5 text-[9px] font-black uppercase tracking-wider text-white/30 border-b border-white/[0.04] mb-1">
+              Мои плейлисты
+            </div>
+            <div className="max-h-48 overflow-y-auto">
+              {userPlaylists.length > 0 ? (
+                userPlaylists.map((playlist) => (
+                  <button
+                    key={playlist.id}
+                    onClick={() => handleAction(() => addTrackToUserPlaylist(playlist.id, track))}
+                    className="flex w-full items-center px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <span className="truncate">{playlist.title}</span>
+                  </button>
+                ))
+              ) : (
+                <span className="block px-4 py-2.5 text-xs font-bold text-white/30 italic">
+                  Нет плейлистов
+                </span>
+              )}
+            </div>
           </div>
-          <div className="max-h-48 overflow-y-auto">
-            {userPlaylists.length > 0 ? (
-              userPlaylists.map((playlist) => (
-                <button
-                  key={playlist.id}
-                  onClick={() => handleAction(() => addTrackToUserPlaylist(playlist.id, track))}
-                  className="flex w-full items-center px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
-                >
-                  <span className="truncate">{playlist.title}</span>
-                </button>
-              ))
-            ) : (
-              <span className="block px-4 py-2.5 text-xs font-bold text-white/30 italic">
-                Нет плейлистов
-              </span>
-            )}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* 7. Показать текст песни */}
