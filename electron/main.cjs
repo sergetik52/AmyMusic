@@ -562,7 +562,7 @@ function createWindow() {
     backgroundColor: "#000000",
     titleBarStyle: "hidden",
     titleBarOverlay: {
-      color: "#000000",
+      color: "rgba(0, 0, 0, 0)",
       symbolColor: "#ffffff",
       height: 36
     },
@@ -611,6 +611,16 @@ function createWindow() {
     });
   }
 }
+
+// ─── Performance & Memory Optimizations ──────────────────────────────
+// Limit the number of renderer processes to drastically reduce overhead
+app.commandLine.appendSwitch("renderer-process-limit", "1");
+// Disable site isolation for massive RAM savings in single-window apps
+app.commandLine.appendSwitch("disable-site-isolation-trials");
+// Limit V8 heap memory size to 256MB to prevent memory bloat over time
+app.commandLine.appendSwitch("js-flags", "--max-old-space-size=256");
+// Avoid calculating window occlusion to prevent CPU spikes in background
+app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);

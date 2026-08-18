@@ -675,18 +675,20 @@ export function AudioProvider({ children }) {
       const data = frequencyDataRef.current;
 
       if (analyser && data && time - lastAnalysisAtRef.current > 42) {
-        analyser.getByteFrequencyData(data);
-        const bass = averageRange(data, 1, 12);
-        const mids = averageRange(data, 12, 70);
-        const treble = averageRange(data, 70, data.length);
-        const level = Math.min(1, bass * 0.58 + mids * 0.3 + treble * 0.18);
+        if (!document.hidden) {
+          analyser.getByteFrequencyData(data);
+          const bass = averageRange(data, 1, 12);
+          const mids = averageRange(data, 12, 70);
+          const treble = averageRange(data, 70, data.length);
+          const level = Math.min(1, bass * 0.58 + mids * 0.3 + treble * 0.18);
 
-        setAudioEnergy({
-          bass: Number(bass.toFixed(3)),
-          mids: Number(mids.toFixed(3)),
-          treble: Number(treble.toFixed(3)),
-          level: Number(level.toFixed(3))
-        });
+          setAudioEnergy({
+            bass: Number(bass.toFixed(3)),
+            mids: Number(mids.toFixed(3)),
+            treble: Number(treble.toFixed(3)),
+            level: Number(level.toFixed(3))
+          });
+        }
         lastAnalysisAtRef.current = time;
       }
 

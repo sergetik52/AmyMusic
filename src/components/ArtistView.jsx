@@ -232,7 +232,7 @@ function RelatedArtistCard({ artist, onOpen }) {
   );
 }
 
-function AlbumView({
+export function AlbumView({
   album,
   artist,
   isLoading,

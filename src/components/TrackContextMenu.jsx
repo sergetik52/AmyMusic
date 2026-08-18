@@ -53,14 +53,9 @@ export function TrackContextMenu({
     subTimerRef.current = setTimeout(() => setIsSubOpen(false), 150);
   }, []);
 
-  const handleAction = async (actionFn) => {
-    try {
-      await actionFn();
-    } catch (e) {
-      console.warn("Action failed", e);
-    } finally {
-      onClose();
-    }
+  const handleAction = (actionFn) => {
+    actionFn();
+    onClose();
   };
 
   const handleOpenArtist = () => {
@@ -74,38 +69,26 @@ export function TrackContextMenu({
     });
   };
 
-  const handleOpenAlbum = async () => {
+  const handleOpenAlbum = () => {
     let albumObj = track.album || track.release;
     if (!albumObj && track.playlistId) {
       albumObj = { id: track.playlistId, title: track.playlistTitle || "Альбом", cover: track.cover };
     }
 
-    const immediateSingle = {
-      id: `single-${track.id}`,
-      title: track.title,
-      kind: "single",
-      artist: track.artist,
-      artistId: track.artistId,
-      artistAvatar: track.artistAvatar || track.cover,
-      cover: track.cover,
-      trackCount: 1,
-      tracks: [track]
-    };
-
-    // Open single/album view instantly!
-    const targetAlbum = albumObj || immediateSingle;
-    onOpenAlbum?.(targetAlbum);
-
-    // If no album was pre-attached, attempt background fetch for full album
-    if (!albumObj && track.id && track.id !== "empty") {
-      try {
-        const fetchedAlbum = await getTrackAlbum(track);
-        if (fetchedAlbum && fetchedAlbum.kind !== "single") {
-          onOpenAlbum?.(fetchedAlbum);
-        }
-      } catch (e) {
-        console.warn("Background album resolution failed", e);
-      }
+    if (albumObj) {
+      onOpenAlbum?.(albumObj);
+    } else {
+      onOpenAlbum?.({
+        id: `single-${track.id}`,
+        title: track.title,
+        kind: "single",
+        artist: track.artist,
+        artistId: track.artistId,
+        artistAvatar: track.artistAvatar || track.cover,
+        cover: track.cover,
+        trackCount: 1,
+        tracks: [track]
+      });
     }
   };
 

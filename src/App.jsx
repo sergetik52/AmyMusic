@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Component } from "react";
 import { WaveView } from "./components/WaveView";
 import { CollectionView } from "./components/CollectionView";
-import { ArtistView } from "./components/ArtistView";
+import { ArtistView, AlbumView } from "./components/ArtistView";
 import { FullPlayerOverlay } from "./components/FullPlayerOverlay";
 import { AudioProvider, useAudioPlayer } from "./audio/AudioPlayerContext";
 import { TrackMenuButton } from "./components/TrackContextMenu";
@@ -1605,6 +1605,71 @@ function PlayerTools({ onOpenFull }) {
   );
 }
 
+function AlbumViewContainer({ album, onBack, onOpenArtist, onOpenAlbum }) {
+  const {
+    likedTrackIds,
+    savedReleaseIds,
+    playTrack,
+    toggleLike,
+    toggleSavedRelease
+  } = useAudioPlayer();
+
+  const [fullAlbum, setFullAlbum] = useState(album);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setFullAlbum(album);
+
+    if (!album?.tracks || album.tracks.length === 0) {
+      setIsLoading(true);
+      getAlbumDetails(album, { id: album?.artistId, username: album?.artist, name: album?.artist })
+        .then((fetched) => {
+          if (isMounted && fetched) setFullAlbum(fetched);
+        })
+        .finally(() => {
+          if (isMounted) setIsLoading(false);
+        });
+    }
+
+    return () => { isMounted = false; };
+  }, [album]);
+
+  const tracks = fullAlbum?.tracks || [];
+  const isSaved = savedReleaseIds.has(fullAlbum?.id);
+
+  const handlePlayAlbum = () => {
+    if (tracks.length > 0) {
+      playTrack(tracks[0], tracks);
+    }
+  };
+
+  const handleShufflePlay = () => {
+    if (tracks.length > 0) {
+      const shuffled = [...tracks].sort(() => Math.random() - 0.5);
+      playTrack(shuffled[0], shuffled);
+    }
+  };
+
+  return (
+    <AlbumView
+      album={fullAlbum}
+      artist={{ username: fullAlbum?.artist, name: fullAlbum?.artist }}
+      isLoading={isLoading}
+      likedTrackIds={likedTrackIds}
+      isReleaseSaved={isSaved}
+      onBack={onBack}
+      onPlayAlbum={handlePlayAlbum}
+      onShufflePlay={handleShufflePlay}
+      onPlayTrack={(track, queue) => playTrack(track, queue)}
+      onToggleLike={(trackId, track) => toggleLike(trackId, track)}
+      onToggleRelease={() => toggleSavedRelease(fullAlbum)}
+      onOpenArtist={onOpenArtist}
+      onOpenAlbum={onOpenAlbum}
+    />
+  );
+}
+
 function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum }) {
   const { trackPalette } = useAudioPlayer();
 
@@ -1632,7 +1697,9 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum }) {
 export default function App() {
   const { isFullOpen, setIsFullOpen } = useAudioPlayer();
   const [activeTab, setActiveTab] = useState("wave");
+  const [previousTab, setPreviousTab] = useState("wave");
   const [activeArtist, setActiveArtist] = useState(null);
+  const [activeAlbum, setActiveAlbum] = useState(null);
   const [waveRequestId, setWaveRequestId] = useState(0);
   const [apiSettingsVersion, setApiSettingsVersion] = useState(0);
 
@@ -1652,25 +1719,26 @@ export default function App() {
   };
 
   const openArtist = (artist) => {
+    setPreviousTab((prev) => (prev === "artist" || prev === "album" ? prev : activeTab));
     setActiveArtist(artist);
-    setActiveTab("artist");
-  };
-
-  const openAlbum = (album) => {
-    setIsFullOpen(false);
-    const artistObj = {
-      id: album.artistId || "",
-      name: album.artist || "Исполнитель",
-      username: album.artist || "Исполнитель",
-      avatar: album.artistAvatar || album.cover || "/logo.png"
-    };
-    setActiveArtist({ ...artistObj, initialAlbum: album });
     setActiveTab("artist");
   };
 
   const closeArtist = () => {
     setActiveArtist(null);
-    setActiveTab("wave");
+    setActiveTab(previousTab || "wave");
+  };
+
+  const openAlbum = (album) => {
+    setIsFullOpen(false);
+    setPreviousTab((prev) => (prev === "album" || prev === "artist" ? prev : activeTab));
+    setActiveAlbum(album);
+    setActiveTab("album");
+  };
+
+  const closeAlbum = () => {
+    setActiveAlbum(null);
+    setActiveTab(previousTab || "wave");
   };
 
   const renderContent = () => {
@@ -1684,7 +1752,18 @@ export default function App() {
             artist={activeArtist}
             onBack={closeArtist}
             onOpenArtist={openArtist}
-            initialAlbum={activeArtist?.initialAlbum}
+            onOpenAlbum={openAlbum}
+          />
+        ) : (
+          <SearchPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />
+        );
+      case "album":
+        return activeAlbum ? (
+          <AlbumViewContainer
+            album={activeAlbum}
+            onBack={closeAlbum}
+            onOpenArtist={openArtist}
+            onOpenAlbum={openAlbum}
           />
         ) : (
           <SearchPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />
@@ -1702,12 +1781,12 @@ export default function App() {
       />
       <Sidebar activeTab={activeTab} setActiveTab={selectTab} />
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
-        <div key={`${activeTab}-${activeArtist?.id || "none"}-${activeArtist?.initialAlbum?.id || "noalbum"}-${apiSettingsVersion}`} className="contents">
+        <div key={`${activeTab}-${activeArtist?.id || "none"}-${activeAlbum?.id || "noalbum"}-${apiSettingsVersion}`} className="contents">
           {renderContent()}
         </div>
         {activeTab !== "wave" && (
           <div className="flex shrink-0 flex-col gap-1">
-            <BottomPlayer onOpenFull={() => setIsFullOpen(true)} onOpenArtist={openArtist} />
+            <BottomPlayer onOpenFull={() => setIsFullOpen(true)} onOpenArtist={openArtist} onOpenAlbum={openAlbum} />
             <p className="self-end pr-1 text-[10px] text-neutral-600">Copyright © 2026 AmyMusic. Все права НЕ защищены.</p>
           </div>
         )}
@@ -1716,6 +1795,7 @@ export default function App() {
         <FullPlayerOverlay
           onClose={() => setIsFullOpen(false)}
           onOpenArtist={openArtist}
+          onOpenAlbum={openAlbum}
         />
       )}
     </main>

@@ -491,8 +491,14 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
                 <div className="pointer-events-auto">
                   <TrackMenuButton
                     track={currentTrack}
-                    onOpenArtist={onOpenArtist}
-                    onOpenAlbum={onOpenAlbum}
+                    onOpenArtist={(artist) => {
+                      onClose?.();
+                      onOpenArtist?.(artist);
+                    }}
+                    onOpenAlbum={(album) => {
+                      onClose?.();
+                      onOpenAlbum?.(album);
+                    }}
                     placement="top"
                   />
                 </div>
