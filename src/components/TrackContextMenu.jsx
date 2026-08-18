@@ -141,7 +141,7 @@ export function TrackContextMenu({
 
         {/* Submenu */}
         <div
-          className={`absolute right-full mr-2 hidden w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md group-hover/sub:block pointer-events-auto animate-slide-up-fade ${
+          className={`absolute left-full ml-2 hidden w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md group-hover/sub:block pointer-events-auto animate-slide-up-fade ${
             placement === "top" ? "bottom-0" : "top-0"
           }`}
           style={{
