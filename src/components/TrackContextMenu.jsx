@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
 
 export function TrackContextMenu({
@@ -22,6 +22,7 @@ export function TrackContextMenu({
   } = useAudioPlayer();
 
   const menuRef = useRef(null);
+  const subTimerRef = useRef(null);
   const isLiked = likedTrackIds.has(track.id);
   const isDisliked = dislikedTrackIds.has(track.id);
   const [isSubOpen, setIsSubOpen] = useState(false);
@@ -36,6 +37,20 @@ export function TrackContextMenu({
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [onClose]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => clearTimeout(subTimerRef.current);
+  }, []);
+
+  const openSub = useCallback(() => {
+    clearTimeout(subTimerRef.current);
+    setIsSubOpen(true);
+  }, []);
+
+  const closeSub = useCallback(() => {
+    subTimerRef.current = setTimeout(() => setIsSubOpen(false), 150);
+  }, []);
 
   const handleAction = (actionFn) => {
     actionFn();
@@ -130,8 +145,8 @@ export function TrackContextMenu({
       {/* 6. Добавить в плейлист */}
       <div
         className="relative"
-        onMouseEnter={() => setIsSubOpen(true)}
-        onMouseLeave={() => setIsSubOpen(false)}
+        onMouseEnter={openSub}
+        onMouseLeave={closeSub}
       >
         <button
           type="button"
@@ -151,12 +166,15 @@ export function TrackContextMenu({
         {/* Submenu */}
         {isSubOpen && (
           <div
-            className={`absolute left-full ml-2 w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md pointer-events-auto animate-slide-up-fade before:absolute before:right-full before:top-0 before:bottom-0 before:w-2 before:bg-transparent ${
+            className={`absolute left-full w-56 rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md pointer-events-auto animate-slide-up-fade ${
               placement === "top" ? "bottom-0" : "top-0"
             }`}
             style={{
-              boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
+              boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
+              marginLeft: "0px"
             }}
+            onMouseEnter={openSub}
+            onMouseLeave={closeSub}
           >
             <div className="px-4 py-1.5 text-[9px] font-black uppercase tracking-wider text-white/30 border-b border-white/[0.04] mb-1">
               Мои плейлисты
@@ -226,7 +244,10 @@ export function TrackMenuButton({
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onMouseLeave={() => setIsOpen(false)}
+    >
       <button
         type="button"
         onClick={(e) => {
