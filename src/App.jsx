@@ -6,6 +6,7 @@ import { CollectionView } from "./components/CollectionView";
 import { ArtistView } from "./components/ArtistView";
 import { FullPlayerOverlay } from "./components/FullPlayerOverlay";
 import { AudioProvider, useAudioPlayer } from "./audio/AudioPlayerContext";
+import { TrackMenuButton } from "./components/TrackContextMenu";
 import {
   buildArtistsFromTracks,
   getAlbumDetails,
@@ -328,6 +329,13 @@ function ProfileSettingsModal({ settings, onClose, onSave }) {
       </form>
     </div>
   );
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60).toString().padStart(2, "0");
+  return `${mins}:${secs}`;
 }
 
 function Sidebar({ activeTab, setActiveTab }) {
@@ -1076,16 +1084,18 @@ function SearchPanel({ onOpenArtist }) {
               </button>
               <ArtistLinks track={track} onOpenArtist={onOpenArtist} />
             </div>
-            <button
-              type="button"
-              onClick={() => openTrackWave(track)}
-              disabled={trackWaveLoading}
-              title="Волна по треку"
-              className="opacity-0 group-hover:opacity-100 shrink-0 text-[#8341EF]/60 transition hover:text-[#8341EF] disabled:opacity-30 p-1"
-              aria-label="Волна по треку"
-            >
-              <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3zm0 16a7 7 0 1 1 0-14A7 7 0 0 1 12 19zm-1-7.59V8h2v3.41l2.29 2.3-1.41 1.41L11 12.41z"/></svg>
-            </button>
+            <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
+              <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
+                {formatDuration(track.duration)}
+              </span>
+              <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                <TrackMenuButton
+                  track={track}
+                  onOpenArtist={onOpenArtist}
+                  onOpenAlbum={openAlbum}
+                />
+              </div>
+            </div>
           </div>
         );
 
@@ -1180,12 +1190,12 @@ function TrendsPanel({ onOpenArtist }) {
         const renderTrackItem = (track) => (
           <div
             key={track.id}
-            className="flex items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/5"
+            className="group flex items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/5"
           >
             <button type="button" onClick={() => playTrack(track, tracks)} className="h-11 w-11 shrink-0">
               <img src={track.cover} alt="" className="h-11 w-11 rounded-lg object-cover" />
             </button>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <button
                 type="button"
                 onClick={() => playTrack(track, tracks)}
@@ -1194,6 +1204,17 @@ function TrendsPanel({ onOpenArtist }) {
                 {track.title}
               </button>
               <ArtistLinks track={track} onOpenArtist={onOpenArtist} />
+            </div>
+            <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
+              <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
+                {formatDuration(track.duration)}
+              </span>
+              <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                <TrackMenuButton
+                  track={track}
+                  onOpenArtist={onOpenArtist}
+                />
+              </div>
             </div>
           </div>
         );
@@ -1614,9 +1635,9 @@ function BottomPlayer({ onOpenFull, onOpenArtist }) {
 }
 
 export default function App() {
+  const { isFullOpen, setIsFullOpen } = useAudioPlayer();
   const [activeTab, setActiveTab] = useState("wave");
   const [activeArtist, setActiveArtist] = useState(null);
-  const [isFullOpen, setIsFullOpen] = useState(false);
   const [waveRequestId, setWaveRequestId] = useState(0);
   const [apiSettingsVersion, setApiSettingsVersion] = useState(0);
 

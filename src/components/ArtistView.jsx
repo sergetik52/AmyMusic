@@ -11,6 +11,7 @@ import {
 } from "../services/soundCloudApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { HorizontalScrollSection } from "./HorizontalScrollSection";
+import { TrackMenuButton } from "./TrackContextMenu";
 
 function formatCount(value) {
   if (!value) return "0";
@@ -166,8 +167,19 @@ function TrackRow({
             {track.streamUrl ? track.artist : `${track.artist} · недоступно`}
           </p>
         </div>
-        <span className="text-xs font-semibold text-white/30">{formatDuration(track.duration)}</span>
       </button>
+
+      <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
+        <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
+          {formatDuration(track.duration)}
+        </span>
+        <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          <TrackMenuButton
+            track={track}
+            onOpenArtist={onOpenArtist}
+          />
+        </div>
+      </div>
 
       {showLike && (
         <button

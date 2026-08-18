@@ -11,7 +11,8 @@ import {
   emptyTrack,
   hydrateSoundCloudTracks,
   normalizeTrackMetadata,
-  resolveStreamUrl
+  resolveStreamUrl,
+  getTrackWaveTracks
 } from "../services/soundCloudApi";
 import { getPlayerRuntimeSettings, subscribeProfileSettings } from "../services/profileSettings";
 import { logDebug, logWarn } from "../utils/logger";
@@ -475,6 +476,7 @@ export function AudioProvider({ children }) {
   });
   const [error, setError] = useState("");
   const [notifications, setNotifications] = useState([]);
+  const [isFullOpen, setIsFullOpen] = useState(false);
 
   const showNotification = useCallback((message, type = "info") => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -1425,6 +1427,70 @@ export function AudioProvider({ children }) {
     showNotification("Плейлист удален", "info");
   }, [showNotification]);
 
+  const openTrackWave = useCallback(async (track) => {
+    const normalized = normalizeStoredTrack(track);
+    if (!normalized) return;
+    try {
+      showNotification("Загружаю Мою волну по треку...", "info");
+      const waveTracks = await getTrackWaveTracks(normalized, {
+        likedTracks,
+        dislikedTrackIds,
+        dislikedTracks
+      });
+      if (waveTracks.length) {
+        await playTrack(normalized, [normalized, ...waveTracks]);
+        showNotification("Моя волна по треку запущена", "success");
+      } else {
+        showNotification("Не удалось загрузить волну по треку", "error");
+      }
+    } catch (e) {
+      showNotification("Ошибка при загрузке волны по треку", "error");
+    }
+  }, [likedTracks, dislikedTrackIds, dislikedTracks, playTrack, showNotification]);
+
+  const playNext = useCallback((track) => {
+    const normalized = normalizeStoredTrack(track);
+    if (!normalized) return;
+
+    setQueue((currentQueue) => {
+      const nextQueue = [...currentQueue];
+      const existingIdx = nextQueue.findIndex((t) => t.id === normalized.id);
+      if (existingIdx >= 0) {
+        nextQueue.splice(existingIdx, 1);
+      }
+      
+      const insertIndex = nextQueue.length > 0 ? currentIndex + 1 : 0;
+      nextQueue.splice(insertIndex, 0, normalized);
+
+      setOriginalQueue((orig) => {
+        const nextOrig = [...orig];
+        const origIdx = nextOrig.findIndex((t) => t.id === normalized.id);
+        if (origIdx >= 0) nextOrig.splice(origIdx, 1);
+        const origInsert = nextOrig.length > 0 ? currentIndex + 1 : 0;
+        nextOrig.splice(origInsert, 0, normalized);
+        return nextOrig;
+      });
+
+      return nextQueue;
+    });
+    showNotification("Будет воспроизведено следующим", "success");
+  }, [currentIndex, showNotification]);
+
+  const addToQueueEnd = useCallback((track) => {
+    const normalized = normalizeStoredTrack(track);
+    if (!normalized) return;
+
+    setQueue((currentQueue) => {
+      if (currentQueue.some((t) => t.id === normalized.id)) {
+        showNotification("Трек уже в очереди", "info");
+        return currentQueue;
+      }
+      setOriginalQueue((orig) => [...orig, normalized]);
+      showNotification("Добавлено в конец очереди", "success");
+      return [...currentQueue, normalized];
+    });
+  }, [showNotification]);
+
   const isCurrentLiked = likedTrackIds.has(currentTrack.id);
   const isCurrentDisliked = dislikedTrackIds.has(currentTrack.id);
 
@@ -1630,7 +1696,12 @@ export function AudioProvider({ children }) {
       updateUserPlaylist,
       removeTrackFromUserPlaylist,
       deleteUserPlaylist,
-      showNotification
+      showNotification,
+      openTrackWave,
+      playNext,
+      addToQueueEnd,
+      isFullOpen,
+      setIsFullOpen
     }),
     [
       controls,
@@ -1671,17 +1742,13 @@ export function AudioProvider({ children }) {
       updateUserPlaylist,
       removeTrackFromUserPlaylist,
       deleteUserPlaylist,
-      toggleDislike,
-      toggleLike,
-      toggleSavedRelease,
-      toggleMute,
-      toggleShuffle,
-      togglePlay,
       userPlaylists,
-      updateUserPlaylist,
-      removeTrackFromUserPlaylist,
-      deleteUserPlaylist,
-      volume
+      volume,
+      showNotification,
+      openTrackWave,
+      playNext,
+      addToQueueEnd,
+      isFullOpen
     ]
   );
 

@@ -3,6 +3,7 @@ import { useAudioPlayer } from "../audio/AudioPlayerContext";
 import { getAlbumDetails, getTrackWaveTracks, hydrateSoundCloudTracks, searchTracks } from "../services/soundCloudApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { HorizontalScrollSection } from "./HorizontalScrollSection";
+import { TrackMenuButton } from "./TrackContextMenu";
 
 function HeartHeaderIcon() {
   return (
@@ -910,32 +911,17 @@ export function CollectionView({ onOpenArtist }) {
                     >
                       <LikeIcon />
                     </button>
-                    <span className="w-10 text-right text-xs font-medium text-white/40">
-                      {formatDuration(track.duration)}
-                    </span>
-                    {userPlaylists.length > 0 && (
-                      <div className="group/menu relative flex h-full items-center">
-                        <button type="button" className="opacity-0 transition hover:text-white group-hover:opacity-100 text-white/50 font-bold px-2 py-1">
-                          •••
-                        </button>
-                        <div className="absolute right-0 top-full pt-1 hidden w-48 flex-col group-hover/menu:flex z-[60]">
-                          <div className="overflow-hidden rounded-xl border border-white/10 bg-[#141414] shadow-2xl flex flex-col">
-                            <div className="px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white/30 border-b border-white/[0.04]">В плейлист</div>
-                            <div className="max-h-48 overflow-y-auto">
-                              {userPlaylists.map((playlist) => (
-                                <button
-                                  key={playlist.id}
-                                  onClick={() => addTrackToUserPlaylist(playlist.id, track)}
-                                  className="w-full px-3 py-2.5 text-left text-xs font-semibold text-white/70 transition hover:bg-white/10 hover:text-white"
-                                >
-                                  {playlist.title}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
+                    <div className="relative w-10 h-10 flex items-center justify-end shrink-0">
+                      <span className="text-xs font-medium text-white/40 group-hover:opacity-0 transition-opacity duration-150">
+                        {formatDuration(track.duration)}
+                      </span>
+                      <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                        <TrackMenuButton
+                          track={track}
+                          onOpenArtist={onOpenArtist}
+                        />
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               );
