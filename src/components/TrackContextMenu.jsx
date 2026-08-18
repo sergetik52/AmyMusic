@@ -69,7 +69,7 @@ export function TrackContextMenu({
   return (
     <div
       ref={menuRef}
-      className={`absolute right-0 z-[100] w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md animate-slide-up-fade pointer-events-auto ${
+      className={`absolute right-0 z-[100] w-56 rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md animate-slide-up-fade pointer-events-auto ${
         placement === "top" ? "bottom-full mb-2" : "top-full mt-1"
       }`}
       style={{
