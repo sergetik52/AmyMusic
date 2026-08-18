@@ -151,7 +151,7 @@ export function TrackContextMenu({
         {/* Submenu */}
         {isSubOpen && (
           <div
-            className={`absolute left-full ml-2 w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md pointer-events-auto animate-slide-up-fade ${
+            className={`absolute left-full ml-2 w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md pointer-events-auto animate-slide-up-fade before:absolute before:right-full before:top-0 before:bottom-0 before:w-2 before:bg-transparent ${
               placement === "top" ? "bottom-0" : "top-0"
             }`}
             style={{
