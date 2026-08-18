@@ -140,10 +140,15 @@ export function TrackContextMenu({
         </button>
 
         {/* Submenu */}
-        <div className={`absolute right-full mr-1 hidden w-48 overflow-hidden rounded-xl border border-white/10 bg-[#141414]/95 shadow-2xl backdrop-blur-md group-hover/sub:block py-1 ${
-          placement === "top" ? "bottom-0" : "top-0"
-        }`}>
-          <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-white/30 border-b border-white/[0.04] mb-1">
+        <div
+          className={`absolute right-full mr-2 hidden w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md group-hover/sub:block pointer-events-auto animate-slide-up-fade ${
+            placement === "top" ? "bottom-0" : "top-0"
+          }`}
+          style={{
+            boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
+          }}
+        >
+          <div className="px-4 py-1.5 text-[9px] font-black uppercase tracking-wider text-white/30 border-b border-white/[0.04] mb-1">
             Мои плейлисты
           </div>
           <div className="max-h-48 overflow-y-auto">
@@ -152,13 +157,13 @@ export function TrackContextMenu({
                 <button
                   key={playlist.id}
                   onClick={() => handleAction(() => addTrackToUserPlaylist(playlist.id, track))}
-                  className="w-full px-3 py-2 text-left text-xs font-semibold text-white/70 transition hover:bg-white/10 hover:text-white truncate"
+                  className="flex w-full items-center px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
                 >
-                  {playlist.title}
+                  <span className="truncate">{playlist.title}</span>
                 </button>
               ))
             ) : (
-              <span className="block px-3 py-2 text-[11px] font-semibold text-white/30 italic">
+              <span className="block px-4 py-2.5 text-xs font-bold text-white/30 italic">
                 Нет плейлистов
               </span>
             )}
