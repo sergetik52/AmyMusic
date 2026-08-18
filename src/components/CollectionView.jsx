@@ -387,31 +387,24 @@ function PlaylistView({
                 <p className="truncate text-sm font-bold text-white">{track.title}</p>
                 <TrackArtistLinks track={track} onOpenArtist={onOpenArtist} />
               </div>
-              <span className="text-xs font-semibold text-white/30">{formatDuration(track.duration)}</span>
             </button>
             <TrackLikeButton
               track={track}
               isLiked={likedTrackIds.has(track.id)}
               onToggleLike={onToggleLike}
             />
-            <button
-              type="button"
-              title="Волна по треку"
-              onClick={() => onOpenTrackWave?.(track)}
-              className="rounded-full px-2 py-1 text-xs font-bold text-[#8341EF]/60 transition hover:bg-[#8341EF]/10 hover:text-[#8341EF] opacity-0 group-hover:opacity-100"
-              aria-label="Волна по треку"
-            >
-              <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
-            </button>
-            {isEditable && (
-              <button
-                type="button"
-                onClick={() => onRemoveTrack?.(playlist.id, track.id)}
-                className="rounded-full px-3 py-1 text-xs font-bold text-white/35 transition hover:bg-white/[0.06] hover:text-white"
-              >
-                Удалить
-              </button>
-            )}
+            <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
+              <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
+                {formatDuration(track.duration)}
+              </span>
+              <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                <TrackMenuButton
+                  track={track}
+                  onOpenArtist={onOpenArtist}
+                  onRemoveFromPlaylist={isEditable ? () => onRemoveTrack?.(playlist.id, track.id) : undefined}
+                />
+              </div>
+            </div>
           </div>
         )) : (
           <div className="grid min-h-[220px] place-items-center text-sm font-bold text-white/35">
@@ -893,16 +886,6 @@ export function CollectionView({ onOpenArtist }) {
                   </div>
 
                   <div className="flex shrink-0 items-center gap-4 pl-2">
-                    <button
-                      type="button"
-                      onClick={() => openTrackWave(track)}
-                      disabled={trackWaveLoading}
-                      title="Волна по треку"
-                      className="opacity-0 group-hover:opacity-100 text-[#8341EF]/60 transition hover:text-[#8341EF] disabled:opacity-30 px-1"
-                      aria-label="Волна по треку"
-                    >
-                      <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3zm0 16a7 7 0 1 1 0-14A7 7 0 0 1 12 19zm-1-7.59V8h2v3.41l2.29 2.3-1.41 1.41L11 12.41z"/></svg>
-                    </button>
                     <button
                       type="button"
                       onClick={() => toggleLike(track.id, track)}

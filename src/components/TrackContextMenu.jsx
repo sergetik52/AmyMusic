@@ -6,6 +6,7 @@ export function TrackContextMenu({
   onClose,
   onOpenArtist,
   onOpenAlbum,
+  onRemoveFromPlaylist,
   placement = "bottom"
 }) {
   const {
@@ -231,6 +232,21 @@ export function TrackContextMenu({
         <img src="/menu/artist.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
         <span>Перейти к исполнителю</span>
       </button>
+
+      {/* 10. Удалить из плейлиста (optional) */}
+      {onRemoveFromPlaylist && (
+        <>
+          <div className="my-1 border-t border-white/[0.06]" />
+          <button
+            type="button"
+            onClick={() => handleAction(onRemoveFromPlaylist)}
+            className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
+          >
+            <svg className="h-4.5 w-4.5 shrink-0 fill-current opacity-60" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            <span>Удалить из плейлиста</span>
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -239,6 +255,7 @@ export function TrackMenuButton({
   track,
   onOpenArtist,
   onOpenAlbum,
+  onRemoveFromPlaylist,
   placement = "bottom"
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -281,6 +298,7 @@ export function TrackMenuButton({
           onClose={() => setIsOpen(false)}
           onOpenArtist={onOpenArtist}
           onOpenAlbum={onOpenAlbum}
+          onRemoveFromPlaylist={onRemoveFromPlaylist}
           placement={placement}
         />
       )}
