@@ -242,16 +242,31 @@ export function TrackMenuButton({
   placement = "bottom"
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const closeTimer = useRef(null);
+
+  useEffect(() => {
+    return () => clearTimeout(closeTimer.current);
+  }, []);
+
+  const handleEnter = useCallback(() => {
+    clearTimeout(closeTimer.current);
+  }, []);
+
+  const handleLeave = useCallback(() => {
+    closeTimer.current = setTimeout(() => setIsOpen(false), 200);
+  }, []);
 
   return (
     <div
       className="relative"
-      onMouseLeave={() => setIsOpen(false)}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
     >
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
+          clearTimeout(closeTimer.current);
           setIsOpen(!isOpen);
         }}
         className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 text-white/50 hover:text-white transition active:scale-95"
