@@ -1042,7 +1042,7 @@ export function AudioProvider({ children }) {
     } catch (loadError) {
       if (requestId !== loadRequestIdRef.current) return false;
       logWarn("audio", "loadTrack:failed", loadError);
-      setError(loadError.message || "Р СњР Вµ РЎС“Р Т‘Р В°Р В»Р С•РЎРѓРЎРЉ Р В·Р В°Р С–РЎР‚РЎС“Р В·Р С‘РЎвЂљРЎРЉ Р В°РЎС“Р Т‘Р С‘Р С•Р С—Р С•РЎвЂљР С•Р С”");
+      setError(loadError.message || "Не удалось загрузить аудиопоток");
       setIsPlaying(false);
       return false;
     } finally {
@@ -1092,7 +1092,7 @@ export function AudioProvider({ children }) {
       await audio.play();
     } catch (playError) {
       logWarn("audio", "play failed", playError);
-      setError(playError.message || "Р СњР Вµ РЎС“Р Т‘Р В°Р В»Р С•РЎРѓРЎРЉ Р Р…Р В°РЎвЂЎР В°РЎвЂљРЎРЉ Р Р†Р С•РЎРѓР С—РЎР‚Р С•Р С‘Р В·Р Р†Р ВµР Т‘Р ВµР Р…Р С‘Р Вµ");
+      setError(playError.message || "Не удалось начать воспроизведение");
       setIsPlaying(false);
     }
   }, [ensureAudioGraph, loadTrack]);
@@ -1119,11 +1119,10 @@ export function AudioProvider({ children }) {
       const existingIndex = nextQueue.findIndex((item) => item.id === track.id);
       const resolvedQueue = existingIndex >= 0 ? nextQueue : [track, ...nextQueue];
       const resolvedIndex = existingIndex >= 0 ? existingIndex : 0;
-      const didLoad = await loadTrack(track, true, true);
-      if (!didLoad) return false;
 
       explicitLoadTrackIdRef.current = track.id;
       pendingAutoplayRef.current = true;
+      manualActionRef.current = true;
       setOriginalQueue(resolvedQueue);
 
       if (isShuffleRef.current && resolvedQueue.length > 1) {
@@ -1139,7 +1138,9 @@ export function AudioProvider({ children }) {
         track,
         ...history.filter((item) => item.id !== track.id)
       ].slice(0, 50));
-      return true;
+
+      const didLoad = await loadTrack(track, true, true);
+      return didLoad;
     },
     [loadTrack, queue]
   );

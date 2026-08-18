@@ -275,7 +275,27 @@ export function AlbumView({
             <div className="max-w-4xl pb-2">
               <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-white/35">{releaseType}</p>
               <h1 className="text-5xl font-black tracking-tight text-white">{album.title}</h1>
-              <p className="mt-2 text-base font-bold text-white/48">{album.artist || artist.username || artist.name}</p>
+              {onOpenArtist ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onOpenArtist(
+                      artist?.id
+                        ? artist
+                        : {
+                            id: album.artistId || "",
+                            username: album.artist || artist?.username || artist?.name,
+                            name: album.artist || artist?.name || artist?.username
+                          }
+                    )
+                  }
+                  className="mt-2 text-left text-base font-bold text-white/60 transition hover:text-white hover:underline"
+                >
+                  {album.artist || artist?.username || artist?.name}
+                </button>
+              ) : (
+                <p className="mt-2 text-base font-bold text-white/48">{album.artist || artist?.username || artist?.name}</p>
+              )}
               <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm font-bold text-white/38">
                 <span>{tracks.length || album.trackCount || 0} треков</span>
                 {totalDuration > 0 && <span>{Math.round(totalDuration / 60)} мин</span>}
