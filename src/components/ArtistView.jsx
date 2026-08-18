@@ -149,7 +149,9 @@ function TrackRow({
   showCover = true,
   showLike = false,
   isLiked = false,
-  onToggleLike
+  onToggleLike,
+  onOpenArtist,
+  onOpenAlbum
 }) {
   return (
     <div className="group flex w-full items-center gap-3 rounded-xl p-2 transition hover:bg-white/[0.04]">
@@ -177,6 +179,7 @@ function TrackRow({
           <TrackMenuButton
             track={track}
             onOpenArtist={onOpenArtist}
+            onOpenAlbum={onOpenAlbum}
           />
         </div>
       </div>
@@ -233,7 +236,9 @@ function AlbumView({
   onShufflePlay,
   onPlayTrack,
   onToggleLike,
-  onToggleRelease
+  onToggleRelease,
+  onOpenArtist,
+  onOpenAlbum
 }) {
   const tracks = album.tracks || [];
   const totalDuration = tracks.reduce((total, track) => total + (track.duration || 0), 0);
@@ -315,6 +320,8 @@ function AlbumView({
                 isLiked={likedTrackIds.has(track.id)}
                 onToggleLike={onToggleLike}
                 onPlay={(nextTrack) => onPlayTrack(nextTrack, tracks)}
+                onOpenArtist={onOpenArtist}
+                onOpenAlbum={onOpenAlbum}
               />
             ))}
           </div>
@@ -328,7 +335,7 @@ function AlbumView({
   );
 }
 
-function ArtistTracksView({ artist, tracks, isLoading, onBack, onPlayTrack, likedTrackIds, onToggleLike }) {
+function ArtistTracksView({ artist, tracks, isLoading, onBack, onPlayTrack, likedTrackIds, onToggleLike, onOpenArtist, onOpenAlbum }) {
   const sortedTracks = useMemo(() => sortByPopularity(tracks), [tracks]);
   const playableTracks = sortedTracks.filter((track) => track.streamUrl);
 
@@ -374,6 +381,8 @@ function ArtistTracksView({ artist, tracks, isLoading, onBack, onPlayTrack, like
               isLiked={likedTrackIds.has(track.id)}
               onToggleLike={(track) => onToggleLike(track.id, track)}
               onPlay={(nextTrack) => onPlayTrack(nextTrack, playableTracks.length ? playableTracks : sortedTracks)}
+              onOpenArtist={onOpenArtist}
+              onOpenAlbum={onOpenAlbum}
             />
           ))}
         </div>
@@ -522,6 +531,8 @@ export function ArtistView({ artist, onBack, onOpenArtist }) {
         onPlayTrack={handlePlayTrack}
         onToggleLike={(track) => toggleLike(track.id, track)}
         onToggleRelease={toggleSavedRelease}
+        onOpenArtist={onOpenArtist}
+        onOpenAlbum={setActiveAlbum}
       />
     );
   }
@@ -536,6 +547,8 @@ export function ArtistView({ artist, onBack, onOpenArtist }) {
         onPlayTrack={handlePlayTrack}
         likedTrackIds={likedTrackIds}
         onToggleLike={toggleLike}
+        onOpenArtist={onOpenArtist}
+        onOpenAlbum={setActiveAlbum}
       />
     );
   }
@@ -623,6 +636,8 @@ export function ArtistView({ artist, onBack, onOpenArtist }) {
                   isLiked={likedTrackIds.has(track.id)}
                   onToggleLike={(t) => toggleLike(t.id, t)}
                   onPlay={(nextTrack) => handlePlayTrack(nextTrack, sortedTracks)}
+                  onOpenArtist={onOpenArtist}
+                  onOpenAlbum={setActiveAlbum}
                 />
               );
 
