@@ -105,6 +105,8 @@ function TrackSquare({ track, onPlay }) {
 }
 
 function AlbumCard({ album, onOpen, isSaved = false, onToggleSave }) {
+  const isSingle = album.kind === "single" || (album.trackCount || album.tracks?.length) === 1;
+
   return (
     <div className="group w-40 shrink-0 text-left">
       <button
@@ -115,6 +117,11 @@ function AlbumCard({ album, onOpen, isSaved = false, onToggleSave }) {
         <div className="relative aspect-square overflow-hidden rounded-2xl bg-white/[0.04]">
           <img src={album.cover} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
           <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/20" />
+          {isSingle && (
+            <div className="absolute top-2 left-2 rounded-md bg-[#8341EF]/90 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-md backdrop-blur-sm">
+              Сингл
+            </div>
+          )}
           <div className="absolute bottom-2 right-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-black text-white/70">
             {album.trackCount || album.tracks?.length || 0}
           </div>
@@ -123,7 +130,7 @@ function AlbumCard({ album, onOpen, isSaved = false, onToggleSave }) {
       <div className="mt-2 flex items-start gap-2">
         <button type="button" onClick={() => onOpen(album)} className="min-w-0 flex-1 text-left">
           <p className="truncate text-sm font-black text-white">{album.title}</p>
-          <p className="truncate text-xs font-semibold text-white/35">{formatDate(album.createdAt) || album.artist}</p>
+          <p className="truncate text-xs font-semibold text-white/35">{isSingle ? "Сингл" : (formatDate(album.createdAt) || album.artist)}</p>
         </button>
         <button
           type="button"
@@ -171,19 +178,6 @@ function TrackRow({
         </div>
       </button>
 
-      <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
-        <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
-          {formatDuration(track.duration)}
-        </span>
-        <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          <TrackMenuButton
-            track={track}
-            onOpenArtist={onOpenArtist}
-            onOpenAlbum={onOpenAlbum}
-          />
-        </div>
-      </div>
-
       {showLike && (
         <button
           type="button"
@@ -192,7 +186,7 @@ function TrackRow({
             onToggleLike?.(track);
           }}
           className={[
-            "ml-3 grid h-9 w-9 shrink-0 place-items-center rounded-full transition hover:bg-white/[0.07] active:scale-95",
+            "grid h-9 w-9 shrink-0 place-items-center rounded-full transition hover:bg-white/[0.07] active:scale-95",
             isLiked ? "opacity-100" : "opacity-45 hover:opacity-85"
           ].join(" ")}
           aria-label={isLiked ? "Убрать лайк" : "Лайкнуть трек"}
@@ -205,6 +199,19 @@ function TrackRow({
           />
         </button>
       )}
+
+      <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
+        <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
+          {formatDuration(track.duration)}
+        </span>
+        <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          <TrackMenuButton
+            track={track}
+            onOpenArtist={onOpenArtist}
+            onOpenAlbum={onOpenAlbum}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -242,7 +249,8 @@ function AlbumView({
 }) {
   const tracks = album.tracks || [];
   const totalDuration = tracks.reduce((total, track) => total + (track.duration || 0), 0);
-  const releaseType = album.kind === "playlist" ? "Плейлист" : "Альбом";
+  const isSingle = album.kind === "single" || album.trackCount === 1 || tracks.length === 1;
+  const releaseType = isSingle ? "Сингл" : album.kind === "playlist" ? "Плейлист" : "Альбом";
 
   return (
     <section className="flex-1 overflow-y-auto rounded-[17.76px] border border-white/[0.04] bg-[#070707] text-white shadow-2xl">
@@ -489,7 +497,10 @@ export function ArtistView({ artist, onBack, onOpenArtist }) {
     [profile.name, profile.username, sortedTracks]
   );
   const previewTracks = useMemo(() => sortedTracks.slice(0, 10), [sortedTracks]);
-  const visibleAlbums = showAllAlbums ? albums : albums.slice(0, 5);
+  const fullAlbums = useMemo(() => albums.filter((a) => a.kind !== "single" && (a.trackCount || a.tracks?.length || 0) > 1), [albums]);
+  const singleReleases = useMemo(() => albums.filter((a) => a.kind === "single" || (a.trackCount || a.tracks?.length || 0) === 1), [albums]);
+  const visibleAlbums = showAllAlbums ? fullAlbums : fullAlbums.slice(0, 5);
+  const visibleSingles = showAllAlbums ? singleReleases : singleReleases.slice(0, 5);
   const visiblePlaylists = showAllPlaylists ? playlists : playlists.slice(0, 5);
   const tags = profile.tags?.length ? profile.tags : tracks.map((track) => track.mood).filter(Boolean).slice(0, 3);
 
@@ -663,7 +674,7 @@ export function ArtistView({ artist, onBack, onOpenArtist }) {
           </HorizontalScrollSection>
         )}
 
-        {albums.length > 0 && (
+        {fullAlbums.length > 0 && (
           <HorizontalScrollSection title={
             <button onClick={() => setShowAllAlbums((value) => !value)} className="flex items-center gap-2 transition hover:text-white/80">
               <span>Альбомы</span>
@@ -676,6 +687,20 @@ export function ArtistView({ artist, onBack, onOpenArtist }) {
                 album={album}
                 onOpen={openAlbum}
                 isSaved={savedReleaseIds.has(album.id)}
+                onToggleSave={toggleSavedRelease}
+              />
+            ))}
+          </HorizontalScrollSection>
+        )}
+
+        {singleReleases.length > 0 && (
+          <HorizontalScrollSection title="Синглы и EP">
+            {visibleSingles.map((single) => (
+              <AlbumCard
+                key={single.id}
+                album={single}
+                onOpen={openAlbum}
+                isSaved={savedReleaseIds.has(single.id)}
                 onToggleSave={toggleSavedRelease}
               />
             ))}

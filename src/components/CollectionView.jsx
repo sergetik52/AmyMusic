@@ -194,11 +194,14 @@ function PlaylistView({
   onDelete,
   onOpenTrackWave
 }) {
+  const { reorderPlaylistTracks } = useAudioPlayer();
   const [title, setTitle] = useState(playlist.title);
   const [cover, setCover] = useState(playlist.cover);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDeletePromptOpen, setIsDeletePromptOpen] = useState(false);
   const [isCoverExpanded, setIsCoverExpanded] = useState(false);
+  const [draggedTrackIndex, setDraggedTrackIndex] = useState(null);
+  const [dragOverTrackIndex, setDragOverTrackIndex] = useState(null);
   const fileInputRef = React.useRef(null);
   const tracks = playlist.tracks || [];
 
@@ -378,35 +381,82 @@ function PlaylistView({
         {isLoading && (
           <p className="mb-4 text-sm font-bold text-white/35">Догружаю треки...</p>
         )}
-        {tracks.length ? tracks.map((track, index) => (
-          <div key={track.id} className="group flex items-center gap-3 rounded-xl p-2 transition hover:bg-white/[0.04]">
-            <button type="button" onClick={() => onPlay(track, tracks)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-              <span className="w-7 text-right text-xs font-black text-white/25">{index + 1}</span>
-              <img src={track.cover} alt="" className="h-11 w-11 rounded-lg object-cover" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-white">{track.title}</p>
-                <TrackArtistLinks track={track} onOpenArtist={onOpenArtist} />
-              </div>
-            </button>
-            <TrackLikeButton
-              track={track}
-              isLiked={likedTrackIds.has(track.id)}
-              onToggleLike={onToggleLike}
-            />
-            <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
-              <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
-                {formatDuration(track.duration)}
-              </span>
-              <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                <TrackMenuButton
-                  track={track}
-                  onOpenArtist={onOpenArtist}
-                  onRemoveFromPlaylist={isEditable ? () => onRemoveTrack?.(playlist.id, track.id) : undefined}
-                />
+        {tracks.length ? tracks.map((track, index) => {
+          const isDragging = draggedTrackIndex === index;
+          const isDragOver = dragOverTrackIndex === index;
+
+          return (
+            <div
+              key={track.id}
+              draggable={isEditable}
+              onDragStart={(e) => {
+                if (!isEditable) return;
+                e.dataTransfer.setData("text/plain", String(index));
+                setDraggedTrackIndex(index);
+              }}
+              onDragOver={(e) => {
+                if (!isEditable) return;
+                e.preventDefault();
+                setDragOverTrackIndex(index);
+              }}
+              onDragLeave={() => setDragOverTrackIndex(null)}
+              onDrop={(e) => {
+                if (!isEditable) return;
+                e.preventDefault();
+                if (draggedTrackIndex !== null && draggedTrackIndex !== index) {
+                  reorderPlaylistTracks(playlist.id, draggedTrackIndex, index);
+                }
+                setDraggedTrackIndex(null);
+                setDragOverTrackIndex(null);
+              }}
+              onDragEnd={() => {
+                setDraggedTrackIndex(null);
+                setDragOverTrackIndex(null);
+              }}
+              className={[
+                "group flex items-center gap-3 rounded-xl p-2 transition hover:bg-white/[0.04]",
+                isEditable ? "cursor-grab active:cursor-grabbing" : "",
+                isDragging ? "opacity-30 scale-95" : "opacity-100",
+                isDragOver ? "border-2 border-[#8341EF]" : "border border-transparent"
+              ].join(" ")}
+            >
+              <button type="button" onClick={() => onPlay(track, tracks)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                {isEditable ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <svg className="h-4 w-4 fill-white/20 group-hover:fill-white/60 transition" viewBox="0 0 24 24">
+                      <path d="M9 18h6v-2H9v2zm0-5h6v-2H9v2zm0-7v2h6V6H9z" />
+                    </svg>
+                    <span className="w-5 text-right text-xs font-black text-white/25">{index + 1}</span>
+                  </div>
+                ) : (
+                  <span className="w-7 text-right text-xs font-black text-white/25">{index + 1}</span>
+                )}
+                <img src={track.cover} alt="" className="h-11 w-11 rounded-lg object-cover" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-white">{track.title}</p>
+                  <TrackArtistLinks track={track} onOpenArtist={onOpenArtist} />
+                </div>
+              </button>
+              <TrackLikeButton
+                track={track}
+                isLiked={likedTrackIds.has(track.id)}
+                onToggleLike={onToggleLike}
+              />
+              <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
+                <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
+                  {formatDuration(track.duration)}
+                </span>
+                <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                  <TrackMenuButton
+                    track={track}
+                    onOpenArtist={onOpenArtist}
+                    onRemoveFromPlaylist={isEditable ? () => onRemoveTrack?.(playlist.id, track.id) : undefined}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        )) : (
+          );
+        }) : (
           <div className="grid min-h-[220px] place-items-center text-sm font-bold text-white/35">
             Плейлист пустой
           </div>

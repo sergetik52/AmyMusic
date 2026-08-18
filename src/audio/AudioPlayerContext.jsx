@@ -622,7 +622,29 @@ export function AudioProvider({ children }) {
       analyser.smoothingTimeConstant = 0.68;
 
       const source = context.createMediaElementSource(audio);
-      source.connect(analyser);
+
+      // High-fidelity Audio DSP Chain (Bass punch + Treble clarity + Compressor limiter)
+      const compressor = context.createDynamicsCompressor();
+      compressor.threshold.value = -20;
+      compressor.knee.value = 12;
+      compressor.ratio.value = 3;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.25;
+
+      const bassFilter = context.createBiquadFilter();
+      bassFilter.type = "lowshelf";
+      bassFilter.frequency.value = 80;
+      bassFilter.gain.value = 2.2;
+
+      const trebleFilter = context.createBiquadFilter();
+      trebleFilter.type = "highshelf";
+      trebleFilter.frequency.value = 10000;
+      trebleFilter.gain.value = 2.5;
+
+      source.connect(bassFilter);
+      bassFilter.connect(trebleFilter);
+      trebleFilter.connect(compressor);
+      compressor.connect(analyser);
       analyser.connect(context.destination);
 
       audioContextRef.current = context;
@@ -1299,6 +1321,13 @@ export function AudioProvider({ children }) {
           });
         }
         showNotification("Трек скрыт (Дизлайк)", "info");
+
+        // Automatically skip to next track if disliking the current track!
+        if (targetId === currentTrackRef.current?.id) {
+          setTimeout(() => {
+            next();
+          }, 100);
+        }
       }
       return nextIds;
     });
@@ -1310,7 +1339,40 @@ export function AudioProvider({ children }) {
       return nextIds;
     });
     setLikedTracks((tracks) => tracks.filter((item) => item.id !== targetId));
-  }, [currentTrack.id, currentTrack, showNotification]);
+  }, [currentTrack.id, currentTrack, next, showNotification]);
+
+  const reorderQueue = useCallback((fromIndex, toIndex) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    setQueue((prevQueue) => {
+      if (fromIndex >= prevQueue.length || toIndex >= prevQueue.length) return prevQueue;
+      const nextQueue = [...prevQueue];
+      const [movedItem] = nextQueue.splice(fromIndex, 1);
+      nextQueue.splice(toIndex, 0, movedItem);
+
+      setCurrentIndex((currIndex) => {
+        if (currIndex === fromIndex) return toIndex;
+        if (fromIndex < currIndex && toIndex >= currIndex) return currIndex - 1;
+        if (fromIndex > currIndex && toIndex <= currIndex) return currIndex + 1;
+        return currIndex;
+      });
+
+      return nextQueue;
+    });
+  }, []);
+
+  const reorderPlaylistTracks = useCallback((playlistId, fromIndex, toIndex) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    setUserPlaylists((prevPlaylists) => {
+      return prevPlaylists.map((pl) => {
+        if (pl.id !== playlistId) return pl;
+        const tracks = pl.tracks ? [...pl.tracks] : [];
+        if (fromIndex >= tracks.length || toIndex >= tracks.length) return pl;
+        const [moved] = tracks.splice(fromIndex, 1);
+        tracks.splice(toIndex, 0, moved);
+        return { ...pl, tracks, updatedAt: Date.now() };
+      });
+    });
+  }, []);
 
   const toggleSavedRelease = useCallback((release) => {
     const normalized = normalizeStoredRelease(release);
@@ -1700,6 +1762,8 @@ export function AudioProvider({ children }) {
       openTrackWave,
       playNext,
       addToQueueEnd,
+      reorderQueue,
+      reorderPlaylistTracks,
       isFullOpen,
       setIsFullOpen
     }),

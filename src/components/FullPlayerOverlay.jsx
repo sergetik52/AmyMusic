@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
 import { fetchLyricsForTrack } from "../services/lyricsApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
+import { TrackMenuButton } from "./TrackContextMenu";
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
@@ -105,8 +106,12 @@ export function FullPlayerOverlay({ onClose, onOpenArtist }) {
     playTrack,
     toggleLike,
     cycleRepeatMode,
-    seek
+    seek,
+    reorderQueue
   } = useAudioPlayer();
+
+  const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
+  const [dragOverQueueIndex, setDragOverQueueIndex] = useState(null);
 
   const activeLyricIndex = useMemo(
     () => getActiveLyricIndex(lyricsState.lines, currentTime),
@@ -298,18 +303,48 @@ export function FullPlayerOverlay({ onClose, onOpenArtist }) {
       <div className="scrollbar-none min-h-0 flex-1 space-y-1 overflow-y-auto pr-2">
         {queue.length ? queue.map((track, index) => {
           const isCurrent = index === currentIndex || track.id === currentTrack.id;
+          const isDragging = draggedQueueIndex === index;
+          const isDragOver = dragOverQueueIndex === index;
 
           return (
-            <button
+            <div
               key={`${track.id}-${index}`}
-              type="button"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("text/plain", String(index));
+                setDraggedQueueIndex(index);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverQueueIndex(index);
+              }}
+              onDragLeave={() => setDragOverQueueIndex(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggedQueueIndex !== null && draggedQueueIndex !== index) {
+                  reorderQueue(draggedQueueIndex, index);
+                }
+                setDraggedQueueIndex(null);
+                setDragOverQueueIndex(null);
+              }}
+              onDragEnd={() => {
+                setDraggedQueueIndex(null);
+                setDragOverQueueIndex(null);
+              }}
               onClick={() => playTrack(track, queue)}
               className={[
-                "group flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition",
-                isCurrent ? "bg-white/[0.10]" : "hover:bg-white/[0.055]"
+                "group flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition cursor-grab active:cursor-grabbing",
+                isCurrent ? "bg-white/[0.10]" : "hover:bg-white/[0.055]",
+                isDragging ? "opacity-30 scale-95" : "opacity-100",
+                isDragOver ? "border-2 border-[#8341EF]" : "border border-transparent"
               ].join(" ")}
             >
-              <span className="w-6 shrink-0 text-right text-xs font-black text-white/25">{index + 1}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <svg className="h-4 w-4 fill-white/20 group-hover:fill-white/60 transition" viewBox="0 0 24 24">
+                  <path d="M9 18h6v-2H9v2zm0-5h6v-2H9v2zm0-7v2h6V6H9z" />
+                </svg>
+                <span className="w-5 text-right text-xs font-black text-white/25">{index + 1}</span>
+              </div>
               <img src={track.cover} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-black text-white">{track.title}</span>
@@ -320,7 +355,7 @@ export function FullPlayerOverlay({ onClose, onOpenArtist }) {
                   now
                 </span>
               )}
-            </button>
+            </div>
           );
         }) : (
           <div className="grid h-full place-items-center text-sm font-bold text-white/35">
@@ -343,7 +378,7 @@ export function FullPlayerOverlay({ onClose, onOpenArtist }) {
       <button
         type="button"
         onClick={handleClose}
-        className="absolute right-8 top-8 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95"
+        className="absolute right-8 top-8 z-30 flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-white/10 hover:text-white active:scale-95"
         aria-label="Закрыть"
       >
         <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24">
@@ -437,57 +472,12 @@ export function FullPlayerOverlay({ onClose, onOpenArtist }) {
               </div>
 
               <div className="pointer-events-none absolute bottom-4 left-4 right-4 flex items-center justify-between">
-                <div className="pointer-events-auto relative">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setIsMoreOpen((value) => !value);
-                    }}
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-black/30 text-white/80 transition hover:bg-black/50 hover:text-white active:scale-95"
-                    aria-label="Еще"
-                    aria-expanded={isMoreOpen}
-                  >
-                    <span className="text-xs font-bold tracking-widest">...</span>
-                  </button>
-
-                  {isMoreOpen && (
-                    <div className="absolute bottom-12 left-0 z-20 w-52 overflow-hidden rounded-2xl border border-white/10 bg-[#111]/95 p-1.5 text-left shadow-2xl backdrop-blur-md">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsMoreOpen(false);
-                          if (primaryArtist) handleArtistClick(primaryArtist);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.07] hover:text-white"
-                      >
-                        <img src="/user.svg" alt="" className="h-4 w-4 opacity-80" />
-                        <span className="truncate">Открыть артиста</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          seek(0);
-                          setIsMoreOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.07] hover:text-white"
-                      >
-                        <img src="/prev.svg" alt="" className="h-4 w-4 brightness-200 opacity-80" />
-                        <span>В начало трека</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowLyrics((value) => !value);
-                          setIsMoreOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.07] hover:text-white"
-                      >
-                        <img src="/lyrics.svg" alt="" className="h-4 w-4 brightness-200 opacity-80" />
-                        <span>{showLyrics ? "Скрыть текст" : "Показать текст"}</span>
-                      </button>
-                    </div>
-                  )}
+                <div className="pointer-events-auto">
+                  <TrackMenuButton
+                    track={currentTrack}
+                    onOpenArtist={onOpenArtist}
+                    placement="top"
+                  />
                 </div>
 
                 <button
