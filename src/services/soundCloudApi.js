@@ -649,6 +649,41 @@ export async function searchPlaylists(query) {
   );
 }
 
+export async function getTrackAlbum(track) {
+  if (!track) return null;
+  if (track.album || track.release) return track.album || track.release;
+
+  try {
+    const artistName = track.artist || "";
+    const title = track.title || "";
+    const query = `${artistName} ${title}`.trim();
+    if (query) {
+      const albums = await searchAlbums(query);
+      if (albums && albums.length > 0) {
+        const matched = albums.find((a) => 
+          (a.artist && a.artist.toLowerCase() === artistName.toLowerCase()) ||
+          (a.title && a.title.toLowerCase().includes(title.toLowerCase()))
+        ) || albums[0];
+        if (matched) return matched;
+      }
+    }
+  } catch (e) {
+    logWarn("api", "getTrackAlbum search failed", e);
+  }
+
+  return {
+    id: `single-${track.id}`,
+    title: track.title,
+    kind: "single",
+    artist: track.artist,
+    artistId: track.artistId,
+    artistAvatar: track.artistAvatar || track.cover,
+    cover: track.cover,
+    trackCount: 1,
+    tracks: [track]
+  };
+}
+
 export async function getArtistProfile(artist) {
   assertClientId();
   if (!artist?.id || artist.id === "empty") return emptyArtist;

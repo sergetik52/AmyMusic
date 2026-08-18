@@ -69,14 +69,15 @@ export function TrackContextMenu({
     });
   };
 
-  const handleOpenAlbum = () => {
-    const albumObj = track.album || track.release;
+  const handleOpenAlbum = async () => {
+    let albumObj = track.album || track.release;
     if (albumObj) {
       onOpenAlbum?.(albumObj);
     } else if (track.playlistId) {
       onOpenAlbum?.({ id: track.playlistId, title: track.playlistTitle || "Альбом", cover: track.cover });
     } else if (track.id && track.id !== "empty") {
-      onOpenAlbum?.({
+      const fetchedAlbum = await getTrackAlbum(track);
+      onOpenAlbum?.(fetchedAlbum || {
         id: `single-${track.id}`,
         title: track.title,
         kind: "single",

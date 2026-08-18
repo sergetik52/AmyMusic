@@ -431,7 +431,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
     setRelatedArtists([]);
     setShowAllAlbums(false);
     setShowAllPlaylists(false);
-    setActiveAlbum(null);
+    setActiveAlbum(artist?.initialAlbum || initialAlbum || null);
     setIsAlbumLoading(false);
     setIsTracksViewOpen(false);
 

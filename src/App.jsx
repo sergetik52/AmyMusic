@@ -1701,7 +1701,7 @@ export default function App() {
       />
       <Sidebar activeTab={activeTab} setActiveTab={selectTab} />
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
-        <div key={`${activeTab}-${activeArtist?.id || "none"}-${apiSettingsVersion}`} className="contents">
+        <div key={`${activeTab}-${activeArtist?.id || "none"}-${activeArtist?.initialAlbum?.id || "noalbum"}-${apiSettingsVersion}`} className="contents">
           {renderContent()}
         </div>
         {activeTab !== "wave" && (
