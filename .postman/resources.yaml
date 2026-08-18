@@ -1,0 +1,18 @@
+# Use this workspace to collaborate
+workspace:
+  id: b267f067-823f-4a91-8dd5-531effd1f6d9
+
+dependencies:
+  collections:
+    57454254-cf687931-f271-4d87-8c91-13130febc446:
+      name: My Collection
+      path: ../postman/.dependencies/collections/My Collection
+    13183464-90abb798-cb85-43cb-ba3a-ae7941e968da:
+      name: OpenAI API
+      path: ../postman/.dependencies/collections/OpenAI API
+
+# All resources in the `postman/` folder are automatically registered in Local View.
+# Point to additional files outside the `postman/` folder to register them individually. Example:
+#localResources:
+#  collections:
+#    - ../tests/E2E Test Collection/

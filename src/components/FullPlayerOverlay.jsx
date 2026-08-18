@@ -1,0 +1,590 @@
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useAudioPlayer } from "../audio/AudioPlayerContext";
+import { fetchLyricsForTrack } from "../services/lyricsApi";
+import { useEscapeKey } from "../utils/useEscapeKey";
+
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.floor(seconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${rest}`;
+}
+
+function getActiveLyricIndex(lines, currentTime) {
+  if (!lines.length) return -1;
+
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (Number.isFinite(lines[index].time) && currentTime + 0.08 >= lines[index].time) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+const lyricsRequestCache = new Map();
+
+function getLyricsCacheKey(track, duration) {
+  return [
+    track?.id || "",
+    track?.title || "",
+    track?.artist || "",
+    Math.round(track?.duration || duration || 0)
+  ].join("|");
+}
+
+function getCachedLyricsForTrack(track, duration) {
+  const key = getLyricsCacheKey(track, duration);
+  if (lyricsRequestCache.has(key)) {
+    return lyricsRequestCache.get(key);
+  }
+
+  const request = fetchLyricsForTrack({
+    ...track,
+    duration: track.duration || duration
+  })
+    .then((lyrics) => ({
+      status: lyrics.status,
+      lines: lyrics.lines || [],
+      error: ""
+    }))
+    .catch((error) => ({
+      status: "error",
+      lines: [],
+      error: error.message || "Не удалось загрузить текст"
+    }));
+
+  lyricsRequestCache.set(key, request);
+  return request;
+}
+
+function getTrackArtists(track) {
+  return track.artists?.length
+    ? track.artists
+    : [{
+      id: track.artistId || "",
+      name: track.artist,
+      username: track.artist,
+      avatar: track.artistAvatar || track.cover || "/logo.png",
+      permalinkUrl: track.artistPermalinkUrl || ""
+    }];
+}
+
+export function FullPlayerOverlay({ onClose, onOpenArtist }) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(true);
+  const [sidePanel, setSidePanel] = useState("lyrics");
+  const [isVisible, setIsVisible] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [lyricsOffset, setLyricsOffset] = useState(0);
+  const [lyricsState, setLyricsState] = useState({
+    status: "idle",
+    lines: [],
+    error: ""
+  });
+  const lyricsStageRef = useRef(null);
+  const lyricRefs = useRef([]);
+  const lyricWheelLockRef = useRef(false);
+  const {
+    currentTrack,
+    trackPalette,
+    isPlaying,
+    isLiked,
+    currentTime,
+    duration,
+    progress,
+    queue,
+    currentIndex,
+    repeatMode,
+    isShuffle,
+    toggleShuffle,
+    togglePlay,
+    previous,
+    next,
+    playTrack,
+    toggleLike,
+    cycleRepeatMode,
+    seek
+  } = useAudioPlayer();
+
+  const activeLyricIndex = useMemo(
+    () => getActiveLyricIndex(lyricsState.lines, currentTime),
+    [currentTime, lyricsState.lines]
+  );
+  const firstLyricTime = lyricsState.lines[0]?.time;
+  const isBeforeFirstLyric =
+    Number.isFinite(firstLyricTime) && currentTime + 0.08 < firstLyricTime;
+  const lyricsAnchorIndex = isBeforeFirstLyric ? -1 : activeLyricIndex;
+  const shouldShowLyricsPanel =
+    sidePanel === "lyrics" && showLyrics && (lyricsState.status === "loading" || lyricsState.lines.length > 0);
+  const shouldShowQueuePanel = sidePanel === "queue";
+  const shouldShowSidePanel = shouldShowLyricsPanel || shouldShowQueuePanel;
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsVisible(true), 10);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+    lyricRefs.current = [];
+    setLyricsOffset(0);
+
+    if (!currentTrack?.id || currentTrack.id === "empty") {
+      setLyricsState({ status: "empty", lines: [], error: "" });
+      return undefined;
+    }
+
+    setLyricsState({ status: "loading", lines: [], error: "" });
+
+    getCachedLyricsForTrack(currentTrack, duration)
+      .then((nextLyricsState) => {
+        if (!isCancelled) {
+          setLyricsState(nextLyricsState);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentTrack.id, currentTrack.title, currentTrack.artist, currentTrack.duration, duration]);
+
+  useLayoutEffect(() => {
+    if (!shouldShowLyricsPanel || lyricsAnchorIndex < -1) {
+      setLyricsOffset(0);
+      return;
+    }
+
+    const stage = lyricsStageRef.current;
+    const anchor = lyricRefs.current[lyricsAnchorIndex];
+    if (!stage || !anchor) return;
+
+    const nextOffset =
+      stage.clientHeight / 2 -
+      anchor.offsetTop -
+      anchor.offsetHeight / 2;
+
+    setLyricsOffset(nextOffset);
+  }, [lyricsAnchorIndex, lyricsState.lines, shouldShowLyricsPanel]);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setIsVisible(false);
+    setTimeout(onClose, 300);
+  };
+
+  const handleArtistClick = (artist) => {
+    onOpenArtist?.({
+      id: artist.id || "",
+      name: artist.name || artist.username,
+      username: artist.username || artist.name,
+      avatar: artist.avatar || currentTrack.artistAvatar || currentTrack.cover || "/logo.png",
+      permalinkUrl: artist.permalinkUrl || "",
+      followers: 0,
+      followings: 0,
+      trackCount: 0,
+      city: "",
+      country: "",
+      tags: []
+    });
+    handleClose();
+  };
+
+  const primaryArtist = getTrackArtists(currentTrack)[0];
+
+  useEscapeKey(true, () => {
+    if (isMoreOpen) {
+      setIsMoreOpen(false);
+      return;
+    }
+
+    handleClose();
+  });
+
+  const seekToLyric = (line, index = activeLyricIndex) => {
+    if (!Number.isFinite(line?.time)) return;
+    seek(Math.max(0, line.time));
+
+    const stage = lyricsStageRef.current;
+    const anchor = lyricRefs.current[index];
+    if (stage && anchor) {
+      setLyricsOffset(stage.clientHeight / 2 - anchor.offsetTop - anchor.offsetHeight / 2);
+    }
+  };
+
+  const handleLyricsWheel = (event) => {
+    if (!lyricsState.lines.length || lyricWheelLockRef.current) return;
+    event.preventDefault();
+
+    const direction = event.deltaY > 0 ? 1 : -1;
+    const currentIndex = activeLyricIndex >= 0 ? activeLyricIndex : 0;
+    const nextIndex = Math.min(
+      lyricsState.lines.length - 1,
+      Math.max(0, currentIndex + direction)
+    );
+    const nextLine = lyricsState.lines[nextIndex];
+    if (!nextLine || nextIndex === activeLyricIndex) return;
+
+    lyricWheelLockRef.current = true;
+    seekToLyric(nextLine, nextIndex);
+    window.setTimeout(() => {
+      lyricWheelLockRef.current = false;
+    }, 180);
+  };
+
+  const renderLyrics = () => {
+    if (lyricsState.status === "loading") {
+      return <p className="text-2xl font-black text-neutral-700">Загружаю текст...</p>;
+    }
+
+    return [
+      isBeforeFirstLyric ? (
+        <div
+          key="intro-dots"
+          ref={(node) => {
+            lyricRefs.current[-1] = node;
+          }}
+          className="karaoke-dots flex h-12 items-center justify-center gap-2"
+          aria-hidden="true"
+        >
+          <span />
+          <span />
+          <span />
+        </div>
+      ) : null,
+      ...lyricsState.lines.map((line, index) => {
+        const isCurrent = index === activeLyricIndex && !isBeforeFirstLyric;
+
+        return (
+          <button
+            type="button"
+            key={`${line.time ?? index}-${line.text}`}
+            ref={(node) => {
+              lyricRefs.current[index] = node;
+            }}
+            onClick={() => seekToLyric(line, index)}
+            disabled={!Number.isFinite(line.time)}
+            aria-label={Number.isFinite(line.time) ? `Перемотать к ${formatTime(line.time)}` : undefined}
+            className={`group relative w-full max-w-[760px] cursor-pointer text-center text-[28px] leading-tight transition-[color,opacity,transform] duration-300 disabled:cursor-default ${isCurrent
+                ? "scale-[1.02] font-black text-white opacity-100"
+                : "font-extrabold text-neutral-700 opacity-95 hover:text-neutral-500"
+              }`}
+          >
+            <span>{line.text}</span>
+            {Number.isFinite(line.time) && (
+              <span className="absolute -right-16 top-1/2 hidden -translate-y-1/2 text-xs font-black text-white/25 group-hover:block">
+                {formatTime(line.time)}
+              </span>
+            )}
+          </button>
+        );
+      })
+    ];
+  };
+
+  const renderQueue = () => (
+    <div className="flex h-screen w-full flex-col px-10 py-16">
+      <div className="mb-5 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-white/28">Очередь</p>
+          <h3 className="mt-1 text-3xl font-black tracking-tight text-white">Сейчас играет</h3>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-black text-white/45">
+          {queue.length} треков
+        </span>
+      </div>
+
+      <div className="scrollbar-none min-h-0 flex-1 space-y-1 overflow-y-auto pr-2">
+        {queue.length ? queue.map((track, index) => {
+          const isCurrent = index === currentIndex || track.id === currentTrack.id;
+
+          return (
+            <button
+              key={`${track.id}-${index}`}
+              type="button"
+              onClick={() => playTrack(track, queue)}
+              className={[
+                "group flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition",
+                isCurrent ? "bg-white/[0.10]" : "hover:bg-white/[0.055]"
+              ].join(" ")}
+            >
+              <span className="w-6 shrink-0 text-right text-xs font-black text-white/25">{index + 1}</span>
+              <img src={track.cover} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-black text-white">{track.title}</span>
+                <span className="block truncate text-xs font-semibold text-white/40">{track.artist}</span>
+              </span>
+              {isCurrent && (
+                <span className="rounded-full bg-[var(--player-accent)] px-2 py-1 text-[10px] font-black text-white">
+                  now
+                </span>
+              )}
+            </button>
+          );
+        }) : (
+          <div className="grid h-full place-items-center text-sm font-bold text-white/35">
+            Очередь пустая
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      className={`fixed inset-0 z-50 flex select-none text-white transition-opacity duration-300 ease-out ${isVisible && !isClosing ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      style={{
+        "--player-accent": `color-mix(in srgb, ${trackPalette.line} 50%, #4a4a4a)`,
+        backgroundColor: `color-mix(in srgb, ${trackPalette.shadow} 28%, #171717)`
+      }}
+    >
+      <button
+        type="button"
+        onClick={handleClose}
+        className="absolute right-8 top-8 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95"
+        aria-label="Закрыть"
+      >
+        <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24">
+          <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+        </svg>
+      </button>
+
+      <div className={`flex flex-col items-center justify-center p-8 transition-all duration-500 ease-in-out ${shouldShowSidePanel ? "w-1/2" : "w-full"}`}>
+        <div
+          className={`flex flex-col items-center gap-4 transition-all duration-300 ease-out ${isVisible && !isClosing ? "translate-y-0 scale-100" : "translate-y-4 scale-95"
+            }`}
+        >
+          <div
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            className="relative h-80 w-80 cursor-pointer overflow-hidden rounded-2xl shadow-2xl"
+            style={{ boxShadow: "0 30px 90px rgba(0,0,0,.62)" }}
+          >
+            <img src={currentTrack.cover} alt={currentTrack.title} className="h-full w-full object-cover" />
+
+            <div
+              className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${isHovered ? "opacity-100" : "pointer-events-none opacity-0"
+                }`}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSidePanel((prev) => (prev === "queue" ? "lyrics" : "queue"));
+                }}
+                className="absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/30 text-white/80 transition hover:scale-105 hover:bg-black/50"
+                aria-label="Очередь"
+              >
+                <img src="/queue.svg" alt="" className="h-5 w-5 brightness-200" />
+              </button>
+
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-5">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); toggleShuffle(); }}
+                  className={[
+                    "pointer-events-auto absolute left-4 transition hover:opacity-100",
+                    isShuffle ? "opacity-100" : "opacity-60"
+                  ].join(" ")}
+                  aria-label="Случайный порядок"
+                >
+                  <img src="/shuffle.svg" alt="" className="h-5 w-5 brightness-200" />
+                </button>
+
+                <button type="button" onClick={(e) => { e.stopPropagation(); previous(); }} className="pointer-events-auto transition hover:scale-110 active:scale-95" aria-label="Назад">
+                  <img src="/prev.svg" alt="" className="h-6 w-6 brightness-200" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+                  className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--player-accent)] text-white shadow-lg transition hover:scale-105 active:scale-95"
+                  aria-label={isPlaying ? "Пауза" : "Играть"}
+                >
+                  {isPlaying ? (
+                    <svg className="h-7 w-7 fill-current" viewBox="0 0 24 24">
+                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-7 w-7 fill-current" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  )}
+                </button>
+
+                <button type="button" onClick={(e) => { e.stopPropagation(); next(); }} className="pointer-events-auto transition hover:scale-110 active:scale-95" aria-label="Вперед">
+                  <img src="/next.svg" alt="" className="h-6 w-6 brightness-200" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); cycleRepeatMode(); }}
+                  className={[
+                    "pointer-events-auto absolute right-4 transition hover:opacity-100",
+                    repeatMode !== "off" ? "opacity-100" : "opacity-60"
+                  ].join(" ")}
+                  aria-label="Повтор"
+                >
+                  <img src="/repeat.svg" alt="" className="h-5 w-5 brightness-200" />
+                  {repeatMode !== "off" && (
+                    <span className="absolute -right-2 -top-2 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--player-accent)] px-1 text-[9px] font-black leading-none text-white">
+                      {repeatMode === "one" ? "1" : "∞"}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <div className="pointer-events-none absolute bottom-4 left-4 right-4 flex items-center justify-between">
+                <div className="pointer-events-auto relative">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setIsMoreOpen((value) => !value);
+                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-black/30 text-white/80 transition hover:bg-black/50 hover:text-white active:scale-95"
+                    aria-label="Еще"
+                    aria-expanded={isMoreOpen}
+                  >
+                    <span className="text-xs font-bold tracking-widest">...</span>
+                  </button>
+
+                  {isMoreOpen && (
+                    <div className="absolute bottom-12 left-0 z-20 w-52 overflow-hidden rounded-2xl border border-white/10 bg-[#111]/95 p-1.5 text-left shadow-2xl backdrop-blur-md">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMoreOpen(false);
+                          if (primaryArtist) handleArtistClick(primaryArtist);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.07] hover:text-white"
+                      >
+                        <img src="/user.svg" alt="" className="h-4 w-4 opacity-80" />
+                        <span className="truncate">Открыть артиста</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          seek(0);
+                          setIsMoreOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.07] hover:text-white"
+                      >
+                        <img src="/prev.svg" alt="" className="h-4 w-4 brightness-200 opacity-80" />
+                        <span>В начало трека</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowLyrics((value) => !value);
+                          setIsMoreOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.07] hover:text-white"
+                      >
+                        <img src="/lyrics.svg" alt="" className="h-4 w-4 brightness-200 opacity-80" />
+                        <span>{showLyrics ? "Скрыть текст" : "Показать текст"}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setShowLyrics(!showLyrics); }}
+                  title="Текст песни"
+                  className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/30 transition hover:bg-black/50 hover:text-white ${showLyrics ? "text-white" : "text-white/80"}`}
+                >
+                  <img src="/lyrics.svg" alt="" className="h-5 w-5 brightness-200" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); toggleLike(); }}
+                  className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/30 transition hover:bg-black/50 ${isLiked ? "text-white" : "text-white/80 hover:text-white"}`}
+                  aria-label="Лайк"
+                >
+                  <img src={isLiked ? "/like.svg" : "/unlike.svg"} alt="" className={`h-5 w-5 ${isLiked ? "" : "brightness-200"}`} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center">
+            <h2 className="text-base font-bold text-white">{currentTrack.title}</h2>
+            <div className="mt-1 flex max-w-80 flex-wrap justify-center gap-x-1 overflow-hidden text-xs font-semibold text-white/50">
+              {getTrackArtists(currentTrack).map((artist, index) => (
+                <React.Fragment key={`${artist.id || artist.name}-${index}`}>
+                  {index > 0 && <span className="text-white/25">,</span>}
+                  <button
+                    type="button"
+                    onClick={() => handleArtistClick(artist)}
+                    className="max-w-[140px] truncate transition hover:text-white hover:underline"
+                  >
+                    {artist.name || artist.username}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+
+          <div className="w-80">
+            <div className="mb-1 flex items-center justify-between text-[10px] font-medium text-white/35">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
+            <div className="player-seek-wrap relative h-4">
+              <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/20">
+                <div className="h-full bg-[var(--player-accent)]" style={{ width: `${progress * 100}%` }} />
+              </div>
+              <input
+                type="range"
+                min="0"
+                max={Math.max(duration || 0, 1)}
+                step="0.1"
+                value={Math.min(currentTime || 0, duration || 0)}
+                onChange={(event) => seek(Number(event.target.value))}
+                disabled={!duration}
+                aria-label="Перемотка"
+                className="player-seek-slider"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={`flex flex-col items-center justify-center overflow-hidden transition-all duration-500 ease-in-out ${shouldShowSidePanel ? "w-1/2 scale-100 opacity-100" : "pointer-events-none w-0 scale-95 opacity-0"
+          }`}
+      >
+        {shouldShowQueuePanel ? (
+          renderQueue()
+        ) : shouldShowLyricsPanel ? (
+          lyricsState.status === "plain" ? (
+            <div className="scrollbar-none h-full w-full overflow-y-auto px-12 py-32" onWheel={(e) => e.stopPropagation()}>
+              <div className="mx-auto flex max-w-[760px] flex-col gap-6 text-center text-[28px] font-extrabold leading-tight text-white/80">
+                {lyricsState.lines.map((line, index) => (
+                  <p key={`${index}-${line.text}`}>{line.text}</p>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div
+              ref={lyricsStageRef}
+              onWheel={handleLyricsWheel}
+              className="relative h-screen w-full overflow-hidden px-12"
+            >
+              <div
+                className="absolute left-0 right-0 top-0 flex flex-col items-center gap-6 px-12 text-center transition-transform duration-500 ease-out"
+                style={{ transform: `translateY(${lyricsOffset}px)` }}
+              >
+                {renderLyrics()}
+              </div>
+            </div>
+          )
+        ) : null}
+      </div>
+    </div>
+  );
+}

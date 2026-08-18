@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release/
+out/
+*.log
+*.err.log
+.env
+.env.local
+.DS_Store
+postman/.dependencies/
