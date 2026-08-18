@@ -53,9 +53,14 @@ export function TrackContextMenu({
     subTimerRef.current = setTimeout(() => setIsSubOpen(false), 150);
   }, []);
 
-  const handleAction = (actionFn) => {
-    actionFn();
-    onClose();
+  const handleAction = async (actionFn) => {
+    try {
+      await actionFn();
+    } catch (e) {
+      console.warn("Action failed", e);
+    } finally {
+      onClose();
+    }
   };
 
   const handleOpenArtist = () => {
@@ -71,23 +76,36 @@ export function TrackContextMenu({
 
   const handleOpenAlbum = async () => {
     let albumObj = track.album || track.release;
-    if (albumObj) {
-      onOpenAlbum?.(albumObj);
-    } else if (track.playlistId) {
-      onOpenAlbum?.({ id: track.playlistId, title: track.playlistTitle || "Альбом", cover: track.cover });
-    } else if (track.id && track.id !== "empty") {
-      const fetchedAlbum = await getTrackAlbum(track);
-      onOpenAlbum?.(fetchedAlbum || {
-        id: `single-${track.id}`,
-        title: track.title,
-        kind: "single",
-        artist: track.artist,
-        artistId: track.artistId,
-        artistAvatar: track.artistAvatar || track.cover,
-        cover: track.cover,
-        trackCount: 1,
-        tracks: [track]
-      });
+    if (!albumObj && track.playlistId) {
+      albumObj = { id: track.playlistId, title: track.playlistTitle || "Альбом", cover: track.cover };
+    }
+
+    const immediateSingle = {
+      id: `single-${track.id}`,
+      title: track.title,
+      kind: "single",
+      artist: track.artist,
+      artistId: track.artistId,
+      artistAvatar: track.artistAvatar || track.cover,
+      cover: track.cover,
+      trackCount: 1,
+      tracks: [track]
+    };
+
+    // Open single/album view instantly!
+    const targetAlbum = albumObj || immediateSingle;
+    onOpenAlbum?.(targetAlbum);
+
+    // If no album was pre-attached, attempt background fetch for full album
+    if (!albumObj && track.id && track.id !== "empty") {
+      try {
+        const fetchedAlbum = await getTrackAlbum(track);
+        if (fetchedAlbum && fetchedAlbum.kind !== "single") {
+          onOpenAlbum?.(fetchedAlbum);
+        }
+      } catch (e) {
+        console.warn("Background album resolution failed", e);
+      }
     }
   };
 

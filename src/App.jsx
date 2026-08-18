@@ -1684,6 +1684,7 @@ export default function App() {
             artist={activeArtist}
             onBack={closeArtist}
             onOpenArtist={openArtist}
+            initialAlbum={activeArtist?.initialAlbum}
           />
         ) : (
           <SearchPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />
