@@ -1398,9 +1398,11 @@ function PlayerSeekBar() {
 }
 
 function PlayerTools({ onOpenFull }) {
-  const { currentTrack, effectiveVolume, playTrack, queue, setVolume } = useAudioPlayer();
+  const { currentTrack, effectiveVolume, playTrack, queue, reorderQueue, setVolume } = useAudioPlayer();
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
+  const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
+  const [dragOverQueueIndex, setDragOverQueueIndex] = useState(null);
   const [equalizer, setEqualizer] = useState({
     bass: 52,
     mids: 50,
@@ -1438,23 +1440,55 @@ function PlayerTools({ onOpenFull }) {
               {queue.length === 0 ? (
                 <p className="py-5 text-center text-xs text-white/35">Очередь пустая</p>
               ) : (
-                queue.map((track) => (
-                  <button
-                    key={track.id}
-                    type="button"
-                    onClick={() => playTrack(track, queue)}
-                    className={[
-                      "flex w-full items-center gap-2 rounded-xl p-2 text-left transition hover:bg-white/5",
-                      currentTrack.id === track.id ? "bg-white/10" : ""
-                    ].join(" ")}
-                  >
-                    <img src={track.cover} alt="" className="h-9 w-9 rounded-lg object-cover" />
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-bold text-white">{track.title}</p>
-                      <p className="truncate text-[11px] text-white/40">{track.artist}</p>
+                queue.map((track, index) => {
+                  const isCurrent = currentTrack.id === track.id;
+                  const isDragging = draggedQueueIndex === index;
+                  const isDragOver = dragOverQueueIndex === index;
+
+                  return (
+                    <div
+                      key={`${track.id}-${index}`}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", String(index));
+                        setDraggedQueueIndex(index);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverQueueIndex(index);
+                      }}
+                      onDragLeave={() => setDragOverQueueIndex(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedQueueIndex !== null && draggedQueueIndex !== index) {
+                          reorderQueue(draggedQueueIndex, index);
+                        }
+                        setDraggedQueueIndex(null);
+                        setDragOverQueueIndex(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedQueueIndex(null);
+                        setDragOverQueueIndex(null);
+                      }}
+                      onClick={() => playTrack(track, queue)}
+                      className={[
+                        "flex w-full items-center gap-2 rounded-xl p-2 text-left transition cursor-grab active:cursor-grabbing",
+                        isCurrent ? "bg-white/10" : "hover:bg-white/5",
+                        isDragging ? "opacity-30 scale-95" : "opacity-100",
+                        isDragOver ? "border-2 border-[#8341EF]" : "border border-transparent"
+                      ].join(" ")}
+                    >
+                      <svg className="h-3.5 w-3.5 shrink-0 fill-white/20 hover:fill-white/60 transition" viewBox="0 0 24 24">
+                        <path d="M9 18h6v-2H9v2zm0-5h6v-2H9v2zm0-7v2h6V6H9z" />
+                      </svg>
+                      <img src={track.cover} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-bold text-white">{track.title}</p>
+                        <p className="truncate text-[11px] text-white/40">{track.artist}</p>
+                      </div>
                     </div>
-                  </button>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

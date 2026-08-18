@@ -394,20 +394,20 @@ export function FullPlayerOverlay({ onClose, onOpenArtist }) {
           <div
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            className="relative h-80 w-80 cursor-pointer overflow-hidden rounded-2xl shadow-2xl"
+            className="relative h-80 w-80 cursor-pointer rounded-2xl shadow-2xl"
             style={{ boxShadow: "0 30px 90px rgba(0,0,0,.62)" }}
           >
-            <img src={currentTrack.cover} alt={currentTrack.title} className="h-full w-full object-cover" />
+            <img src={currentTrack.cover} alt={currentTrack.title} className="h-full w-full object-cover rounded-2xl" />
 
             <div
-              className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${isHovered ? "opacity-100" : "pointer-events-none opacity-0"
+              className={`absolute inset-0 bg-black/50 rounded-2xl transition-opacity duration-300 ${isHovered ? "opacity-100" : "pointer-events-none opacity-0"
                 }`}
             >
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setSidePanel((prev) => (prev === "queue" ? "lyrics" : "queue"));
+                  setSidePanel((prev) => (prev === "queue" ? "none" : "queue"));
                 }}
                 className="absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/30 text-white/80 transition hover:scale-105 hover:bg-black/50"
                 aria-label="Очередь"
@@ -482,9 +482,13 @@ export function FullPlayerOverlay({ onClose, onOpenArtist }) {
 
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setShowLyrics(!showLyrics); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSidePanel((prev) => (prev === "lyrics" ? "none" : "lyrics"));
+                    setShowLyrics(true);
+                  }}
                   title="Текст песни"
-                  className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/30 transition hover:bg-black/50 hover:text-white ${showLyrics ? "text-white" : "text-white/80"}`}
+                  className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/30 transition hover:bg-black/50 hover:text-white ${sidePanel === "lyrics" ? "text-white" : "text-white/80"}`}
                 >
                   <img src="/lyrics.svg" alt="" className="h-5 w-5 brightness-200" />
                 </button>
