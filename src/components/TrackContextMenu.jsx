@@ -73,14 +73,24 @@ export function TrackContextMenu({
     const albumObj = track.album || track.release;
     if (albumObj) {
       onOpenAlbum?.(albumObj);
-    } else {
-      if (track.playlistId) {
-        onOpenAlbum?.({ id: track.playlistId, title: track.playlistTitle || "Альбом", cover: track.cover });
-      }
+    } else if (track.playlistId) {
+      onOpenAlbum?.({ id: track.playlistId, title: track.playlistTitle || "Альбом", cover: track.cover });
+    } else if (track.id && track.id !== "empty") {
+      onOpenAlbum?.({
+        id: `single-${track.id}`,
+        title: track.title,
+        kind: "single",
+        artist: track.artist,
+        artistId: track.artistId,
+        artistAvatar: track.artistAvatar || track.cover,
+        cover: track.cover,
+        trackCount: 1,
+        tracks: [track]
+      });
     }
   };
 
-  const hasAlbum = Boolean(track.album || track.release || track.playlistId);
+  const hasAlbum = true;
 
   return (
     <div
@@ -219,7 +229,7 @@ export function TrackContextMenu({
         className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:pointer-events-none"
       >
         <img src="/menu/album.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
-        <span>Перейти к альбому</span>
+        <span>{track.album || track.release ? "Перейти к альбому" : "Перейти к синглу"}</span>
       </button>
 
       {/* 9. Перейти к исполнителю */}
