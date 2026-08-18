@@ -29,7 +29,7 @@ import "./main.css";
 const initialNavigation = [
   { id: "search", label: "Поиск", icon: "/search.svg" },
   { id: "wave", label: "Моя волна", icon: "/wave.svg" },
-  { id: "trends", label: "Для вас и Тренды", icon: "/trends.svg" },
+  { id: "trends", label: "Чарты", icon: "/trends.svg" },
   { id: "collection", label: "Коллекция", icon: "/collection.svg" }
 ];
 
@@ -1134,16 +1134,48 @@ function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
       setIsLoading(true);
       setError("");
       try {
-        let results = await getPersonalWaveTracks({
-          likedTracks,
-          dislikedTrackIds,
-          dislikedTracks,
-          playHistory,
-          currentTrack
-        });
+        let results = [];
+        let loadedFromChart = false;
 
-        if (!results.length) {
-          results = await getRecommendedTracks();
+        if (window.amyMusicDesktop?.getBandlinkChart) {
+          try {
+            const chartData = await window.amyMusicDesktop.getBandlinkChart();
+            if (chartData && chartData.length > 0) {
+              const searchPromises = chartData.map(async (item) => {
+                try {
+                  const query = `${item.artist} ${item.title}`.trim();
+                  const matched = await searchTracks(query);
+                  return matched && matched.length > 0 ? matched[0] : null;
+                } catch (err) {
+                  return null;
+                }
+              });
+              const scTracks = await Promise.all(searchPromises);
+              results = scTracks.filter(Boolean);
+              if (results.length > 20) {
+                results = results.slice(0, 20);
+              }
+              if (results.length > 0) {
+                loadedFromChart = true;
+              }
+            }
+          } catch (chartErr) {
+            console.warn("Failed to load Bandlink chart, falling back to recommendations", chartErr);
+          }
+        }
+
+        if (!loadedFromChart) {
+          results = await getPersonalWaveTracks({
+            likedTracks,
+            dislikedTrackIds,
+            dislikedTracks,
+            playHistory,
+            currentTrack
+          });
+
+          if (!results.length) {
+            results = await getRecommendedTracks();
+          }
         }
 
         if (isMounted) setTracks(results);
@@ -1165,8 +1197,8 @@ function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
     <section className="flex-1 overflow-y-auto rounded-[17.76px] border border-white/[0.04] bg-[#121212] p-[26.6px] shadow-2xl">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-black tracking-tight text-white">Для вас и Тренды</h2>
-          <p className="mt-1 text-sm font-semibold text-white/35">Подборка строится по лайкам, истории, жанрам и дизлайкам.</p>
+          <h2 className="text-2xl font-black tracking-tight text-white">Тренды и Чарты</h2>
+          <p className="mt-1 text-sm font-semibold text-white/35">Самые популярные треки на основе реальных чартов.</p>
         </div>
         <span className="text-xs font-semibold text-white/30">
           {isLoading ? "загрузка" : `${tracks.length} треков`}
@@ -1176,30 +1208,22 @@ function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
       {error && <p className="mb-4 text-sm text-red-300">{error}</p>}
 
       {(() => {
-        const leftTracks = [];
-        const rightTracks = [];
-        tracks.forEach((track, index) => {
-          const chunkIndex = Math.floor(index / 5);
-          if (chunkIndex % 2 === 0) {
-            leftTracks.push(track);
-          } else {
-            rightTracks.push(track);
-          }
-        });
-
-        const renderTrackItem = (track) => (
+        const renderTrackItem = (track, index) => (
           <div
-            key={track.id}
-            className="group flex items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/5"
+            key={track.id || index}
+            className="group flex items-center gap-4 rounded-xl p-3 text-left transition hover:bg-white/5"
           >
-            <button type="button" onClick={() => playTrack(track, tracks)} className="h-11 w-11 shrink-0">
-              <img src={track.cover} alt="" className="h-11 w-11 rounded-lg object-cover" />
+            <div className="w-6 text-center text-sm font-bold text-white/40 group-hover:text-white/80">
+              {index + 1}
+            </div>
+            <button type="button" onClick={() => playTrack(track, tracks)} className="h-12 w-12 shrink-0">
+              <img src={track.cover} alt="" className="h-12 w-12 rounded-lg object-cover shadow-md" />
             </button>
             <div className="min-w-0 flex-1">
               <button
                 type="button"
                 onClick={() => playTrack(track, tracks)}
-                className="block max-w-full truncate text-left text-sm font-semibold text-white transition hover:text-white/80"
+                className="block max-w-full truncate text-left text-[15px] font-bold text-white transition hover:text-white/80"
               >
                 {track.title}
               </button>
@@ -1221,13 +1245,8 @@ function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
         );
 
         return (
-          <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              {leftTracks.map(renderTrackItem)}
-            </div>
-            <div className="flex flex-col gap-2">
-              {rightTracks.map(renderTrackItem)}
-            </div>
+          <div className="flex flex-col gap-1 max-w-4xl">
+            {tracks.map((track, index) => renderTrackItem(track, index))}
           </div>
         );
       })()}

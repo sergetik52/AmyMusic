@@ -551,6 +551,46 @@ function registerDesktopIpc() {
       });
     });
   });
+
+  ipcMain.handle("amymusic:get-bandlink-chart", async () => {
+    return new Promise((resolve) => {
+      const https = require('https');
+      const options = {
+        hostname: 'music.yandex.ru',
+        path: '/chart',
+        rejectUnauthorized: false,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+        }
+      };
+
+      https.get(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const trackRegex = /"title":"([^"]+)".*?"artists":\[\{.*?"name":"([^"]+)"/g;
+            let match;
+            const tracks = [];
+            const seen = new Set();
+            while ((match = trackRegex.exec(data)) !== null) {
+              const title = match[1];
+              const artist = match[2];
+              const key = `${artist} - ${title}`;
+              if (!seen.has(key)) {
+                 seen.add(key);
+                 tracks.push({ title, artist });
+                 if (tracks.length >= 40) break;
+              }
+            }
+            resolve(tracks);
+          } catch(e) {
+            resolve([]);
+          }
+        });
+      }).on('error', () => resolve([]));
+    });
+  });
 }
 
 function createWindow() {
@@ -644,6 +684,15 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("certificate-error", (event, webContents, url, error, certificate, callback) => {
+  if (url.includes("band.link") || url.includes("yandex") || url.includes("yastatic")) {
+    event.preventDefault();
+    callback(true);
+  } else {
+    callback(false);
+  }
 });
 
 app.on("before-quit", () => {

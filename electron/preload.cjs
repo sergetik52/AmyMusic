@@ -14,5 +14,6 @@ contextBridge.exposeInMainWorld("amyMusicDesktop", {
   setAutoLaunch: (enabled) => ipcRenderer.invoke("amymusic:set-auto-launch", Boolean(enabled)),
   setTrayEnabled: (enabled) => ipcRenderer.invoke("amymusic:set-tray-enabled", Boolean(enabled)),
   showWindow: () => ipcRenderer.invoke("amymusic:show-window"),
-  parsePlaylist: (url) => ipcRenderer.invoke("amymusic:parse-playlist-url", url)
+  parsePlaylist: (url) => ipcRenderer.invoke("amymusic:parse-playlist-url", url),
+  getBandlinkChart: () => ipcRenderer.invoke("amymusic:get-bandlink-chart")
 });

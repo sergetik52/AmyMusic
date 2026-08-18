@@ -7,7 +7,8 @@ import {
   getArtistProfile,
   getArtistTracks,
   getRelatedArtists,
-  searchArtists
+  searchArtists,
+  searchTracks
 } from "../services/soundCloudApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { HorizontalScrollSection } from "./HorizontalScrollSection";
@@ -457,51 +458,96 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
 
     async function loadArtist() {
       let resolvedArtist = artist;
-      if (!resolvedArtist?.id && (resolvedArtist?.username || resolvedArtist?.name)) {
+      const artistQuery = artist?.username || artist?.name || "";
+
+      if (artistQuery) {
         try {
-          const foundArtists = await searchArtists(resolvedArtist.username || resolvedArtist.name);
-          resolvedArtist = foundArtists[0] || resolvedArtist;
-          if (isMounted) setProfile(resolvedArtist);
+          const foundArtists = await searchArtists(artistQuery);
+          if (foundArtists.length > 0) {
+            const normQuery = (artistQuery || "").toLowerCase().trim();
+            const exactMatch = foundArtists.find(
+              (a) => (a.username || a.name || "").toLowerCase().trim() === normQuery
+            );
+            resolvedArtist = exactMatch || foundArtists[0];
+            if (isMounted) setProfile(resolvedArtist);
+          }
         } catch {
           resolvedArtist = artist;
         }
       }
 
-      return Promise.allSettled([
+      const results = await Promise.allSettled([
         getArtistProfile(resolvedArtist),
         getArtistTracks(resolvedArtist, 200),
+        artistQuery ? searchTracks(artistQuery) : Promise.resolve([]),
         getArtistAlbums(resolvedArtist),
         getArtistPlaylists(resolvedArtist),
         getRelatedArtists(resolvedArtist)
       ]);
-    }
 
-    loadArtist().then((results) => {
       if (!isMounted) return;
 
-      const [profileResult, tracksResult, albumsResult, playlistsResult, relatedResult] = results;
-      if (profileResult.status === "fulfilled") setProfile(profileResult.value);
-      if (tracksResult.status === "fulfilled") setTracks(tracksResult.value);
-      
-      let loadedAlbums = [];
-      if (albumsResult.status === "fulfilled") {
-        loadedAlbums = albumsResult.value || [];
-        setAlbums(loadedAlbums);
+      const [profileResult, tracksResult, searchedTracksResult, albumsResult, playlistsResult, relatedResult] = results;
+
+      if (profileResult.status === "fulfilled" && profileResult.value) {
+        setProfile(profileResult.value);
       }
+
+      const directTracks = tracksResult.status === "fulfilled" ? tracksResult.value || [] : [];
+      const searchedTracks = searchedTracksResult.status === "fulfilled" ? searchedTracksResult.value || [] : [];
+
+      // Merge and deduplicate all tracks (by track ID)
+      const trackMap = new Map();
+      directTracks.forEach((t) => {
+        if (t?.id) trackMap.set(String(t.id), t);
+      });
+
+      searchedTracks.forEach((t) => {
+        if (t?.id && !trackMap.has(String(t.id))) {
+          trackMap.set(String(t.id), t);
+        }
+      });
+
+      const mergedTracks = Array.from(trackMap.values());
+      setTracks(mergedTracks);
+
+      let loadedAlbums = albumsResult.status === "fulfilled" ? albumsResult.value || [] : [];
+      const knownAlbumTitles = new Set(loadedAlbums.map((a) => (a.title || "").toLowerCase().trim()));
+
+      // Automatically turn standalone searched tracks into single release cards if not in albums
+      searchedTracks.forEach((t) => {
+        const normTitle = (t.title || "").toLowerCase().trim();
+        if (normTitle && !knownAlbumTitles.has(normTitle)) {
+          knownAlbumTitles.add(normTitle);
+          loadedAlbums.push({
+            id: `single-${t.id}`,
+            title: t.title,
+            kind: "single",
+            artist: t.artist || resolvedArtist.name || artistQuery,
+            cover: t.cover,
+            tracks: [t],
+            trackCount: 1,
+            createdAt: t.createdAt
+          });
+        }
+      });
+
+      setAlbums(loadedAlbums);
 
       if (playlistsResult.status === "fulfilled") {
         const albumIds = new Set(loadedAlbums.map((a) => String(a.id)));
-        const albumTitles = new Set(loadedAlbums.map((a) => String(a.title).toLowerCase().trim()));
         const uniquePlaylists = (playlistsResult.value || []).filter((p) => {
-          return !albumIds.has(String(p.id)) && !albumTitles.has(String(p.title).toLowerCase().trim());
+          return !albumIds.has(String(p.id)) && !knownAlbumTitles.has((p.title || "").toLowerCase().trim());
         });
         setPlaylists(uniquePlaylists);
       }
-      if (relatedResult.status === "fulfilled") setRelatedArtists(relatedResult.value);
-      if (tracksResult.status === "rejected") {
-        setError(tracksResult.reason?.message || "Не удалось загрузить треки артиста");
+
+      if (relatedResult.status === "fulfilled") {
+        setRelatedArtists(relatedResult.value);
       }
-    }).finally(() => {
+    }
+
+    loadArtist().finally(() => {
       if (isMounted) setIsLoading(false);
     });
 

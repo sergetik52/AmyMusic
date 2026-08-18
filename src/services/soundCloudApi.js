@@ -1,15 +1,16 @@
-import { logDebug, logWarn } from "../utils/logger";
-import { getSoundCloudRuntimeSettings } from "./profileSettings";
+import { logDebug, logWarn } from "../utils/logger.js";
+import { getSoundCloudRuntimeSettings } from "./profileSettings.js";
 
 function getSoundCloudApiBase() {
   const proxyPort = new URLSearchParams(window.location.search).get("amymusicProxyPort");
 
   return window.amyMusicConfig?.soundCloudApiBase ||
     (proxyPort ? `http://127.0.0.1:${proxyPort}/api/soundcloud` : "") ||
-    import.meta.env.VITE_SOUNDCLOUD_API_BASE ||
+    import.meta?.env?.VITE_SOUNDCLOUD_API_BASE ||
     "/api/soundcloud";
 }
-const ENV_SOUNDCLOUD_CLIENT_ID = import.meta.env.VITE_SOUNDCLOUD_CLIENT_ID || "";
+const ENV_SOUNDCLOUD_CLIENT_ID = import.meta?.env?.VITE_SOUNDCLOUD_CLIENT_ID || "";
+const DEFAULT_FALLBACK_CLIENT_ID = "yNSW5UvBmb1A5j7qPUtIMuB9Itx3jsOC";
 
 export const emptyTrack = {
   id: "empty",
@@ -46,7 +47,11 @@ export const emptyArtist = {
 };
 
 function getSoundCloudClientId() {
-  return getSoundCloudRuntimeSettings().clientId || ENV_SOUNDCLOUD_CLIENT_ID;
+  return (
+    getSoundCloudRuntimeSettings().clientId ||
+    ENV_SOUNDCLOUD_CLIENT_ID ||
+    DEFAULT_FALLBACK_CLIENT_ID
+  );
 }
 
 function assertClientId() {
@@ -57,10 +62,10 @@ function assertClientId() {
 
 function applyRuntimeSettings(url) {
   const settings = getSoundCloudRuntimeSettings();
-  const clientId = settings.clientId || ENV_SOUNDCLOUD_CLIENT_ID;
+  const clientId = settings.clientId || ENV_SOUNDCLOUD_CLIENT_ID || DEFAULT_FALLBACK_CLIENT_ID;
   if (clientId) url.searchParams.set("client_id", clientId);
-  if (settings.clientSecret) url.searchParams.set("_client_secret", settings.clientSecret);
-  if (settings.httpProxies) url.searchParams.set("_proxies", settings.httpProxies);
+  if (settings.clientSecret) url.searchParams.set("client_secret", settings.clientSecret);
+  if (settings.httpProxies) url.searchParams.set("http_proxies", settings.httpProxies);
   return url;
 }
 
@@ -120,8 +125,8 @@ function normalizeSoundCloudArtist(user = {}) {
 
 function cleanTrackTitle(value = "") {
   return String(value || "")
-    .replace(/\s*\[[^\]]*]/g, "")
-    .replace(/\s*\((?:official|audio|video|lyrics|visualizer|remix|sped up|slowed|prod\.?|clip)[^)]*\)/gi, "")
+    .replace(/\s*\[\s*(?:official\s*(?:audio|video|music\s*video|mv)?|audio|video|mv|hd|4k|hq|explicit|clean|lyric\s*video|lyrics|visualizer|clip)\s*\]/gi, "")
+    .replace(/\s*\(\s*(?:official\s*(?:audio|video|music\s*video|mv)?|audio|video|mv|hd|4k|hq|explicit|clean|lyric\s*video|lyrics|visualizer|clip)\s*\)/gi, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -137,102 +142,205 @@ function normalizeComparable(value = "") {
     .trim();
 }
 
-function addArtistCandidate(artists, artist) {
-  const name = cleanTrackTitle(artist?.name || artist?.username || artist || "");
-  if (!name || name.length < 2) return;
-  const key = normalizeComparable(name);
-  if (artists.some((item) => normalizeComparable(item.name || item.username) === key)) return;
-
-  artists.push({
-    id: artist?.id ? String(artist.id) : "",
-    name,
-    username: name,
-    avatar: artist?.avatar || "",
-    permalinkUrl: artist?.permalinkUrl || ""
-  });
+function findTopLevelDash(text = "") {
+  let depth = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (char === "(" || char === "[" || char === "{") {
+      depth += 1;
+    } else if (char === ")" || char === "]" || char === "}") {
+      if (depth > 0) depth -= 1;
+    } else if (depth === 0 && (char === "-" || char === "–" || char === "—")) {
+      const prev = text[i - 1] || "";
+      const next = text[i + 1] || "";
+      if (/\s/.test(prev) && /\s/.test(next)) {
+        return {
+          left: text.slice(0, i).trim(),
+          right: text.slice(i + 1).trim()
+        };
+      }
+    }
+  }
+  return null;
 }
 
 function splitArtistNames(value = "") {
+  if (!value) return [];
   return cleanTrackTitle(value)
     .replace(/^[\(\[]+|[\)\]]+$/g, "")
     .split(/\s*(?:,|&|\/|\+|\bx\b|\bX\b|feat\.?|ft\.?|\bfeaturing\b|\bwith\b|;)\s*/i)
-    .map(cleanTrackTitle)
     .map((name) => name.replace(/^[\s.\-–—:;()[\]]+|[\s.\-–—:;()[\]]+$/g, "").trim())
-    .filter((name) => name.length >= 2 && name.length <= 64);
+    .filter((name) => {
+      if (!name || name.length < 2 || name.length > 50) return false;
+      if (/^\d+$/.test(name)) return false;
+      if (/^(prod\.?|producer|prod\s+by|beat\s+by)/i.test(name)) return false;
+      return true;
+    });
 }
 
 function splitTrailingFeatureBlock(value = "") {
   const cleaned = cleanTrackTitle(value);
-  const plusIndex = cleaned.search(/\s*\+\s*\S/);
-  if (plusIndex > 0) {
-    const plusPrefix = cleaned.slice(plusIndex).match(/^\s*\+\s*/)?.[0] || "+";
-    return {
-      title: cleaned.slice(0, plusIndex).trim(),
-      features: cleaned.slice(plusIndex + plusPrefix.length)
-    };
-  }
 
-  const featureMatch = cleaned.match(/\s*[\(\[]?\s*(?:feat\.?|ft\.?|\bfeaturing\b|\bwith\b)/i);
-  if (featureMatch?.index > 0) {
+  // Match (feat. X) or [ft. X] or feat. X or with X
+  const featureMatch = cleaned.match(/\s*[\(\[]?\s*(?:feat\.?|ft\.?|\bfeaturing\b|\bwith\b)\s+(.+?)[\)\]]?$/i);
+  if (featureMatch && featureMatch.index > 0) {
+    const titlePart = cleaned.slice(0, featureMatch.index).replace(/[\(\[]+$/g, "").trim();
+    const featurePart = featureMatch[1].replace(/[\)\]]+$/g, "").trim();
     return {
-      title: cleaned.slice(0, featureMatch.index).replace(/[\(\[]+$/g, "").trim(),
-      features: cleaned.slice(featureMatch.index + featureMatch[0].length).replace(/^[\s.\-–—:;()[\]]+/, "")
+      title: titlePart || cleaned,
+      features: featurePart
     };
   }
 
   return { title: cleaned, features: "" };
 }
 
-function parseTrackCredits(rawTitle, primaryArtist) {
-  const artists = [];
-  const cleaned = cleanTrackTitle(rawTitle);
-  const dashMatch = cleaned.match(/^(.+?)\s+[-–—]\s+(.+)$/);
-  const titleSource = dashMatch ? dashMatch[2] : cleaned;
+export function parseCleanTrackInfo(rawTitle = "", defaultArtist = "Unknown artist") {
+  const raw = String(rawTitle || "").trim();
+  const cleaned = cleanTrackTitle(raw);
+  const fallbackStr = typeof defaultArtist === "string" ? defaultArtist : "Unknown artist";
 
-  if (dashMatch) {
-    splitArtistNames(dashMatch[1]).forEach((name) => addArtistCandidate(artists, name));
-  } else {
-    addArtistCandidate(artists, primaryArtist);
+  if (!cleaned) {
+    return {
+      title: raw || "Без названия",
+      artistNames: [fallbackStr]
+    };
   }
 
-  const splitTitle = splitTrailingFeatureBlock(titleSource);
-  splitArtistNames(splitTitle.features).forEach((name) => addArtistCandidate(artists, name));
+  let artistNames = [];
+  let titleSource = cleaned;
 
-  return {
-    title: splitTitle.title || titleSource || cleaned,
-    artists
-  };
+  try {
+    // 1. Strict check for top-level "Artist - Track Title" (outside parentheses & brackets)
+    const dashMatch = findTopLevelDash(cleaned);
+    if (dashMatch) {
+      const candidateArtistStr = dashMatch.left;
+      const parsedArtists = splitArtistNames(candidateArtistStr);
+      if (parsedArtists.length > 0) {
+        artistNames = parsedArtists;
+        titleSource = dashMatch.right;
+      }
+    }
+
+    // If no artist from top-level dash, use fallbackStr
+    if (!artistNames.length) {
+      let safeDefault = String(fallbackStr || "").trim();
+      if (
+        !safeDefault ||
+        safeDefault.includes("(") ||
+        safeDefault.includes("[") ||
+        safeDefault.length > 50 ||
+        normalizeComparable(safeDefault) === normalizeComparable(cleaned)
+      ) {
+        safeDefault = "Unknown artist";
+      }
+
+      const splitDefault = splitArtistNames(safeDefault);
+      artistNames = splitDefault.length ? splitDefault : [safeDefault];
+    }
+
+    // 2. Check for featured artists in titleSource (e.g. "MB (feat. LIL KRYSTALLL)")
+    const splitTitle = splitTrailingFeatureBlock(titleSource);
+    const featureNames = splitArtistNames(splitTitle.features);
+
+    // Combine primary artists + feature artists (deduplicated)
+    const allArtistNames = [...artistNames];
+    featureNames.forEach((featName) => {
+      const normFeat = normalizeComparable(featName);
+      if (!allArtistNames.some((existing) => normalizeComparable(existing) === normFeat)) {
+        allArtistNames.push(featName);
+      }
+    });
+
+    const finalTitle = splitTitle.title || titleSource || cleaned;
+
+    return {
+      title: finalTitle || raw || "Без названия",
+      artistNames: allArtistNames.length ? allArtistNames : [fallbackStr]
+    };
+  } catch (err) {
+    logWarn("api", "parseCleanTrackInfo error fallback", err);
+    return {
+      title: cleaned || raw || "Без названия",
+      artistNames: [fallbackStr]
+    };
+  }
 }
 
 export function normalizeTrackMetadata(track = {}) {
   if (!track || typeof track !== "object") return track;
-  const rawTitle = track.rawTitle || track.originalTitle || track.title || "";
-  const existingArtists = Array.isArray(track.artists)
-    ? track.artists.filter((artist) => artist?.name || artist?.username)
-    : [];
-  const primaryArtist = {
-    id: track.artistId ? String(track.artistId) : "",
-    name: track.artists?.[0]?.name || track.artist || "Unknown artist",
-    username: track.artists?.[0]?.username || track.artist || "Unknown artist",
-    avatar: track.artists?.[0]?.avatar || track.artistAvatar || track.cover || "/logo.png",
-    permalinkUrl: track.artists?.[0]?.permalinkUrl || track.artistPermalinkUrl || ""
-  };
-  const credits = parseTrackCredits(rawTitle, primaryArtist);
-  const displayArtists = credits.artists.length > 1
-    ? credits.artists
-    : existingArtists.length > 1
-      ? existingArtists
-      : credits.artists.length
-        ? credits.artists
-        : [primaryArtist];
+  
+  try {
+    const rawTitle = track.rawTitle || track.originalTitle || track.title || "";
+    
+    let uploaderName =
+      track.uploaderName ||
+      track.username ||
+      (typeof track.user?.username === "string" ? track.user.username : "") ||
+      (typeof track.user?.full_name === "string" ? track.user.full_name : "") ||
+      track.artistUsername ||
+      "";
 
-  return {
-    ...track,
-    rawTitle,
-    title: credits.title || track.title,
-    artist: displayArtists.map((artist) => artist.name).join(", "),
-    artists: displayArtists
-  };
+    if (!uploaderName) {
+      const candidate = track.artists?.[0]?.name || track.artists?.[0]?.username || (typeof track.artist === "string" ? track.artist : "");
+      if (candidate && typeof candidate === "string" && !candidate.includes("(") && !candidate.includes("[") && candidate.length <= 50) {
+        uploaderName = candidate;
+      }
+    }
+
+    const parsed = parseCleanTrackInfo(rawTitle, uploaderName);
+    const safeArtistNames = Array.isArray(parsed.artistNames) && parsed.artistNames.length ? parsed.artistNames : ["Unknown artist"];
+
+    const splitUploader = splitArtistNames(uploaderName);
+
+    const artistsObjects = safeArtistNames.map((name) => {
+      const normName = normalizeComparable(name);
+      const isUploaderMatch =
+        uploaderName &&
+        (normName === normalizeComparable(uploaderName) ||
+          splitUploader.some((u) => normalizeComparable(u) === normName));
+
+      return {
+        id: isUploaderMatch && track.artistId ? String(track.artistId) : "",
+        name,
+        username: name,
+        avatar: isUploaderMatch ? (track.artistAvatar || track.cover || "/logo.png") : "/logo.png",
+        permalinkUrl: isUploaderMatch ? (track.artistPermalinkUrl || "") : ""
+      };
+    });
+
+    return {
+      ...track,
+      rawTitle,
+      title: parsed.title || track.title || "Без названия",
+      artist: safeArtistNames.join(", "),
+      artists: artistsObjects
+    };
+  } catch (err) {
+    logWarn("api", "normalizeTrackMetadata exception fallback", err);
+    return track;
+  }
+}
+
+function safeNormalizeSoundCloudTrack(item, fallback) {
+  try {
+    return normalizeSoundCloudTrack(item, fallback);
+  } catch (err) {
+    logWarn("api", "safeNormalizeSoundCloudTrack error", err);
+    const source = item?.track || item || {};
+    return {
+      id: String(source.id || fallback?.id || Math.random()),
+      rawTitle: source.title || fallback?.title || "Без названия",
+      title: source.title || fallback?.title || "Без названия",
+      artist: source.user?.username || fallback?.artist || "Unknown artist",
+      artists: [{ name: source.user?.username || fallback?.artist || "Unknown artist" }],
+      artistId: source.user?.id ? String(source.user.id) : "",
+      artistAvatar: getLargeImage(source.user?.avatar_url) || "/logo.png",
+      cover: getLargeImage(source.artwork_url) || "/logo.png",
+      streamUrl: "",
+      duration: 0
+    };
+  }
 }
 
 function normalizeSoundCloudTrack(track = {}, fallback = {}) {
@@ -244,17 +352,25 @@ function normalizeSoundCloudTrack(track = {}, fallback = {}) {
   const transcoding =
     pool.find((item) => item.format?.protocol?.includes("progressive")) ||
     pool[0];
-  const artistName =
-    user.username ||
-    user.full_name ||
-    fallback.artist ||
-    fallback.username ||
-    "Unknown artist";
+
+  const userArtistName = user.username || user.full_name;
+  let artistName = userArtistName || fallback.uploaderName || fallback.username || "";
+
+  if (!artistName) {
+    const fallbackCandidate = fallback.artist || "";
+    if (fallbackCandidate && !fallbackCandidate.includes("(") && !fallbackCandidate.includes("[")) {
+      artistName = fallbackCandidate;
+    } else {
+      artistName = "Unknown artist";
+    }
+  }
+
   const artistAvatar =
     getLargeImage(user.avatar_url) ||
     getLargeImage(source.artwork_url) ||
     fallback.cover ||
     "/logo.png";
+
   const primaryArtist = {
     id: user.id ? String(user.id) : "",
     name: artistName,
@@ -262,10 +378,12 @@ function normalizeSoundCloudTrack(track = {}, fallback = {}) {
     avatar: artistAvatar,
     permalinkUrl: user.permalink_url || ""
   };
+
   const credits = normalizeTrackMetadata({
     rawTitle: source.title || fallback.rawTitle || fallback.title || "",
     title: source.title || fallback.title || "",
     artist: artistName,
+    uploaderName: artistName,
     artistId: user.id ? String(user.id) : "",
     artistAvatar,
     artistPermalinkUrl: user.permalink_url || ""
@@ -299,6 +417,154 @@ function normalizeSoundCloudTrack(track = {}, fallback = {}) {
     createdAt: source.created_at || "",
     palette: emptyTrack.palette
   };
+}
+
+async function resolveArtistUser(artist) {
+  if (artist?.id && artist.id !== "empty") return artist;
+  const name = artist?.username || artist?.name;
+  if (!name) return null;
+
+  try {
+    const found = await searchArtists(name);
+    if (found.length > 0) {
+      const normName = normalizeComparable(name);
+      const exact = found.find(
+        (a) => normalizeComparable(a.username || a.name) === normName
+      );
+      return exact || found[0];
+    }
+  } catch (err) {
+    logWarn("api", "resolveArtistUser search failed", err);
+  }
+  return null;
+}
+
+export async function getArtistProfile(artist) {
+  assertClientId();
+  const resolved = await resolveArtistUser(artist);
+  const targetId = resolved?.id || artist?.id;
+
+  if (!targetId || targetId === "empty") {
+    return {
+      id: "",
+      name: artist?.name || artist?.username || "Unknown artist",
+      username: artist?.username || artist?.name || "Unknown artist",
+      avatar: artist?.avatar || "/logo.png",
+      followers: 0,
+      followings: 0,
+      trackCount: 0
+    };
+  }
+
+  const url = new URL(`${getSoundCloudApiBase()}/users/${targetId}`, window.location.origin);
+  applyRuntimeSettings(url);
+
+  try {
+    const data = await requestJson(toFetchUrl(url), "getArtistProfile");
+    return normalizeSoundCloudArtist(data);
+  } catch (error) {
+    logWarn("api", "getArtistProfile failed", error);
+    return resolved || {
+      id: targetId,
+      name: artist?.name || artist?.username || "Unknown artist",
+      username: artist?.username || artist?.name || "Unknown artist",
+      avatar: artist?.avatar || "/logo.png",
+      followers: 0
+    };
+  }
+}
+
+export async function getArtistTracks(artist, limit = 200) {
+  assertClientId();
+  const query = artist?.username || artist?.name || "";
+  const resolved = await resolveArtistUser(artist);
+  const targetId = resolved?.id || artist?.id;
+
+  const promises = [];
+  if (targetId && targetId !== "empty") {
+    const url = new URL(`${getSoundCloudApiBase()}/users/${targetId}/tracks`, window.location.origin);
+    applyRuntimeSettings(url);
+    url.searchParams.set("limit", String(limit));
+    promises.push(
+      requestJson(toFetchUrl(url), "getArtistTracks")
+        .then((data) => (Array.isArray(data) ? data : data.collection || []).map((t) => safeNormalizeSoundCloudTrack(t)))
+        .catch((e) => {
+          logWarn("api", "getArtistTracks profile fetch failed", e);
+          return [];
+        })
+    );
+  }
+
+  if (query) {
+    promises.push(
+      searchTracksLimited(query, 50).catch((e) => {
+        logWarn("api", "getArtistTracks search fallback failed", e);
+        return [];
+      })
+    );
+  }
+
+  const results = await Promise.allSettled(promises);
+  const trackMap = new Map();
+
+  results.forEach((res) => {
+    if (res.status === "fulfilled" && Array.isArray(res.value)) {
+      res.value.forEach((t) => {
+        if (t?.id && !trackMap.has(String(t.id))) {
+          trackMap.set(String(t.id), t);
+        }
+      });
+    }
+  });
+
+  return Array.from(trackMap.values());
+}
+
+export async function getArtistAlbums(artist) {
+  assertClientId();
+  const resolved = await resolveArtistUser(artist);
+  const targetId = resolved?.id || artist?.id;
+
+  if (!targetId || targetId === "empty") return [];
+
+  const load = async (path, scope) => {
+    const url = new URL(`${getSoundCloudApiBase()}${path}`, window.location.origin);
+    applyRuntimeSettings(url);
+    url.searchParams.set("limit", "24");
+    const data = await requestJson(toFetchUrl(url), scope);
+    return (Array.isArray(data) ? data : data.collection || []).map((album) =>
+      normalizeSoundCloudAlbum(album, resolved || artist, "album")
+    );
+  };
+
+  try {
+    return await load(`/users/${targetId}/albums`, "getArtistAlbums");
+  } catch (error) {
+    logWarn("api", "getArtistAlbums failed", error);
+    return [];
+  }
+}
+
+export async function getArtistPlaylists(artist) {
+  assertClientId();
+  const resolved = await resolveArtistUser(artist);
+  const targetId = resolved?.id || artist?.id;
+
+  if (!targetId || targetId === "empty") return [];
+
+  const url = new URL(`${getSoundCloudApiBase()}/users/${targetId}/playlists`, window.location.origin);
+  applyRuntimeSettings(url);
+  url.searchParams.set("limit", "50");
+
+  try {
+    const data = await requestJson(toFetchUrl(url), "getArtistPlaylists");
+    return (Array.isArray(data) ? data : data.collection || []).map((playlist) =>
+      normalizeSoundCloudAlbum(playlist, resolved || artist, "playlist")
+    );
+  } catch (error) {
+    logWarn("api", "getArtistPlaylists failed", error);
+    return [];
+  }
 }
 
 function normalizeChartItem(item) {
@@ -684,64 +950,6 @@ export async function getTrackAlbum(track) {
   };
 }
 
-export async function getArtistProfile(artist) {
-  assertClientId();
-  if (!artist?.id || artist.id === "empty") return emptyArtist;
-
-  const url = new URL(`${getSoundCloudApiBase()}/users/${artist.id}`, window.location.origin);
-  applyRuntimeSettings(url);
-
-  const data = await requestJson(toFetchUrl(url), "getArtistProfile");
-  return normalizeSoundCloudArtist(data);
-}
-
-export async function getArtistTracks(artist, limit = 200) {
-  assertClientId();
-  if (!artist?.id || artist.id === "empty") return [];
-
-  const url = new URL(`${getSoundCloudApiBase()}/users/${artist.id}/tracks`, window.location.origin);
-  applyRuntimeSettings(url);
-  url.searchParams.set("limit", String(limit));
-
-  const data = await requestJson(toFetchUrl(url), "getArtistTracks");
-  return (Array.isArray(data) ? data : data.collection || []).map(normalizeSoundCloudTrack);
-}
-
-export async function getArtistAlbums(artist) {
-  assertClientId();
-  if (!artist?.id || artist.id === "empty") return [];
-
-  const load = async (path, scope) => {
-    const url = new URL(`${getSoundCloudApiBase()}${path}`, window.location.origin);
-    applyRuntimeSettings(url);
-    url.searchParams.set("limit", "24");
-    const data = await requestJson(toFetchUrl(url), scope);
-    return (Array.isArray(data) ? data : data.collection || []).map((album) =>
-      normalizeSoundCloudAlbum(album, artist, "album")
-    );
-  };
-
-  try {
-    return await load(`/users/${artist.id}/albums`, "getArtistAlbums");
-  } catch (error) {
-    logWarn("api", "getArtistAlbums failed", error);
-    return [];
-  }
-}
-
-export async function getArtistPlaylists(artist) {
-  assertClientId();
-  if (!artist?.id || artist.id === "empty") return [];
-
-  const url = new URL(`${getSoundCloudApiBase()}/users/${artist.id}/playlists`, window.location.origin);
-  applyRuntimeSettings(url);
-  url.searchParams.set("limit", "50");
-
-  const data = await requestJson(toFetchUrl(url), "getArtistPlaylists");
-  return (Array.isArray(data) ? data : data.collection || []).map((playlist) =>
-    normalizeSoundCloudAlbum(playlist, artist, "playlist")
-  );
-}
 
 export async function getAlbumDetails(album, artist = {}) {
   assertClientId();
@@ -760,11 +968,32 @@ export async function getAlbumDetails(album, artist = {}) {
 }
 
 export async function getRelatedArtists(artist) {
+  assertClientId();
+  const resolved = await resolveArtistUser(artist);
+  const targetId = resolved?.id || artist?.id;
+
+  if (targetId && targetId !== "empty") {
+    try {
+      const url = new URL(`${getSoundCloudApiBase()}/users/${targetId}/followings`, window.location.origin);
+      url.searchParams.set("limit", "12");
+      applyRuntimeSettings(url);
+
+      const data = await requestJson(toFetchUrl(url), "getRelatedArtists");
+      const followings = (data.collection || []).map(normalizeSoundCloudArtist);
+      
+      if (followings.length > 0) {
+        return followings;
+      }
+    } catch (error) {
+      logWarn("api", "getRelatedArtists followings failed, falling back to search", error);
+    }
+  }
+
   if (!artist?.username && !artist?.name) return [];
 
   const artists = await searchArtists(artist.username || artist.name);
   return artists
-    .filter((item) => item.id !== artist.id)
+    .filter((item) => item.id !== (targetId || artist.id))
     .slice(0, 12);
 }
 

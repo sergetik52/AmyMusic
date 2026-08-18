@@ -1060,7 +1060,7 @@ export function AudioProvider({ children }) {
       return;
     }
 
-    const nextTrack = queueRef.current[currentIndex] || emptyTrack;
+    const nextTrack = queue[currentIndex] || emptyTrack;
     if (!nextTrack?.id || nextTrack.id === "empty") return;
 
     if (explicitLoadTrackIdRef.current === nextTrack.id) {
@@ -1072,7 +1072,7 @@ export function AudioProvider({ children }) {
     pendingAutoplayRef.current = false;
     loadTrack(nextTrack, shouldPlay, manualActionRef.current);
     manualActionRef.current = false;
-  }, [currentIndex, loadTrack]);
+  }, [currentIndex, queue, loadTrack]);
 
   const play = useCallback(async () => {
     const audio = audioRef.current;

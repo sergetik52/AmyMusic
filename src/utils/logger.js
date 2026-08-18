@@ -1,4 +1,4 @@
-const DEBUG_ENABLED = import.meta.env.DEV || import.meta.env.VITE_DEBUG_AUDIO === "true";
+const DEBUG_ENABLED = Boolean(import.meta?.env?.DEV || import.meta?.env?.VITE_DEBUG_AUDIO === "true");
 
 export function logDebug(scope, message, details) {
   if (!DEBUG_ENABLED) return;
