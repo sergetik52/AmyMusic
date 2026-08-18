@@ -300,7 +300,23 @@ export function FullPlayerOverlay({ onClose, onOpenArtist }) {
         </span>
       </div>
 
-      <div className="scrollbar-none min-h-0 flex-1 space-y-1 overflow-y-auto pr-2">
+      <div
+        onWheel={(e) => {
+          e.currentTarget.scrollTop += e.deltaY;
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          const container = e.currentTarget;
+          const rect = container.getBoundingClientRect();
+          const offsetY = e.clientY - rect.top;
+          if (offsetY < 60) {
+            container.scrollTop -= 14;
+          } else if (rect.height - offsetY < 60) {
+            container.scrollTop += 14;
+          }
+        }}
+        className="scrollbar-none min-h-0 flex-1 space-y-1 overflow-y-auto pr-2"
+      >
         {queue.length ? queue.map((track, index) => {
           const isCurrent = index === currentIndex || track.id === currentTrack.id;
           const isDragging = draggedQueueIndex === index;

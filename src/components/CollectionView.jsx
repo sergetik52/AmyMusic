@@ -228,7 +228,26 @@ function PlaylistView({
   };
 
   return (
-    <div className="flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] bg-[#090909] text-white">
+    <div
+      onWheel={(e) => {
+        if (draggedTrackIndex !== null) {
+          e.currentTarget.scrollTop += e.deltaY;
+        }
+      }}
+      onDragOver={(e) => {
+        if (draggedTrackIndex === null) return;
+        e.preventDefault();
+        const container = e.currentTarget;
+        const rect = container.getBoundingClientRect();
+        const offsetY = e.clientY - rect.top;
+        if (offsetY < 60) {
+          container.scrollTop -= 14;
+        } else if (rect.height - offsetY < 60) {
+          container.scrollTop += 14;
+        }
+      }}
+      className="flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] bg-[#090909] text-white"
+    >
       <div className="relative border-b border-white/[0.06] p-7">
         <div className="absolute inset-0 opacity-30 blur-3xl">
           <img src={cover || "/logo.png"} alt="" className="h-full w-full object-cover" />

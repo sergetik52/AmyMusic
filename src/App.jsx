@@ -1436,7 +1436,26 @@ function PlayerTools({ onOpenFull }) {
               <p className="text-xs font-bold text-white/80">Очередь</p>
               <span className="text-[10px] font-semibold text-white/35">{queue.length} треков</span>
             </div>
-            <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
+            <div
+              onWheel={(e) => {
+                if (draggedQueueIndex !== null) {
+                  e.currentTarget.scrollTop += e.deltaY;
+                }
+              }}
+              onDragOver={(e) => {
+                if (draggedQueueIndex === null) return;
+                e.preventDefault();
+                const container = e.currentTarget;
+                const rect = container.getBoundingClientRect();
+                const offsetY = e.clientY - rect.top;
+                if (offsetY < 40) {
+                  container.scrollTop -= 10;
+                } else if (rect.height - offsetY < 40) {
+                  container.scrollTop += 10;
+                }
+              }}
+              className="max-h-72 space-y-1 overflow-y-auto pr-1"
+            >
               {queue.length === 0 ? (
                 <p className="py-5 text-center text-xs text-white/35">Очередь пустая</p>
               ) : (
