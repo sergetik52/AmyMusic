@@ -188,6 +188,7 @@ function PlaylistView({
   onBack,
   onPlay,
   onOpenArtist,
+  onOpenAlbum,
   onToggleLike,
   onUpdate,
   onRemoveTrack,
@@ -469,6 +470,7 @@ function PlaylistView({
                   <TrackMenuButton
                     track={track}
                     onOpenArtist={onOpenArtist}
+                    onOpenAlbum={onOpenAlbum}
                     onRemoveFromPlaylist={isEditable ? () => onRemoveTrack?.(playlist.id, track.id) : undefined}
                   />
                 </div>
@@ -485,7 +487,7 @@ function PlaylistView({
   );
 }
 
-export function CollectionView({ onOpenArtist }) {
+export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   const {
     currentTrack,
     isPlaying,
@@ -755,6 +757,7 @@ export function CollectionView({ onOpenArtist }) {
         onBack={() => setActivePlaylist(null)}
         onPlay={playTrack}
         onOpenArtist={openTrackArtist}
+        onOpenAlbum={onOpenAlbum}
         onToggleLike={toggleLike}
         onUpdate={updateUserPlaylist}
         onRemoveTrack={removeTrackFromUserPlaylist}
@@ -970,7 +973,8 @@ export function CollectionView({ onOpenArtist }) {
                       <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                         <TrackMenuButton
                           track={track}
-                          onOpenArtist={onOpenArtist}
+                          onOpenArtist={openTrackArtist}
+                          onOpenAlbum={onOpenAlbum}
                         />
                       </div>
                     </div>

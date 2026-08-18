@@ -1114,7 +1114,7 @@ function SearchPanel({ onOpenArtist }) {
   );
 }
 
-function TrendsPanel({ onOpenArtist }) {
+function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
   const {
     currentTrack,
     likedTracks,
@@ -1213,6 +1213,7 @@ function TrendsPanel({ onOpenArtist }) {
                 <TrackMenuButton
                   track={track}
                   onOpenArtist={onOpenArtist}
+                  onOpenAlbum={onOpenAlbum}
                 />
               </div>
             </div>
@@ -1234,7 +1235,7 @@ function TrendsPanel({ onOpenArtist }) {
   );
 }
 
-function TrackInfo({ onOpenFull, onOpenArtist }) {
+function TrackInfo({ onOpenFull, onOpenArtist, onOpenAlbum }) {
   const { currentTrack } = useAudioPlayer();
 
   return (
@@ -1261,6 +1262,7 @@ function TrackInfo({ onOpenFull, onOpenArtist }) {
             <TrackMenuButton
               track={currentTrack}
               onOpenArtist={onOpenArtist}
+              onOpenAlbum={onOpenAlbum}
               placement="top"
             />
           </div>
@@ -1603,7 +1605,7 @@ function PlayerTools({ onOpenFull }) {
   );
 }
 
-function BottomPlayer({ onOpenFull, onOpenArtist }) {
+function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum }) {
   const { trackPalette } = useAudioPlayer();
 
   return (
@@ -1618,7 +1620,7 @@ function BottomPlayer({ onOpenFull, onOpenArtist }) {
       }}
     >
       <div className="flex items-center justify-between gap-4">
-        <TrackInfo onOpenFull={onOpenFull} onOpenArtist={onOpenArtist} />
+        <TrackInfo onOpenFull={onOpenFull} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
         <PlayerControls />
         <PlayerTools onOpenFull={onOpenFull} />
       </div>
@@ -1654,6 +1656,18 @@ export default function App() {
     setActiveTab("artist");
   };
 
+  const openAlbum = (album) => {
+    setIsFullOpen(false);
+    const artistObj = {
+      id: album.artistId || "",
+      name: album.artist || "Исполнитель",
+      username: album.artist || "Исполнитель",
+      avatar: album.artistAvatar || album.cover || "/logo.png"
+    };
+    setActiveArtist({ ...artistObj, initialAlbum: album });
+    setActiveTab("artist");
+  };
+
   const closeArtist = () => {
     setActiveArtist(null);
     setActiveTab("wave");
@@ -1662,8 +1676,8 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case "wave": return <WaveView requestId={waveRequestId} onOpenFull={() => setIsFullOpen(true)} />;
-      case "collection": return <CollectionView onOpenArtist={openArtist} />;
-      case "trends": return <TrendsPanel onOpenArtist={openArtist} />;
+      case "collection": return <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
+      case "trends": return <TrendsPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
       case "artist":
         return activeArtist ? (
           <ArtistView
@@ -1672,9 +1686,9 @@ export default function App() {
             onOpenArtist={openArtist}
           />
         ) : (
-          <SearchPanel onOpenArtist={openArtist} />
+          <SearchPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />
         );
-      case "search": default: return <SearchPanel onOpenArtist={openArtist} />;
+      case "search": default: return <SearchPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
     }
   };
 

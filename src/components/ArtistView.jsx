@@ -387,7 +387,7 @@ function ArtistTracksView({ artist, tracks, isLoading, onBack, onPlayTrack, like
               index={index}
               showLike={true}
               isLiked={likedTrackIds.has(track.id)}
-              onToggleLike={(track) => onToggleLike(track.id, track)}
+              onToggleLike={(t) => onToggleLike(t.id, t)}
               onPlay={(nextTrack) => onPlayTrack(nextTrack, playableTracks.length ? playableTracks : sortedTracks)}
               onOpenArtist={onOpenArtist}
               onOpenAlbum={onOpenAlbum}
@@ -399,7 +399,7 @@ function ArtistTracksView({ artist, tracks, isLoading, onBack, onPlayTrack, like
   );
 }
 
-export function ArtistView({ artist, onBack, onOpenArtist }) {
+export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
   const {
     likedTrackIds,
     savedReleaseIds,
@@ -416,7 +416,7 @@ export function ArtistView({ artist, onBack, onOpenArtist }) {
   const [error, setError] = useState("");
   const [showAllAlbums, setShowAllAlbums] = useState(false);
   const [showAllPlaylists, setShowAllPlaylists] = useState(false);
-  const [activeAlbum, setActiveAlbum] = useState(null);
+  const [activeAlbum, setActiveAlbum] = useState(artist?.initialAlbum || initialAlbum || null);
   const [isAlbumLoading, setIsAlbumLoading] = useState(false);
   const [isTracksViewOpen, setIsTracksViewOpen] = useState(false);
 
@@ -511,6 +511,9 @@ export function ArtistView({ artist, onBack, onOpenArtist }) {
 
   const openAlbum = async (album) => {
     setActiveAlbum(album);
+    if (album.tracks && album.tracks.length > 0) {
+      return;
+    }
     setIsAlbumLoading(true);
     const fullAlbum = await getAlbumDetails(album, profile);
     setActiveAlbum(fullAlbum);

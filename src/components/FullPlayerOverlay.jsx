@@ -71,7 +71,7 @@ function getTrackArtists(track) {
     }];
 }
 
-export function FullPlayerOverlay({ onClose, onOpenArtist }) {
+export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
   const [isHovered, setIsHovered] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [showLyrics, setShowLyrics] = useState(true);
@@ -492,6 +492,7 @@ export function FullPlayerOverlay({ onClose, onOpenArtist }) {
                   <TrackMenuButton
                     track={currentTrack}
                     onOpenArtist={onOpenArtist}
+                    onOpenAlbum={onOpenAlbum}
                     placement="top"
                   />
                 </div>
