@@ -560,6 +560,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   const [importUrl, setImportUrl] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState("");
+  const [importProgress, setImportProgress] = useState(0);
 
   const favoriteArtists = useMemo(
     () => buildArtistsFromLikes(likedTracks),
@@ -588,6 +589,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
     
     setIsImporting(true);
     setImportStatus("Парсинг страницы...");
+    setImportProgress(0);
     try {
       if (!window.amyMusicDesktop?.parsePlaylist) {
         throw new Error("Функция импорта недоступна");
@@ -599,12 +601,14 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
       }
       
       setImportStatus(`Поиск треков: 0 / ${parsedTracks.length}`);
+      setImportProgress(0);
       
       const foundTracks = [];
       let i = 0;
       for (const t of parsedTracks) {
         i++;
         setImportStatus(`Поиск треков: ${i} / ${parsedTracks.length}`);
+        setImportProgress(Math.round((i / parsedTracks.length) * 100));
         
         const queriesToTry = [];
         
@@ -665,6 +669,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
     } finally {
       setIsImporting(false);
       setImportStatus("");
+      setImportProgress(0);
       setImportUrl("");
     }
   };
@@ -826,7 +831,6 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
                 <form
                   onSubmit={(e) => {
                     handleCreatePlaylist(e);
-                    setIsAddPlaylistOpen(false);
                   }}
                   className="flex flex-col items-start gap-4"
                 >
@@ -857,7 +861,6 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
             <form
               onSubmit={(e) => {
                 handleImportPlaylist(e);
-                setIsAddPlaylistOpen(false);
               }}
               className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-2 max-w-2xl"
             >
@@ -884,8 +887,16 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   }
 
   return (
-    <div className="flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] bg-[#0d0d0d] p-8 text-white">
-      <div className="mb-8">
+    <div className="relative flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] bg-[#0d0d0d] p-8 text-white">
+      {isImporting && (
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-white/5 z-50 overflow-hidden rounded-t-[17.76px]">
+          <div 
+            className="h-full bg-gradient-to-r from-[#8341EF] to-[#b388ff] transition-all duration-300 ease-out"
+            style={{ width: `${importProgress}%` }}
+          />
+        </div>
+      )}
+      <div className="mb-8 mt-2">
         <h1 className="text-3xl font-black tracking-tight">Коллекция</h1>
         <p className="mt-1 text-sm font-medium text-white/40">
           Реальные лайки из текущего плеера

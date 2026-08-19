@@ -1123,6 +1123,13 @@ function scoreWaveTrack(track, context) {
   const artist = normalizeKey(track.artist);
   const genre = normalizeKey(track.mood);
   const title = String(track.title || "").toLowerCase();
+  
+  // Filter out tracks with Arabic characters
+  const ARABIC_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+  if (ARABIC_REGEX.test(title) || ARABIC_REGEX.test(artist) || ARABIC_REGEX.test(String(track.username || ""))) {
+    return -10000;
+  }
+
   let score = 0;
   const artistWeight = getWeightedValue(context.artistWeights, artist);
   const genreWeight = getWeightedValue(context.genreWeights, genre);

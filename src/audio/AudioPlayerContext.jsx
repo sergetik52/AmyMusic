@@ -1176,6 +1176,11 @@ export function AudioProvider({ children }) {
       return;
     }
 
+    // Fix: don't reload the track if it's already playing and we didn't manually request a change
+    if (nextTrack.id === currentTrackRef.current?.id && !manualActionRef.current) {
+      return;
+    }
+
     const shouldPlay = pendingAutoplayRef.current || isPlayingRef.current;
     pendingAutoplayRef.current = false;
     loadTrack(nextTrack, shouldPlay, manualActionRef.current);
