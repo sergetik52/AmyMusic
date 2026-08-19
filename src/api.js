@@ -50,5 +50,8 @@ export const getCollections = () => apiRequest('/sync/collections', 'GET');
 export const syncWave = (data) => apiRequest('/sync/wave', 'POST', data);
 export const getWave = () => apiRequest('/sync/wave', 'GET');
 
+export const syncTasteProfile = (data) => apiRequest('/sync/taste-profile', 'POST', data);
+export const getTasteProfile = () => apiRequest('/sync/taste-profile', 'GET');
+
 export const trackListen = (seconds) => apiRequest('/track/listen', 'POST', { seconds });
 export const getTopUsers = () => apiRequest('/rating/top', 'GET');

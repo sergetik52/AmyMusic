@@ -19,6 +19,16 @@ import { syncCollections, syncWave, getUsername } from "../api";
 import { logDebug, logWarn } from "../utils/logger";
 import Hls from "hls.js";
 
+import { 
+  waveState, 
+  setCurrentWaveTrack, 
+  consumeNextWaveTrack, 
+  goBackWaveHistory,
+  invalidateNextTrack 
+} from "../recommendation/waveEngine";
+import { calculateImplicitFeedback } from "../recommendation/feedback";
+import { updateProfileWithFeedback } from "../recommendation/tasteProfile";
+
 const AudioPlayerContext = createContext(null);
 
 export const EQUALIZER_FREQUENCIES = [
@@ -475,6 +485,7 @@ export function AudioProvider({ children }) {
   const [queue, setQueue] = useState(() => storedAudioState.queue || []);
   const [originalQueue, setOriginalQueue] = useState(() => storedAudioState.originalQueue || storedAudioState.queue || []);
   const [currentIndex, setCurrentIndex] = useState(() => storedAudioState.currentIndex || 0);
+  const [isWaveMode, setIsWaveMode] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -577,8 +588,10 @@ export function AudioProvider({ children }) {
   }, []);
 
   const currentTrack = queue[currentIndex] || emptyTrack;
+  const nextRef = useRef(null);
   const queueRef = useRef(queue);
   const isShuffleRef = useRef(isShuffle);
+  const isWaveModeRef = useRef(isWaveMode);
   const repeatModeRef = useRef(repeatMode);
   const currentTrackRef = useRef(currentTrack);
   const isPlayingRef = useRef(isPlaying);
@@ -601,11 +614,12 @@ export function AudioProvider({ children }) {
   useEffect(() => {
     queueRef.current = queue;
     isShuffleRef.current = isShuffle;
+    isWaveModeRef.current = isWaveMode;
     repeatModeRef.current = repeatMode;
     currentTrackRef.current = currentTrack;
     isPlayingRef.current = isPlaying;
     playerSettingsRef.current = playerSettings;
-  }, [currentTrack, isPlaying, isShuffle, playerSettings, queue, repeatMode]);
+  }, [currentTrack, isPlaying, isShuffle, playerSettings, queue, repeatMode, isWaveMode]);
 
   useEffect(() =>
     subscribeProfileSettings(() => {
@@ -871,6 +885,12 @@ export function AudioProvider({ children }) {
         currentTime: safeCurrentTime,
         duration: safeDuration
       });
+      if (isWaveModeRef.current && nextRef.current) {
+        logDebug("audio", "ended event in wave mode, calling next");
+        nextRef.current();
+        return;
+      }
+
       if (nextRepeatMode === "one") {
         audio.currentTime = 0;
         audio.play().catch((error) => {
@@ -1042,7 +1062,7 @@ export function AudioProvider({ children }) {
       // Use loadedStreamUrlRef because audio.src may be a blob:// URL when HLS is active
       const isSameLoadedTrack =
         loadedTrackIdRef.current === String(track.id) &&
-        loadedStreamUrlRef.current === streamUrl;
+        (loadedStreamUrlRef.current === streamUrl || !isManual);
 
       if (isSameLoadedTrack) {
         audio.volume = targetVolume;
@@ -1265,7 +1285,26 @@ export function AudioProvider({ children }) {
     [loadTrack, queue]
   );
 
-  const next = useCallback(() => {
+  const next = useCallback(async () => {
+    if (isWaveMode) {
+      manualActionRef.current = true;
+      pendingAutoplayRef.current = isPlayingRef.current;
+      
+      const trackLength = audioRef.current?.duration || currentTrackRef.current?.duration || 0;
+      const listenSeconds = currentTime || 0;
+      const feedbackWeight = calculateImplicitFeedback(listenSeconds, trackLength, true, true);
+      updateProfileWithFeedback(currentTrackRef.current, feedbackWeight, false, false);
+      
+      invalidateNextTrack(); // We skipped early, invalidate lookahead
+      const nextTrack = await consumeNextWaveTrack();
+      if (nextTrack) {
+        setCurrentWaveTrack(nextTrack);
+        setQueue([nextTrack]);
+        setCurrentIndex(0);
+      }
+      return;
+    }
+    
     if (queue.length <= 1) return;
     manualActionRef.current = true;
     setCurrentIndex((index) => {
@@ -1279,14 +1318,36 @@ export function AudioProvider({ children }) {
       }
       return index;
     });
-  }, [queue.length, repeatMode]);
+  }, [queue.length, repeatMode, isWaveMode, currentTime]);
+
+  useEffect(() => {
+    nextRef.current = next;
+  }, [next]);
 
   const previous = useCallback(() => {
+    if (isWaveMode) {
+      manualActionRef.current = true;
+      pendingAutoplayRef.current = isPlayingRef.current;
+      
+      const feedbackWeight = calculateImplicitFeedback(currentTime || 0, audioRef.current?.duration || 0, false, false);
+      updateProfileWithFeedback(currentTrackRef.current, feedbackWeight, false, false);
+      // Wait, PREVIOUS implies we want to hear the last song again
+      updateProfileWithFeedback(currentTrackRef.current, 2.0, false, false);
+
+      const prevTrack = goBackWaveHistory();
+      if (prevTrack) {
+        setCurrentWaveTrack(prevTrack);
+        setQueue([prevTrack]);
+        setCurrentIndex(0);
+      }
+      return;
+    }
+
     if (queue.length <= 1) return;
     manualActionRef.current = true;
     pendingAutoplayRef.current = isPlayingRef.current;
     setCurrentIndex((index) => (index - 1 + queue.length) % queue.length);
-  }, [queue.length]);
+  }, [queue.length, isWaveMode, currentTime]);
 
   const seek = useCallback((seconds) => {
     const audio = audioRef.current;
@@ -1411,6 +1472,7 @@ export function AudioProvider({ children }) {
             if (tracks.some((item) => item.id === track.id)) return tracks;
             return [track, ...tracks];
           });
+          updateProfileWithFeedback(track, 5.0, true, false); // Strong Like
         }
         showNotification("Добавлено в Любимые", "success");
       }
@@ -1442,6 +1504,8 @@ export function AudioProvider({ children }) {
             if (prev.some((t) => t.id === targetId)) return prev;
             return [targetTrack, ...prev].slice(0, 200);
           });
+          updateProfileWithFeedback(targetTrack, -6.0, false, true); // Strong Dislike
+          if (isWaveModeRef.current) invalidateNextTrack();
         }
         showNotification("Трек скрыт (Дизлайк)", "info");
 
@@ -1666,6 +1730,29 @@ export function AudioProvider({ children }) {
       showNotification("Ошибка при загрузке волны по треку", "error");
     }
   }, [likedTracks, dislikedTrackIds, dislikedTracks, playTrack, showNotification]);
+
+  const startWaveMode = useCallback(async () => {
+    setIsWaveMode(true);
+    showNotification("Включаем Мою волну...", "info");
+    
+    // Invalidate the old track and force a fetch
+    invalidateNextTrack();
+    
+    // Get the next best track
+    const firstTrack = await consumeNextWaveTrack();
+    if (firstTrack) {
+      setCurrentWaveTrack(firstTrack);
+      await playTrack(firstTrack, [firstTrack]);
+    } else {
+      showNotification("Не удалось запустить волну", "error");
+      setIsWaveMode(false);
+    }
+  }, [playTrack, showNotification]);
+
+  const stopWaveMode = useCallback(() => {
+    setIsWaveMode(false);
+    showNotification("Моя волна выключена", "info");
+  }, [showNotification]);
 
   const playNext = useCallback((track) => {
     const normalized = normalizeStoredTrack(track);
@@ -1987,6 +2074,7 @@ export function AudioProvider({ children }) {
       effectiveVolume: isMuted ? 0 : volume,
       isMuted,
       isShuffle,
+      isWaveMode,
       repeatMode,
       isLiked: isCurrentLiked,
       isDisliked: isCurrentDisliked,
@@ -2025,6 +2113,8 @@ export function AudioProvider({ children }) {
       deleteUserPlaylist,
       showNotification,
       openTrackWave,
+      startWaveMode,
+      stopWaveMode,
       playNext,
       addToQueueEnd,
       reorderQueue,
@@ -2058,6 +2148,7 @@ export function AudioProvider({ children }) {
       isCurrentLiked,
       isCurrentDisliked,
       isShuffle,
+      isWaveMode,
       likedTrackIds,
       likedTracks,
       dislikedTrackIds,
@@ -2086,6 +2177,8 @@ export function AudioProvider({ children }) {
       volume,
       showNotification,
       openTrackWave,
+      startWaveMode,
+      stopWaveMode,
       playNext,
       addToQueueEnd,
       removeFromQueue,

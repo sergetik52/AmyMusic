@@ -402,8 +402,8 @@ button {
   pointer-events: auto;
   position: absolute;
   z-index: 30;
-  left: calc(50% - 239px);
-  bottom: 171px;
+  left: calc(50% - 240px); /* Adjust to exact center of the slot */
+  bottom: 154px; /* Adjust to exact center of the slot */
   top: auto;
   height: 44px;
   width: 44px;
@@ -427,8 +427,8 @@ button {
 }
 
 .is-paused .song-cover {
-  left: calc(50% - 239px);
-  bottom: 171px;
+  left: calc(50% - 240px);
+  bottom: 154px;
   top: auto;
   height: 44px;
   width: 44px;
@@ -440,7 +440,7 @@ button {
 .is-playing .song-cover {
   z-index: 9;
   left: 50%;
-  top: 42%;
+  top: 50%;
   bottom: auto;
   height: 185px;
   width: 185px;

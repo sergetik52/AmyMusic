@@ -580,6 +580,8 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
     if (created) {
       setPlaylistTitle("");
       setPlaylistCover("");
+      setIsAddPlaylistOpen(false);
+      openPlaylist(created);
     }
   };
 
@@ -657,6 +659,13 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
         if (createdPlaylist) {
           updateUserPlaylist(createdPlaylist.id, { 
             tracks: foundTracks, 
+            trackCount: foundTracks.length,
+            cover: foundTracks[0]?.cover || "/logo.png"
+          });
+          setIsAddPlaylistOpen(false);
+          openPlaylist({
+            ...createdPlaylist,
+            tracks: foundTracks,
             trackCount: foundTracks.length,
             cover: foundTracks[0]?.cover || "/logo.png"
           });
@@ -786,7 +795,15 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
 
   if (isAddPlaylistOpen) {
     return (
-      <div className="flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] bg-[#090909] text-white animate-[slideUpFade_0.2s_ease-out_forwards]">
+      <div className="flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] bg-[#090909] text-white animate-[slideUpFade_0.2s_ease-out_forwards] relative">
+        {isImporting && (
+          <div className="absolute left-0 top-0 z-[9999] h-1 w-full bg-white/10">
+            <div
+              className="h-full bg-[#8341EF] transition-all duration-300"
+              style={{ width: `${importProgress}%` }}
+            />
+          </div>
+        )}
         <div className="relative border-b border-white/[0.06] p-7 min-h-[315px]">
           <div className="absolute inset-0 opacity-30 blur-3xl">
             <img src={playlistCover || "/logo.png"} alt="" className="h-full w-full object-cover" />

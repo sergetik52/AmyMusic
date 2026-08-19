@@ -227,12 +227,11 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
     playTrack,
     seek,
     setVolume,
-    appendTracks
+    startWaveMode,
+    isWaveMode
   } = useAudioPlayer();
   const [isLoadingWave, setIsLoadingWave] = useState(false);
   const [waveError, setWaveError] = useState("");
-  const isAppendingWaveRef = useRef(false);
-  const recentWaveIdsRef = useRef(new Set());
   const palette = trackPalette || currentTrack.palette || {
     base: "#2a0a4a",
     line: "#9b5cff",
@@ -240,106 +239,13 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
     shadow: "#4c1d95"
   };
 
-  useEffect(() => {
-    return undefined;
-    // (dead code kept for structure, initial load handled by handleStartWave)
-  }, [_requestId]);
-
-  useEffect(() => {
-    if (!isPlaying) return;
-    if (!queue.length || isAppendingWaveRef.current) return;
-    // Trigger when 12 or fewer tracks are left ahead in queue
-    if (queue.length - currentIndex > 12) return;
-
-    let isMounted = true;
-    isAppendingWaveRef.current = true;
-
-    async function appendMoreWaveTracks() {
-      try {
-        let tracks = await getPersonalWaveTracks({
-          likedTracks,
-          dislikedTrackIds,
-          dislikedTracks,
-          playHistory,
-          currentTrack
-        });
-
-        if (!tracks.length) {
-          tracks = await getWaveTracks("dark underground rap");
-        }
-
-        // Only exclude the rolling recent window, NOT the entire queue.
-        // This lets tracks re-appear after ~80 new ones, keeping the wave infinite.
-        const recentIds = recentWaveIdsRef.current;
-        const nextTracks = shuffleWaveTracks(tracks).filter(
-          (track) => !recentIds.has(String(track.id))
-        );
-
-        if (isMounted && nextTracks.length) {
-          appendTracks(nextTracks);
-
-          // Add newly queued IDs to the rolling window
-          nextTracks.forEach((track) => recentIds.add(String(track.id)));
-
-          // Keep the window bounded to ~80 entries: evict oldest when over limit
-          if (recentIds.size > 80) {
-            const entries = [...recentIds];
-            entries.slice(0, entries.length - 80).forEach((id) => recentIds.delete(id));
-          }
-        }
-      } catch (error) {
-        if (isMounted) {
-          setWaveError(error.message || "Не удалось догрузить Мою волну");
-        }
-      } finally {
-        if (isMounted) {
-          isAppendingWaveRef.current = false;
-        }
-      }
-    }
-
-    appendMoreWaveTracks();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [
-    appendTracks,
-    currentIndex,
-    currentTrack,
-    dislikedTrackIds,
-    isPlaying,
-    likedTracks,
-    playHistory,
-    queue
-  ]);
-
   const handleStartWave = async () => {
     if (isLoadingWave) return;
 
     setIsLoadingWave(true);
     setWaveError("");
-    // Reset rolling window on fresh wave start
-    recentWaveIdsRef.current = new Set();
     try {
-      let tracks = await getPersonalWaveTracks({
-        likedTracks,
-        dislikedTrackIds,
-        dislikedTracks,
-        playHistory,
-        currentTrack
-      });
-
-      if (!tracks.length) {
-        tracks = await getWaveTracks("dark underground rap");
-      }
-
-      if (tracks.length) {
-        const waveTracks = shuffleWaveTracks(tracks);
-        // Seed the recent-IDs window so the first append batch doesn't repeat these
-        waveTracks.forEach((track) => recentWaveIdsRef.current.add(String(track.id)));
-        await playTrack(waveTracks[0], waveTracks);
-      }
+      await startWaveMode();
     } catch (error) {
       setWaveError(error.message || "Не удалось включить Мою волну");
     } finally {
@@ -372,7 +278,7 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
       <button
         type="button"
         onClick={onOpenFull}
-        className="song-cover overflow-hidden rounded-[28px] object-cover ring-1 ring-white/10"
+        className={`song-cover overflow-hidden object-cover transition-all duration-800 ${isPlaying ? 'rounded-[28px] ring-1 ring-white/10' : 'rounded-full ring-0'}`}
         aria-label="Open full player"
       >
         <img src={currentTrack.cover} alt={currentTrack.title} className="h-full w-full object-cover" />
@@ -384,8 +290,8 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
         </p>
       )}
 
-      <div className="pointer-events-none absolute inset-0 z-10 flex -translate-y-10 items-center justify-center">
-        {!isPlaying && (
+      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+        {(!isWaveMode && !isPlaying) && (
           <button
             type="button"
             onClick={handleStartWave}

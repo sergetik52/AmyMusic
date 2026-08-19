@@ -555,20 +555,28 @@ function registerDesktopIpc() {
 
           res.pipe(fileStream);
 
-          fileStream.on("finish", () => {
-            fileStream.close(() => {
-              try {
-                const child_process = require("node:child_process");
-                child_process.spawn(targetPath, ["/S", "--force-run"], { detached: true, stdio: "ignore" }).unref();
-                isQuitting = true;
-                setTimeout(() => app.quit(), 300);
-                resolve({ success: true });
-              } catch (err) {
-                console.error("[AmyMusic] Failed to launch installer:", err);
-                resolve({ success: false, error: err.message });
-              }
-            });
-          });
+          fileStream.on("finish", () => fileStream.close(() => {
+                try {
+                  const child_process = require("node:child_process");
+                  const updateScript = path.join(os.tmpdir(), "AmyMusic-Update.bat");
+                  const exePath = process.execPath;
+                  const batContent = `
+@echo off
+timeout /t 2 /nobreak > nul
+start /wait "" "${targetPath}" /S
+start "" "${exePath}"
+del "%~f0"
+`;
+                  fs.writeFileSync(updateScript, batContent.trim());
+                  child_process.spawn("cmd.exe", ["/c", updateScript], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+                  isQuitting = true;
+                  setTimeout(() => app.quit(), 300);
+                  resolve({ success: true });
+                } catch (err) {
+                  console.error("[AmyMusic] Failed to launch installer:", err);
+                  resolve({ success: false, error: err.message });
+                }
+              }));
         }).on("error", (err) => {
           fs.unlink(targetPath, () => {});
           resolve({ success: false, error: err.message });

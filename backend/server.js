@@ -152,6 +152,27 @@ app.post('/api/sync/wave', authenticateToken, (req, res) => {
   });
 });
 
+app.get('/api/sync/taste-profile', authenticateToken, (req, res) => {
+  db.get(`SELECT data FROM taste_profiles WHERE user_id = ?`, [req.user.id], (err, row) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    if (row) {
+      res.json(JSON.parse(row.data));
+    } else {
+      res.json({});
+    }
+  });
+});
+
+app.post('/api/sync/taste-profile', authenticateToken, (req, res) => {
+  const data = JSON.stringify(req.body);
+  db.run(`INSERT INTO taste_profiles (user_id, data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = CURRENT_TIMESTAMP`, 
+          [req.user.id, data], (err) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    res.json({ success: true });
+  });
+});
+
 // --- RATING / LISTENING TRACKING ---
 app.post('/api/track/listen', authenticateToken, (req, res) => {
   const { absoluteSeconds } = req.body;
