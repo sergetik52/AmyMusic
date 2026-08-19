@@ -883,8 +883,8 @@ app.commandLine.appendSwitch("renderer-process-limit", "1");
 app.commandLine.appendSwitch("disable-site-isolation-trials");
 // Limit V8 JS heap memory footprint to 128MB max & enable GC
 app.commandLine.appendSwitch("js-flags", "--max-old-space-size=128 --expose-gc");
-// Avoid calculating window occlusion and media key overhead in background
-app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion,HardwareMediaKeyHandling,MediaSessionService");
+// Avoid calculating window occlusion in background
+app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
 // Disable unused Chromium background services to minimize CPU/RAM usage
 app.commandLine.appendSwitch("disable-breakpad");
 app.commandLine.appendSwitch("disable-[#component-update]");
