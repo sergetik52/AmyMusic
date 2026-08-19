@@ -1,6 +1,6 @@
-const API_URL = typeof window !== 'undefined' && window.location.origin.includes('http')
+const API_URL = typeof window !== 'undefined' && window.location.origin.startsWith('http') && !window.location.origin.includes('localhost')
   ? `${window.location.origin}/api`
-  : 'http://185.199.158.106:3000/api';
+  : 'https://amymusic.ru/api';
 
 export const getAuthToken = () => localStorage.getItem('amymusic_token');
 export const setAuthToken = (token) => localStorage.setItem('amymusic_token', token);
