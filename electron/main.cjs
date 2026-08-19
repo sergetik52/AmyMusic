@@ -686,7 +686,7 @@ function registerDesktopIpc() {
                 const currentUrl = window.location.href;
                 
                 if (currentUrl.includes("spotify.com")) {
-                  const rows = document.querySelectorAll('[data-testid="tracklist-row"]');
+                  const rows = document.querySelectorAll('[data-testid="tracklist-row"], [role="row"]');
                   if (rows.length > 0) {
                     window.scrollBy(0, 150);
                     const lastRow = rows[rows.length - 1];
@@ -694,16 +694,17 @@ function registerDesktopIpc() {
                       lastRow.scrollIntoView({ behavior: 'auto', block: 'start' });
                     }
                     rows.forEach((row, i) => {
-                      const titleEl = row.querySelector('a[data-testid="internal-track-link"] > div') || row.querySelector('div[dir="auto"]');
+                      const trackLink = row.querySelector('a[data-testid="internal-track-link"], a[href*="/track/"]');
+                      const titleEl = row.querySelector('a[data-testid="internal-track-link"] > div') || trackLink || row.querySelector('div[dir="auto"]');
                       const artistEls = Array.from(row.querySelectorAll('a[href^="/artist/"]'));
-                      if (titleEl) {
-                        const title = titleEl.innerText.trim();
-                        const artist = artistEls.map(a => a.innerText.trim()).join(', ');
-                        const ariaRowIndex = row.getAttribute('aria-rowindex');
-                        const index = ariaRowIndex ? parseInt(ariaRowIndex, 10) : tracksMap.size;
+                      if (titleEl || trackLink) {
+                        const title = (titleEl ? titleEl.innerText : trackLink.innerText).trim();
+                        const artist = artistEls.length > 0 
+                          ? artistEls.map(a => a.innerText.trim()).filter(Boolean).join(', ') 
+                          : '';
                         const key = title + '::' + artist;
-                        if (!tracksMap.has(key)) {
-                          tracksMap.set(key, { title, artist, index });
+                        if (title && !tracksMap.has(key)) {
+                          tracksMap.set(key, { title, artist, index: tracksMap.size });
                           foundAnyNew = true;
                         }
                       }
