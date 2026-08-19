@@ -1,7 +1,7 @@
 {
   "name": "amymusic1",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -22,6 +22,11 @@
       "electron/**/*",
       "package.json"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "sergetik52",
+      "repo": "AmyMusic"
+    },
     "win": {
       "icon": "build/icon.png",
       "target": [

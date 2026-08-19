@@ -221,8 +221,10 @@ app.use('/api/soundcloud', (req, res) => {
 });
 
 // --- DOWNLOADS & AUTO-UPDATE ROUTES ---
+const pkgInfo = require('../package.json');
+
 app.get('/api/app-version', (req, res) => {
-  const version = '0.1.0';
+  const version = pkgInfo.version || '0.1.1';
   const fileName = `AmyMusic-${version}-Setup.exe`;
   const githubDownloadUrl = `https://github.com/sergetik52/AmyMusic/releases/download/v${version}/${fileName}`;
 
@@ -230,12 +232,12 @@ app.get('/api/app-version', (req, res) => {
     version,
     downloadUrl: githubDownloadUrl,
     fileName,
-    releaseNotes: '10-полосный эквалайзер, фильтрация веб-настроек, улучшенные аватарки артистов и однокликовое автообновление через GitHub.'
+    releaseNotes: `Версия v${version}: Официальное автообновление через GitHub, 10-полосный эквалайзер и оптимизация веб-версии.`
   });
 });
 
 app.get('/api/download-app', (req, res) => {
-  const version = '0.1.0';
+  const version = pkgInfo.version || '0.1.1';
   const fileName = `AmyMusic-${version}-Setup.exe`;
   res.redirect(`https://github.com/sergetik52/AmyMusic/releases/download/v${version}/${fileName}`);
 });
