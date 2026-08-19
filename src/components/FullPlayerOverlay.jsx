@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
 import { fetchLyricsForTrack } from "../services/lyricsApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
-import { TrackMenuButton } from "./TrackContextMenu";
+import { TrackContextMenu, TrackMenuButton } from "./TrackContextMenu";
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
@@ -107,11 +107,13 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
     toggleLike,
     cycleRepeatMode,
     seek,
-    reorderQueue
+    reorderQueue,
+    removeFromQueue
   } = useAudioPlayer();
 
   const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
   const [dragOverQueueIndex, setDragOverQueueIndex] = useState(null);
+  const [queueContextMenu, setQueueContextMenu] = useState(null);
 
   const activeLyricIndex = useMemo(
     () => getActiveLyricIndex(lyricsState.lines, currentTime),
@@ -347,6 +349,16 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
                 setDraggedQueueIndex(null);
                 setDragOverQueueIndex(null);
               }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setQueueContextMenu({
+                  track,
+                  index,
+                  x: e.clientX,
+                  y: e.clientY
+                });
+              }}
               onClick={() => playTrack(track, queue)}
               className={[
                 "group flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition cursor-grab active:cursor-grabbing",
@@ -371,6 +383,21 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
                   now
                 </span>
               )}
+
+              {/* Quick Remove from Queue Button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeFromQueue(index);
+                }}
+                title="Удалить из очереди"
+                className="opacity-0 group-hover:opacity-100 flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-white/10 text-white/40 hover:text-red-400 transition"
+              >
+                <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                </svg>
+              </button>
             </div>
           );
         }) : (
@@ -602,6 +629,31 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
           )
         ) : null}
       </div>
+
+      {/* Queue Item Context Menu (Right Click) */}
+      {queueContextMenu && (
+        <TrackContextMenu
+          track={queueContextMenu.track}
+          onClose={() => setQueueContextMenu(null)}
+          onOpenArtist={(artist) => {
+            handleClose();
+            onOpenArtist?.(artist);
+          }}
+          onOpenAlbum={(album) => {
+            handleClose();
+            onOpenAlbum?.(album);
+          }}
+          onRemoveFromQueue={() => {
+            removeFromQueue(queueContextMenu.index);
+          }}
+          positionStyle={{
+            position: "fixed",
+            left: Math.min(queueContextMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1000) - 240),
+            top: Math.min(queueContextMenu.y, (typeof window !== "undefined" ? window.innerHeight : 800) - 380),
+            zIndex: 9999
+          }}
+        />
+      )}
     </div>
   );
 }

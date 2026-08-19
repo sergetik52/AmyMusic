@@ -1423,6 +1423,40 @@ export function AudioProvider({ children }) {
     setLikedTracks((tracks) => tracks.filter((item) => item.id !== targetId));
   }, [currentTrack.id, currentTrack, next, showNotification]);
 
+  const removeFromQueue = useCallback((targetIndexOrTrack) => {
+    setQueue((prevQueue) => {
+      let indexToRemove = -1;
+      if (typeof targetIndexOrTrack === "number") {
+        indexToRemove = targetIndexOrTrack;
+      } else if (targetIndexOrTrack && (typeof targetIndexOrTrack === "string" || typeof targetIndexOrTrack === "number")) {
+        indexToRemove = prevQueue.findIndex((t) => String(t.id) === String(targetIndexOrTrack));
+      } else if (targetIndexOrTrack && targetIndexOrTrack.id) {
+        indexToRemove = prevQueue.findIndex((t) => String(t.id) === String(targetIndexOrTrack.id));
+      }
+
+      if (indexToRemove < 0 || indexToRemove >= prevQueue.length) return prevQueue;
+
+      if (prevQueue.length <= 1) {
+        showNotification("В очереди остался последний трек", "info");
+        return prevQueue;
+      }
+
+      const removedTrack = prevQueue[indexToRemove];
+      const nextQueue = prevQueue.filter((_, idx) => idx !== indexToRemove);
+
+      setCurrentIndex((currIndex) => {
+        if (currIndex > indexToRemove) return currIndex - 1;
+        if (currIndex === indexToRemove) {
+          return Math.min(currIndex, nextQueue.length - 1);
+        }
+        return currIndex;
+      });
+
+      showNotification(`Удалено из очереди: ${removedTrack?.title || "Трек"}`, "info");
+      return nextQueue;
+    });
+  }, [showNotification]);
+
   const reorderQueue = useCallback((fromIndex, toIndex) => {
     if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
     setQueue((prevQueue) => {
@@ -2002,6 +2036,7 @@ export function AudioProvider({ children }) {
       openTrackWave,
       playNext,
       addToQueueEnd,
+      removeFromQueue,
       reorderQueue,
       reorderPlaylistTracks,
       isFullOpen,

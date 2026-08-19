@@ -7,7 +7,9 @@ export function TrackContextMenu({
   onOpenArtist,
   onOpenAlbum,
   onRemoveFromPlaylist,
-  placement = "bottom"
+  onRemoveFromQueue,
+  placement = "bottom",
+  positionStyle = null
 }) {
   const {
     likedTrackIds,
@@ -17,6 +19,7 @@ export function TrackContextMenu({
     openTrackWave,
     playNext,
     addToQueueEnd,
+    removeFromQueue,
     userPlaylists,
     addTrackToUserPlaylist,
     setIsFullOpen
@@ -118,12 +121,16 @@ export function TrackContextMenu({
   return (
     <div
       ref={menuRef}
-      className={`absolute right-0 z-[100] w-56 rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md animate-slide-up-fade pointer-events-auto ${
-        actualPlacement === "top" ? "bottom-full mb-2" : "top-full mt-1"
+      className={`z-[100] w-56 rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md animate-slide-up-fade pointer-events-auto ${
+        positionStyle
+          ? "fixed"
+          : `absolute right-0 ${actualPlacement === "top" ? "bottom-full mb-2" : "top-full mt-1"}`
       }`}
-      style={{
-        boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
-      }}
+      style={
+        positionStyle || {
+          boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
+        }
+      }
       onClick={(e) => e.stopPropagation()}
     >
       {/* 1. Нравится */}
@@ -265,7 +272,22 @@ export function TrackContextMenu({
         <span>Перейти к исполнителю</span>
       </button>
 
-      {/* 10. Удалить из плейлиста (optional) */}
+      {/* 10. Удалить из очереди */}
+      {onRemoveFromQueue && (
+        <>
+          <div className="my-1 border-t border-white/[0.06]" />
+          <button
+            type="button"
+            onClick={() => handleAction(onRemoveFromQueue)}
+            className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
+          >
+            <img src="/menu/delete.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
+            <span>Удалить из очереди</span>
+          </button>
+        </>
+      )}
+
+      {/* 11. Удалить из плейлиста (optional) */}
       {onRemoveFromPlaylist && (
         <>
           <div className="my-1 border-t border-white/[0.06]" />
