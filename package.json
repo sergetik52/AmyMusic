@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "electron:dev": "set AMYMUSIC_DEV=1&& electron .",
-    "package:windows": "npm run build && electron-builder --win --x64"
+    "package:windows": "npm run build && electron-builder --win --x64",
+    "release": "node scripts/release.cjs"
   },
   "build": {
     "appId": "com.amymusic.desktop",
