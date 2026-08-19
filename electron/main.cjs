@@ -494,31 +494,39 @@ function registerDesktopIpc() {
 
   ipcMain.handle("amymusic:check-update", async () => {
     return new Promise((resolve) => {
-      const req = https.get("https://amymusic.ru/api/app-version", (res) => {
-        let body = "";
-        res.on("data", (chunk) => (body += chunk));
-        res.on("end", () => {
-          try {
-            const data = JSON.parse(body);
-            const currentVersion = app.getVersion();
-            const hasUpdate = Boolean(data.version && data.version !== currentVersion);
-            resolve({
-              currentVersion,
-              latestVersion: data.version || currentVersion,
-              downloadUrl: data.downloadUrl || "https://amymusic.ru/downloads/AmyMusic-0.1.0-Setup.exe",
-              hasUpdate,
-              releaseNotes: data.releaseNotes || ""
-            });
-          } catch {
-            resolve({ currentVersion: app.getVersion(), hasUpdate: false });
+      const fetchVersion = (url) => {
+        const protocol = url.startsWith("https") ? https : http;
+        const req = protocol.get(url, { headers: { "User-Agent": "AmyMusic-Desktop" } }, (res) => {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            return fetchVersion(res.headers.location);
           }
+          let body = "";
+          res.on("data", (chunk) => (body += chunk));
+          res.on("end", () => {
+            try {
+              const data = JSON.parse(body);
+              const currentVersion = app.getVersion();
+              const hasUpdate = Boolean(data.version && data.version !== currentVersion);
+              resolve({
+                currentVersion,
+                latestVersion: data.version || currentVersion,
+                downloadUrl: data.downloadUrl || `https://github.com/sergetik52/AmyMusic/releases/download/v${data.version || "0.1.2"}/AmyMusic-${data.version || "0.1.2"}-Setup.exe`,
+                hasUpdate,
+                releaseNotes: data.releaseNotes || ""
+              });
+            } catch {
+              resolve({ currentVersion: app.getVersion(), hasUpdate: false });
+            }
+          });
         });
-      });
-      req.on("error", () => resolve({ currentVersion: app.getVersion(), hasUpdate: false }));
-      req.setTimeout(5000, () => {
-        req.destroy();
-        resolve({ currentVersion: app.getVersion(), hasUpdate: false });
-      });
+        req.on("error", () => resolve({ currentVersion: app.getVersion(), hasUpdate: false }));
+        req.setTimeout(5000, () => {
+          req.destroy();
+          resolve({ currentVersion: app.getVersion(), hasUpdate: false });
+        });
+      };
+
+      fetchVersion("https://amymusic.ru/api/app-version");
     });
   });
 
