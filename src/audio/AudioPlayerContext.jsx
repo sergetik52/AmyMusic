@@ -24,7 +24,8 @@ import {
   setCurrentWaveTrack, 
   consumeNextWaveTrack, 
   goBackWaveHistory,
-  invalidateNextTrack 
+  invalidateNextTrack,
+  setWaveUserCollection
 } from "../recommendation/waveEngine";
 import { calculateImplicitFeedback } from "../recommendation/feedback";
 import { updateProfileWithFeedback } from "../recommendation/tasteProfile";
@@ -621,6 +622,10 @@ export function AudioProvider({ children }) {
     playerSettingsRef.current = playerSettings;
   }, [currentTrack, isPlaying, isShuffle, playerSettings, queue, repeatMode, isWaveMode]);
 
+  useEffect(() => {
+    setWaveUserCollection(likedTracks);
+  }, [likedTracks]);
+
   useEffect(() =>
     subscribeProfileSettings(() => {
       setPlayerSettings(getPlayerRuntimeSettings());
@@ -1059,13 +1064,15 @@ export function AudioProvider({ children }) {
       }
       // Use refs so this function doesn't depend on volume/isMuted state
       const targetVolume = isMutedRef.current ? 0 : volumeRef.current;
-      // Use loadedStreamUrlRef because audio.src may be a blob:// URL when HLS is active
       const isSameLoadedTrack =
         loadedTrackIdRef.current === String(track.id) &&
-        (loadedStreamUrlRef.current === streamUrl || !isManual);
+        loadedStreamUrlRef.current === streamUrl;
 
       if (isSameLoadedTrack) {
         audio.volume = targetVolume;
+        if (isManual) {
+          audio.currentTime = 0;
+        }
         if (shouldPlay && audio.paused) {
           await ensureAudioGraph();
           await audio.play();
@@ -1253,6 +1260,10 @@ export function AudioProvider({ children }) {
       const resolvedQueue = existingIndex >= 0 ? nextQueue : [track, ...nextQueue];
       const resolvedIndex = existingIndex >= 0 ? existingIndex : 0;
 
+      if (isWaveModeRef.current) {
+        setIsWaveMode(false);
+      }
+
       explicitLoadTrackIdRef.current = String(track.id);
       pendingAutoplayRef.current = true;
       manualActionRef.current = true;
@@ -1413,6 +1424,9 @@ export function AudioProvider({ children }) {
       startIndex,
       first: tracks[0]
     });
+    if (isWaveModeRef.current) {
+      setIsWaveMode(false);
+    }
     setOriginalQueue(tracks);
     setQueue(tracks);
     setCurrentIndex(startIndex);

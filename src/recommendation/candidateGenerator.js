@@ -11,7 +11,7 @@ const TTL_MS = 1000 * 60 * 15; // 15 mins
 /**
  * Fetch and combine tracks from multiple sources.
  */
-export async function getCandidatePool(currentTrack, recentHistory) {
+export async function getCandidatePool(currentTrack, recentHistory, userCollection = []) {
   const candidates = new Map(); // deduplicate by track.id
   
   const longTermTaste = getLongTermTaste();
@@ -54,8 +54,14 @@ export async function getCandidatePool(currentTrack, recentHistory) {
     );
   }
 
-  // 3. Fallback to general recommended
-  if (tasks.length === 0) {
+  // 3. Include some random tracks from user collection (injecting own collection)
+  if (userCollection && userCollection.length > 0) {
+    const randomCollectionTracks = [...userCollection].sort(() => 0.5 - Math.random()).slice(0, 10);
+    addCandidates(randomCollectionTracks, 'user_collection');
+  }
+
+  // 4. Fallback to general recommended
+  if (tasks.length === 0 && (!userCollection || userCollection.length === 0)) {
     tasks.push(
       fetchCached('recommended:home', () => getRecommendedTracks())
         .then(res => addCandidates(res, 'recommended'))

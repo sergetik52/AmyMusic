@@ -13,6 +13,11 @@ export const waveState = {
 
 let isPrefetching = false;
 let forceInvalidate = false;
+let userCollectionTracks = [];
+
+export function setWaveUserCollection(tracks) {
+  userCollectionTracks = tracks || [];
+}
 
 /**
  * Triggers re-calculation of the nextTrack.
@@ -65,13 +70,13 @@ export async function prefetchNextTrack() {
     
     // Fallback logic
     if (!waveState.reserveTrack) {
-       const initialPool = await getCandidatePool(waveState.currentTrack, waveState.recentHistoryIds);
+       const initialPool = await getCandidatePool(waveState.currentTrack, waveState.recentHistoryIds, userCollectionTracks);
        if (initialPool.length > 0) {
          waveState.reserveTrack = initialPool[Math.floor(Math.random() * initialPool.length)].track;
        }
     }
     
-    const candidates = await getCandidatePool(waveState.currentTrack, waveState.recentHistoryIds);
+    const candidates = await getCandidatePool(waveState.currentTrack, waveState.recentHistoryIds, userCollectionTracks);
     
     const scored = candidates.map(c => scoreCandidate(c, waveState.currentTrack, waveState.recentHistoryIds));
     const nextTrack = selectNextTrack(scored);

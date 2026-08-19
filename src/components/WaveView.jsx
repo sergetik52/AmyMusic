@@ -291,15 +291,17 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
       )}
 
       <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-        {(!isWaveMode && !isPlaying) && (
+        {!isWaveMode && (
           <button
             type="button"
             onClick={handleStartWave}
             disabled={isLoadingWave}
-            className="wave-title-button pointer-events-auto relative text-7xl font-black tracking-tight text-transparent drop-shadow-[0_16px_34px_rgba(0,0,0,0.95)] transition hover:scale-[1.02] active:scale-[0.99] disabled:cursor-default disabled:opacity-55"
+            className="wave-title-button pointer-events-auto relative text-7xl font-black tracking-tight transition hover:scale-[1.02] active:scale-[0.99] disabled:cursor-default disabled:opacity-55"
             aria-label="Включить Мою волну"
           >
-            Моя волна
+            <span className="bg-gradient-to-br from-white via-white/90 to-white/60 bg-clip-text text-transparent drop-shadow-[0_16px_34px_rgba(0,0,0,0.95)]">
+              Моя волна
+            </span>
           </button>
         )}
       </div>
