@@ -2137,6 +2137,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(getUsername() || null);
   const [profileData, setProfileData] = useState({ displayName: "", avatarUrl: "" });
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showMyWaveSetup, setShowMyWaveSetup] = useState(false);
 
   const handleLoginSuccess = async ({ username, displayName, avatarUrl }) => {
     setCurrentUser(username);
