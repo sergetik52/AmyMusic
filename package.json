@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "discord-rpc": "^4.0.1",
     "hls.js": "^1.7.0",
     "https-proxy-agent": "^9.1.0",
     "lucide-react": "^0.468.0",

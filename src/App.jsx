@@ -8,7 +8,9 @@ import { FullPlayerOverlay } from "./components/FullPlayerOverlay";
 import { AudioProvider, useAudioPlayer } from "./audio/AudioPlayerContext";
 import { TrackMenuButton } from "./components/TrackContextMenu";
 import AuthModal from "./components/AuthModal";
-import { getUsername, removeAuthToken, getCollections, syncCollections, getWave, syncWave } from "./api";
+import { AvatarCropperModal } from "./components/AvatarCropperModal";
+import { EqualizerModal } from "./components/EqualizerModal";
+import { getUsername, removeAuthToken, getCollections, syncCollections, getWave, syncWave, getProfile, updateProfile, changePassword } from "./api";
 import {
   buildArtistsFromTracks,
   getAlbumDetails,
@@ -88,9 +90,79 @@ function SidebarItem({ item, isActive, isCollapsed, onClick }) {
   );
 }
 
-function ProfileSettingsModal({ settings, onClose, onSave }) {
+function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfileSave, onLogout }) {
+  const { setIsEqualizerOpen } = useAudioPlayer();
+  const isDesktop = Boolean(typeof window !== "undefined" && window.amyMusicDesktop);
   const [draft, setDraft] = useState(settings);
+  const [draftProfile, setDraftProfile] = useState(profileData || { displayName: "", avatarUrl: "" });
   const [isClosing, setIsClosing] = useState(false);
+  const [activeTab, setActiveTab] = useState("profile");
+  const [discordBotToken, setDiscordBotToken] = useState("");
+  const [croppingImageSrc, setCroppingImageSrc] = useState(null);
+
+  // Password change state
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordStatus, setPasswordStatus] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  // App auto-updater state
+  const [appVersion, setAppVersion] = useState("0.1.0");
+  const [updateStatus, setUpdateStatus] = useState("idle");
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateMessage, setUpdateMessage] = useState("");
+
+  React.useEffect(() => {
+    window.amyMusicDesktop?.getDiscordBotToken?.().then((t) => setDiscordBotToken(t || "")).catch(() => {});
+    if (isDesktop && window.amyMusicDesktop?.getAppVersion) {
+      window.amyMusicDesktop.getAppVersion().then((v) => {
+        if (v) setAppVersion(v);
+      }).catch(() => {});
+    }
+  }, [isDesktop]);
+
+  const handleCheckOrStartUpdate = async () => {
+    if (!isDesktop || !window.amyMusicDesktop) return;
+    if (updateStatus === "has-update") {
+      setUpdateStatus("downloading");
+      setUpdateProgress(0);
+      setUpdateMessage("Скачивание обновления и запуск инсталлятора...");
+
+      const cleanup = window.amyMusicDesktop.onUpdateProgress?.((data) => {
+        if (data?.percent !== undefined) {
+          setUpdateProgress(data.percent);
+        }
+      });
+
+      const res = await window.amyMusicDesktop.startUpdate();
+      if (cleanup) cleanup();
+      if (!res?.success) {
+        setUpdateStatus("error");
+        setUpdateMessage(res?.error || "Ошибка скачивания обновления.");
+      }
+      return;
+    }
+
+    setUpdateStatus("checking");
+    setUpdateMessage("");
+    const res = await window.amyMusicDesktop.checkUpdate();
+    if (res?.hasUpdate) {
+      setUpdateStatus("has-update");
+      setUpdateMessage(`Доступна новая версия v${res.latestVersion}! ${res.releaseNotes || ""}`);
+    } else {
+      setUpdateStatus("up-to-date");
+      setUpdateMessage("У вас установлена самая свежая версия приложения.");
+      setTimeout(() => setUpdateStatus("idle"), 3000);
+    }
+  };
+
+  const tabs = [
+    { id: "profile", label: "Профиль", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
+    { id: "audio", label: "Аудио", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg> },
+    { id: "system", label: "Система", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
+    { id: "developer", label: "Разработчик", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-.273l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> }
+  ];
 
   const handleClose = () => {
     setIsClosing(true);
@@ -99,18 +171,53 @@ function ProfileSettingsModal({ settings, onClose, onSave }) {
 
   useEscapeKey(true, handleClose);
 
+  // Auto-apply setting changes
   const updateField = (field, value) => {
-    setDraft((current) => ({ ...current, [field]: value }));
+    setDraft((current) => {
+      const nextSettings = { ...current, [field]: value };
+      onSave(nextSettings);
+      return nextSettings;
+    });
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    await onSave(draft);
+  // Auto-apply profile changes
+  const updateProfileField = (field, value) => {
+    setDraftProfile((current) => {
+      const nextProfile = { ...current, [field]: value };
+      onProfileSave(nextProfile);
+      return nextProfile;
+    });
+  };
+
+  const handleDiscordBotTokenChange = (value) => {
+    setDiscordBotToken(value);
+    window.amyMusicDesktop?.setDiscordBotToken?.(value).catch(() => {});
+  };
+
+  const handlePasswordChangeSubmit = async (e) => {
+    e.preventDefault();
+    if (!oldPassword || !newPassword) {
+      setPasswordError("Заполните оба поля");
+      return;
+    }
+    setPasswordLoading(true);
+    setPasswordError("");
+    setPasswordStatus("");
+    try {
+      await changePassword(oldPassword, newPassword);
+      setPasswordStatus("Пароль успешно изменён!");
+      setOldPassword("");
+      setNewPassword("");
+    } catch (err) {
+      setPasswordError(err.message || "Не удалось изменить пароль");
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   const fileInputRef = React.useRef(null);
 
-  const handleAvatarChange = (event) => {
+  const handleAvatarFileSelect = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -118,219 +225,475 @@ function ProfileSettingsModal({ settings, onClose, onSave }) {
     reader.onload = (e) => {
       const result = e.target?.result;
       if (typeof result === "string") {
-        updateField("avatarUrl", result);
+        setCroppingImageSrc(result);
       }
     };
     reader.readAsDataURL(file);
+    event.target.value = "";
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/70 p-10 backdrop-blur-md">
-      <form
-        onSubmit={handleSubmit}
-        className={`flex w-full max-w-4xl flex-col overflow-hidden rounded-[17.76px] border border-white/[0.04] bg-[#090909] text-white shadow-2xl ${isClosing ? "animate-[slideDownFade_0.25s_ease-in_forwards]" : "animate-slide-up-fade"}`}
-        style={{ maxHeight: "calc(100vh - 80px)" }}
-      >
-        <div className="relative min-h-[330px] shrink-0 overflow-hidden border-b border-white/[0.05] px-10 pb-10 pt-8">
-          <div className="absolute inset-0 opacity-45 blur-3xl">
-            <div className="h-full w-full bg-[#8341EF]" />
+    <React.Fragment>
+      {croppingImageSrc && (
+        <AvatarCropperModal
+          key="avatar-cropper-dialog"
+          imageSrc={croppingImageSrc}
+          onCrop={(croppedUrl) => {
+            updateProfileField("avatarUrl", croppedUrl);
+            setCroppingImageSrc(null);
+          }}
+          onCancel={() => setCroppingImageSrc(null)}
+        />
+      )}
+
+      <div key="settings-overlay" className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 sm:p-10 backdrop-blur-[10px]">
+        <div
+          key="settings-window-box"
+          className={`relative flex w-full max-w-5xl h-[75vh] min-h-[500px] overflow-hidden rounded-[24px] border border-white/10 bg-[#0c0c0c] text-white shadow-2xl ${isClosing ? "animate-[slideDownFade_0.25s_ease-in_forwards]" : "animate-slide-up-fade"}`}
+        >
+        {/* Close Button Top-Right */}
+        <button
+          type="button"
+          onClick={handleClose}
+          className="absolute top-5 right-5 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-white/50 hover:bg-white/10 hover:text-white transition"
+          title="Закрыть настройки"
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+
+        {/* Sidebar Navigation */}
+        <div className="w-64 shrink-0 bg-white/[0.02] border-r border-white/5 flex flex-col pt-8 pb-4">
+          <div className="px-6 mb-6">
+            <h2 className="text-xl font-black tracking-tight text-white">Настройки</h2>
           </div>
-          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-[#090909]/78 to-[#090909]" />
-
-          <div className="relative z-10 flex h-full flex-col justify-between">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="absolute right-8 top-8 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95"
-              aria-label="Закрыть"
-            >
-              <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"></path></svg>
-            </button>
-
-            <div className="flex items-end gap-7">
-              <div className="group relative flex h-52 w-52 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.02] object-cover shadow-2xl transition hover:border-white/20" onClick={() => fileInputRef.current?.click()}>
-                 {draft.avatarUrl ? (
-                   <img src={draft.avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
-                 ) : (
-                   <img src="/user.svg" alt="" className="h-20 w-20 opacity-30" />
-                 )}
-                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-                   <span className="text-xs font-bold text-white">Изменить фото</span>
-                 </div>
-                 <input
-                   type="file"
-                   accept="image/*"
-                   className="hidden"
-                   ref={fileInputRef}
-                   onChange={handleAvatarChange}
-                 />
-              </div>
-              <div className="max-w-4xl pb-2">
-                <h1 className="text-5xl font-black tracking-tight text-white">{draft.displayName || "Local Profile"}</h1>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-bold text-white/45">
-                  <span>Локальные настройки</span>
-                  <span>AmyMusic</span>
+          <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${activeTab === tab.id ? "bg-[#8341EF] text-white" : "text-white/50 hover:bg-white/[0.04] hover:text-white"}`}
+              >
+                <div className={`${activeTab === tab.id ? "opacity-100" : "opacity-60"}`}>
+                  {tab.icon}
                 </div>
-                <div className="mt-5 flex flex-wrap items-center gap-2">
-                  <button type="submit" className="rounded-full bg-white px-5 py-2.5 text-sm font-black text-black transition hover:bg-white/85">
-                    Сохранить изменения
-                  </button>
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+          
+          <div className="px-4 mt-auto">
+            {onLogout ? (
+              <button
+                type="button"
+                onClick={() => { handleClose(); onLogout(); }}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 py-2.5 text-xs font-bold text-red-400 hover:text-red-300 transition"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                Выйти из аккаунта
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleClose}
+                className="w-full rounded-xl border border-white/10 hover:bg-white/5 py-2.5 text-xs font-bold text-white/50 hover:text-white transition"
+              >
+                Закрыть
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 relative overflow-hidden bg-[#0a0a0a]">
+          {/* Subtle top gradient */}
+          <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-[#8341EF]/5 to-transparent pointer-events-none" />
+          
+          <div className="absolute inset-0 overflow-y-auto px-10 py-12 custom-scrollbar">
+            {activeTab === "profile" && (
+              <div key="profile" className="animate-[fadeIn_0.3s_ease-out]">
+                <h3 className="text-2xl font-black mb-8 text-white">Профиль</h3>
+                
+                <div className="flex flex-col md:flex-row gap-8 items-start mb-8">
+                  <div className="group relative flex h-40 w-40 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white/10 bg-[#121212] object-cover shadow-xl transition-all hover:border-[#8341EF] hover:shadow-[0_0_30px_rgba(131,65,239,0.3)]" onClick={() => fileInputRef.current?.click()}>
+                    {draftProfile.avatarUrl ? (
+                      <img src={draftProfile.avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                    ) : (
+                      <svg className="h-16 w-16 opacity-20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity duration-300 group-hover:opacity-100 backdrop-blur-sm">
+                      <div className="flex flex-col items-center gap-2">
+                        <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span className="text-[10px] font-bold text-white uppercase tracking-wider">Изменить</span>
+                      </div>
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleAvatarFileSelect} />
+                  </div>
+                  
+                  <div className="flex-1 w-full space-y-6">
+                    <div>
+                      <label className="block text-[11px] font-black uppercase tracking-widest text-white/40 mb-2">Никнейм</label>
+                      <input
+                        type="text"
+                        value={draftProfile.displayName}
+                        onChange={(e) => updateProfileField("displayName", e.target.value)}
+                        placeholder="Как вас зовут?"
+                        className="w-full bg-white/[0.03] border border-white/10 focus:border-[#8341EF] focus:bg-white/[0.05] rounded-xl px-4 py-3 text-lg font-bold text-white placeholder-white/20 outline-none transition-all shadow-inner"
+                      />
+                    </div>
+                    
+                    <div className="p-5 rounded-2xl bg-[#8341EF]/10 border border-[#8341EF]/20 flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-bold text-[#8341EF] mb-1">AmyMusic Cloud</div>
+                        <div className="text-xs font-semibold text-white/50">Коллекция и история прослушиваний синхронизируются</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Password Change Section */}
+                <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <svg className="w-4 h-4 text-[#8341EF]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Смена пароля
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-1.5">Текущий пароль</label>
+                      <input
+                        type="password"
+                        value={oldPassword}
+                        onChange={(e) => setOldPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-white/[0.03] border border-white/10 focus:border-[#8341EF] rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white placeholder-white/20 outline-none transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-1.5">Новый пароль</label>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-white/[0.03] border border-white/10 focus:border-[#8341EF] rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white placeholder-white/20 outline-none transition"
+                      />
+                    </div>
+                  </div>
+
+                  {passwordError && (
+                    <div className="text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl">
+                      {passwordError}
+                    </div>
+                  )}
+                  {passwordStatus && (
+                    <div className="text-xs font-bold text-green-400 bg-green-500/10 border border-green-500/20 p-2.5 rounded-xl">
+                      {passwordStatus}
+                    </div>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => setDraft({
-                      displayName: "Local profile",
-                      avatarUrl: "",
-                      soundCloudClientId: "",
-                      soundCloudClientSecret: "",
-                      soundCloudHttpProxies: "",
-                      appLaunchOnStartup: false,
-                      appMinimizeToTray: false,
-                      crossfadeEnabled: false,
-                      crossfadeSeconds: 4
-                    })}
-                    className="rounded-full bg-white/8 px-4 py-2.5 text-sm font-bold text-white/45 transition hover:bg-white/10 hover:text-white"
+                    onClick={handlePasswordChangeSubmit}
+                    disabled={passwordLoading}
+                    className="rounded-xl bg-[#8341EF] hover:bg-[#7232d6] px-4 py-2.5 text-xs font-bold text-white transition disabled:opacity-50"
                   >
-                    Сбросить
+                    {passwordLoading ? "Изменение..." : "Сменить пароль"}
                   </button>
                 </div>
               </div>
-            </div>
+            )}
+
+            {activeTab === "audio" && (
+              <div key="audio" className="animate-[fadeIn_0.3s_ease-out]">
+                <h3 className="text-2xl font-black mb-8 text-white">Аудио</h3>
+                
+                <div className="space-y-4">
+                  {/* Equalizer Card */}
+                  <div className="flex items-center justify-between gap-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors hover:bg-white/[0.04]">
+                    <div>
+                      <span className="block text-base font-bold text-white mb-1">
+                        Эквалайзер
+                      </span>
+                      <span className="block text-xs font-semibold text-white/40">
+                        Точная настройка частот и пресеты звучания
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsEqualizerOpen(true)}
+                      className="rounded-full bg-[#8341EF] hover:bg-[#7231dd] px-5 py-2 text-xs font-bold text-white transition active:scale-95 shrink-0"
+                    >
+                      Настроить
+                    </button>
+                  </div>
+
+                  <label className="flex cursor-pointer items-center justify-between gap-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors hover:bg-white/[0.04]">
+                    <div>
+                      <span className="block text-base font-bold text-white mb-1">Кроссфейд</span>
+                      <span className="block text-xs font-semibold text-white/40">Плавное затухание в конце и начале треков</span>
+                    </div>
+                    <div className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 ${draft.crossfadeEnabled ? "bg-[#8341EF]" : "bg-white/10"}`}>
+                      <div className={`absolute bottom-1 left-1 top-1 w-5 rounded-full bg-white transition-transform duration-300 shadow-md ${draft.crossfadeEnabled ? "translate-x-5" : "translate-x-0"}`} />
+                    </div>
+                    <input type="checkbox" checked={Boolean(draft.crossfadeEnabled)} onChange={(event) => updateField("crossfadeEnabled", event.target.checked)} className="hidden" />
+                  </label>
+
+                  <div className={`transition-all duration-500 overflow-hidden ${draft.crossfadeEnabled ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}>
+                    <label className="block rounded-2xl border border-[#8341EF]/30 bg-[#8341EF]/5 p-6">
+                      <div className="mb-4 flex items-center justify-between">
+                        <span className="text-sm font-bold text-white/70">Длительность перехода</span>
+                        <span className="text-sm font-black text-[#8341EF]">{draft.crossfadeSeconds || 4} сек</span>
+                      </div>
+                      <div className="player-seek-wrap relative h-5 w-full cursor-pointer">
+                        <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full bg-black/50">
+                          <div className="h-full rounded-full bg-gradient-to-r from-[#8341EF] to-[#b388ff]" style={{ width: `${((draft.crossfadeSeconds || 4) / 12) * 100}%` }} />
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="12"
+                          value={Number(draft.crossfadeSeconds) || 4}
+                          onChange={(event) => updateField("crossfadeSeconds", Number(event.target.value))}
+                          className="player-seek-slider"
+                        />
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "system" && (
+              <div key="system" className="animate-[fadeIn_0.3s_ease-out]">
+                <h3 className="text-2xl font-black mb-8 text-white">Система</h3>
+
+                {!isDesktop && (
+                  <div className="mb-6 rounded-2xl border border-[#8341EF]/30 bg-[#8341EF]/10 p-5 backdrop-blur-md">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#8341EF]/20 text-[#8341EF]">
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                          </svg>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-white">Доступно в ПК приложении</h4>
+                          <p className="text-xs font-semibold text-white/50">Автозапуск, сворачивание в трей и Discord RPC работают в десктопной версии AmyMusic</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="space-y-4">
+                  <div className="relative overflow-hidden rounded-2xl">
+                    {!isDesktop && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-[1.5px] border border-white/10 rounded-2xl">
+                        <span className="flex items-center gap-2 text-xs font-bold text-white/70 bg-black/80 px-4 py-2 rounded-full border border-white/10 shadow-xl">
+                          🔒 Доступно только в ПК приложении
+                        </span>
+                      </div>
+                    )}
+                    <label className={`flex cursor-pointer items-center justify-between gap-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors ${!isDesktop ? "opacity-30 filter blur-[1px] pointer-events-none select-none" : "hover:bg-white/[0.04]"}`}>
+                      <div>
+                        <span className="block text-base font-bold text-white mb-1">Автозапуск</span>
+                        <span className="block text-xs font-semibold text-white/40">Запускать плеер при входе в систему</span>
+                      </div>
+                      <div className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 ${draft.appLaunchOnStartup ? "bg-[#8341EF]" : "bg-white/10"}`}>
+                        <div className={`absolute bottom-1 left-1 top-1 w-5 rounded-full bg-white transition-transform duration-300 shadow-md ${draft.appLaunchOnStartup ? "translate-x-5" : "translate-x-0"}`} />
+                      </div>
+                      <input type="checkbox" disabled={!isDesktop} checked={Boolean(draft.appLaunchOnStartup)} onChange={(event) => updateField("appLaunchOnStartup", event.target.checked)} className="hidden" />
+                    </label>
+                  </div>
+
+                  <div className="relative overflow-hidden rounded-2xl">
+                    {!isDesktop && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-[1.5px] border border-white/10 rounded-2xl">
+                        <span className="flex items-center gap-2 text-xs font-bold text-white/70 bg-black/80 px-4 py-2 rounded-full border border-white/10 shadow-xl">
+                          🔒 Доступно только в ПК приложении
+                        </span>
+                      </div>
+                    )}
+                    <label className={`flex cursor-pointer items-center justify-between gap-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors ${!isDesktop ? "opacity-30 filter blur-[1px] pointer-events-none select-none" : "hover:bg-white/[0.04]"}`}>
+                      <div>
+                        <span className="block text-base font-bold text-white mb-1">Сворачивать в трей</span>
+                        <span className="block text-xs font-semibold text-white/40">Прятать окно вместо полного закрытия</span>
+                      </div>
+                      <div className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 ${draft.appMinimizeToTray ? "bg-[#8341EF]" : "bg-white/10"}`}>
+                        <div className={`absolute bottom-1 left-1 top-1 w-5 rounded-full bg-white transition-transform duration-300 shadow-md ${draft.appMinimizeToTray ? "translate-x-5" : "translate-x-0"}`} />
+                      </div>
+                      <input type="checkbox" disabled={!isDesktop} checked={Boolean(draft.appMinimizeToTray)} onChange={(event) => updateField("appMinimizeToTray", event.target.checked)} className="hidden" />
+                    </label>
+                  </div>
+
+                  <div className="relative overflow-hidden rounded-2xl">
+                    {!isDesktop && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-[1.5px] border border-white/10 rounded-2xl">
+                        <span className="flex items-center gap-2 text-xs font-bold text-white/70 bg-black/80 px-4 py-2 rounded-full border border-white/10 shadow-xl">
+                          🔒 Доступно только в ПК приложении
+                        </span>
+                      </div>
+                    )}
+                    <label className={`flex cursor-pointer items-center justify-between gap-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors ${!isDesktop ? "opacity-30 filter blur-[1px] pointer-events-none select-none" : "hover:bg-white/[0.04]"}`}>
+                      <div>
+                        <span className="block text-base font-bold text-white mb-1">Discord RPC</span>
+                        <span className="block text-xs font-semibold text-white/40">Отображать прослушиваемый трек в статусе Discord</span>
+                      </div>
+                      <div className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 ${draft.discordRpcEnabled !== false ? "bg-[#8341EF]" : "bg-white/10"}`}>
+                        <div className={`absolute bottom-1 left-1 top-1 w-5 rounded-full bg-white transition-transform duration-300 shadow-md ${draft.discordRpcEnabled !== false ? "translate-x-5" : "translate-x-0"}`} />
+                      </div>
+                      <input type="checkbox" disabled={!isDesktop} checked={draft.discordRpcEnabled !== false} onChange={(event) => updateField("discordRpcEnabled", event.target.checked)} className="hidden" />
+                    </label>
+                  </div>
+
+                  {/* 1-Click App Auto-Updater Card */}
+                  <div className="rounded-2xl border border-[#8341EF]/30 bg-[#8341EF]/10 p-5 transition-colors hover:bg-[#8341EF]/15">
+                    <div className="flex items-center justify-between gap-6">
+                      <div>
+                        <span className="block text-base font-bold text-white mb-1">
+                          Обновление приложения
+                        </span>
+                        <span className="block text-xs font-semibold text-white/50">
+                          {isDesktop
+                            ? `Установленная версия: v${appVersion}`
+                            : "Веб-версия AmyMusic (обновляется автоматически)"}
+                        </span>
+                      </div>
+                      {isDesktop ? (
+                        <button
+                          type="button"
+                          disabled={updateStatus === "checking" || updateStatus === "downloading"}
+                          onClick={handleCheckOrStartUpdate}
+                          className="rounded-full bg-[#8341EF] hover:bg-[#7231dd] px-5 py-2.5 text-xs font-bold text-white transition active:scale-95 shrink-0 disabled:opacity-50 shadow-[0_0_15px_rgba(131,65,239,0.3)]"
+                        >
+                          {updateStatus === "checking" && "Проверка..."}
+                          {updateStatus === "idle" && "Проверить обновления"}
+                          {updateStatus === "up-to-date" && "Версия актуальна ✓"}
+                          {updateStatus === "has-update" && "Обновить в 1 клик 🚀"}
+                          {updateStatus === "downloading" && `Загрузка ${updateProgress}%...`}
+                        </button>
+                      ) : (
+                        <a
+                          href="https://amymusic.ru/api/download-app"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download
+                          className="rounded-full bg-[#8341EF] hover:bg-[#7231dd] px-5 py-2.5 text-xs font-bold text-white transition active:scale-95 shrink-0 shadow-[0_0_15px_rgba(131,65,239,0.3)]"
+                        >
+                          Скачать .exe
+                        </a>
+                      )}
+                    </div>
+                    {updateStatus === "downloading" && (
+                      <div className="mt-4 w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-[#8341EF] h-full transition-all duration-300 rounded-full"
+                          style={{ width: `${updateProgress}%` }}
+                        />
+                      </div>
+                    )}
+                    {updateMessage && (
+                      <p className="mt-3 text-xs font-semibold text-white/70">{updateMessage}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "developer" && (
+              <div key="developer" className="animate-[fadeIn_0.3s_ease-out]">
+                <h3 className="text-2xl font-black mb-8 text-white">Для разработчиков</h3>
+                
+                <div className="space-y-6">
+                  <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      <div className="text-xs font-semibold text-yellow-500/80 leading-relaxed">
+                        Эти настройки предназначены для отладки приложения. Не изменяйте их, если не уверены в том, что делаете.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[11px] font-black uppercase tracking-widest text-white/40 mb-2">SoundCloud Client ID</label>
+                      <input
+                        value={draft.soundCloudClientId}
+                        onChange={(event) => updateField("soundCloudClientId", event.target.value)}
+                        className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 font-mono text-sm font-bold text-white outline-none focus:border-[#8341EF] transition-colors"
+                        placeholder="client_id"
+                        spellCheck={false}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[11px] font-black uppercase tracking-widest text-white/40 mb-2">SoundCloud Client Secret</label>
+                      <input
+                        value={draft.soundCloudClientSecret}
+                        onChange={(event) => updateField("soundCloudClientSecret", event.target.value)}
+                        type="password"
+                        className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 font-mono text-sm font-bold text-white outline-none focus:border-[#8341EF] transition-colors"
+                        placeholder="Опционально"
+                        spellCheck={false}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-black uppercase tracking-widest text-white/40 mb-2">HTTP Proxies (по одному на строку)</label>
+                      <textarea
+                        value={draft.soundCloudHttpProxies}
+                        onChange={(event) => updateField("soundCloudHttpProxies", event.target.value)}
+                        className="h-32 w-full resize-none bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 font-mono text-sm font-bold text-white outline-none focus:border-[#8341EF] transition-colors custom-scrollbar"
+                        placeholder={"45.141.185.15:5882\n163.5.189.210:3888"}
+                        spellCheck={false}
+                      />
+                    </div>
+
+                    <div className="relative overflow-hidden rounded-2xl pt-4 border-t border-white/5">
+                      {!isDesktop && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-[1.5px] border border-white/10 rounded-2xl">
+                          <span className="flex items-center gap-2 text-xs font-bold text-white/70 bg-black/80 px-4 py-2 rounded-full border border-white/10 shadow-xl">
+                            🔒 Доступно только в ПК приложении
+                          </span>
+                        </div>
+                      )}
+                      <div className={!isDesktop ? "opacity-30 filter blur-[1px] pointer-events-none select-none" : ""}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <svg className="w-4 h-4 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+                          <label className="block text-[11px] font-black uppercase tracking-widest text-white/40">Discord Bot Token</label>
+                        </div>
+                        <input
+                          value={discordBotToken}
+                          onChange={(event) => handleDiscordBotTokenChange(event.target.value)}
+                          type="password"
+                          disabled={!isDesktop}
+                          className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 font-mono text-sm font-bold text-white outline-none focus:border-[#5865F2] transition-colors"
+                          placeholder="Для отображения обложек треков в Discord"
+                          spellCheck={false}
+                        />
+                        <p className="mt-2 text-[10px] text-white/30 leading-relaxed">Нужен для показа обложек треков в Discord Rich Presence. Получите в <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer" className="text-[#5865F2] hover:underline">Developer Portal</a> → Bot → Reset Token</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-
-        <div className="flex-1 space-y-8 overflow-y-auto p-10">
-          <section>
-            <h3 className="mb-4 text-lg font-black text-white">Основные настройки</h3>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <label className="block rounded-2xl border border-white/5 bg-white/[0.02] p-4 transition-colors focus-within:border-white/20 focus-within:bg-white/[0.04]">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-white/30">Отображаемое имя</span>
-                <input
-                  value={draft.displayName}
-                  onChange={(event) => updateField("displayName", event.target.value)}
-                  className="w-full bg-transparent text-sm font-bold text-white outline-none placeholder:text-white/20"
-                  placeholder="Local profile"
-                />
-              </label>
-
-              <label className="block rounded-2xl border border-white/5 bg-white/[0.02] p-4 transition-colors focus-within:border-white/20 focus-within:bg-white/[0.04]">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-white/30">Client ID</span>
-                <input
-                  value={draft.soundCloudClientId}
-                  onChange={(event) => updateField("soundCloudClientId", event.target.value)}
-                  className="w-full bg-transparent font-mono text-xs font-bold text-white outline-none placeholder:text-white/20"
-                  placeholder="client_id"
-                  spellCheck={false}
-                />
-              </label>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-4 text-lg font-black text-white">Система</h3>
-            <div className="grid grid-cols-1 gap-2">
-              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/5 bg-white/[0.02] p-4 transition-colors hover:bg-white/[0.04]">
-                <div>
-                  <span className="block text-sm font-black text-white">Автозапуск</span>
-                  <span className="block text-xs font-semibold text-white/40">Запускать AmyMusic вместе с Windows</span>
-                </div>
-                <div className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-300 ${draft.appLaunchOnStartup ? "bg-[#8341EF]" : "bg-white/10"}`}>
-                  <div className={`absolute bottom-1 left-1 top-1 w-4 rounded-full bg-white transition-transform duration-300 ${draft.appLaunchOnStartup ? "translate-x-5" : "translate-x-0"}`} />
-                </div>
-                <input
-                  type="checkbox"
-                  checked={Boolean(draft.appLaunchOnStartup)}
-                  onChange={(event) => updateField("appLaunchOnStartup", event.target.checked)}
-                  className="hidden"
-                />
-              </label>
-
-              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/5 bg-white/[0.02] p-4 transition-colors hover:bg-white/[0.04]">
-                <div>
-                  <span className="block text-sm font-black text-white">Трей</span>
-                  <span className="block text-xs font-semibold text-white/40">Сворачивать и закрывать окно в системный трей</span>
-                </div>
-                <div className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-300 ${draft.appMinimizeToTray ? "bg-[#8341EF]" : "bg-white/10"}`}>
-                  <div className={`absolute bottom-1 left-1 top-1 w-4 rounded-full bg-white transition-transform duration-300 ${draft.appMinimizeToTray ? "translate-x-5" : "translate-x-0"}`} />
-                </div>
-                <input
-                  type="checkbox"
-                  checked={Boolean(draft.appMinimizeToTray)}
-                  onChange={(event) => updateField("appMinimizeToTray", event.target.checked)}
-                  className="hidden"
-                />
-              </label>
-
-              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/5 bg-white/[0.02] p-4 transition-colors hover:bg-white/[0.04]">
-                <div>
-                  <span className="block text-sm font-black text-white">Кросфейд</span>
-                  <span className="block text-xs font-semibold text-white/40">Плавное затухание и вход между треками</span>
-                </div>
-                <div className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-300 ${draft.crossfadeEnabled ? "bg-[#8341EF]" : "bg-white/10"}`}>
-                  <div className={`absolute bottom-1 left-1 top-1 w-4 rounded-full bg-white transition-transform duration-300 ${draft.crossfadeEnabled ? "translate-x-5" : "translate-x-0"}`} />
-                </div>
-                <input
-                  type="checkbox"
-                  checked={Boolean(draft.crossfadeEnabled)}
-                  onChange={(event) => updateField("crossfadeEnabled", event.target.checked)}
-                  className="hidden"
-                />
-              </label>
-
-              {draft.crossfadeEnabled && (
-                <label className="block rounded-2xl border border-white/5 bg-white/[0.02] p-4">
-                  <div className="mb-3 flex items-center justify-between text-xs font-bold text-white/40">
-                    <span>Длительность кросфейда</span>
-                    <span className="text-white">{draft.crossfadeSeconds || 4} сек</span>
-                  </div>
-                  <div className="player-seek-wrap relative h-4 w-full">
-                    <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-[3px] -translate-y-1/2 overflow-hidden rounded-full bg-white/15">
-                      <div className="h-full rounded-full bg-[#8341EF]" style={{ width: `${((draft.crossfadeSeconds || 4) / 12) * 100}%` }} />
-                    </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="12"
-                      value={Number(draft.crossfadeSeconds) || 4}
-                      onChange={(event) => updateField("crossfadeSeconds", Number(event.target.value))}
-                      className="player-seek-slider"
-                    />
-                  </div>
-                </label>
-              )}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-4 text-lg font-black text-white">Продвинутые настройки</h3>
-            <div className="grid grid-cols-1 gap-4">
-              <label className="block rounded-2xl border border-white/5 bg-white/[0.02] p-4 transition-colors focus-within:border-white/20 focus-within:bg-white/[0.04]">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-white/30">Client Secret</span>
-                <input
-                  value={draft.soundCloudClientSecret}
-                  onChange={(event) => updateField("soundCloudClientSecret", event.target.value)}
-                  type="password"
-                  className="w-full bg-transparent font-mono text-xs font-bold text-white outline-none placeholder:text-white/20"
-                  placeholder="Опционально"
-                  spellCheck={false}
-                />
-              </label>
-
-              <label className="block rounded-2xl border border-white/5 bg-white/[0.02] p-4 transition-colors focus-within:border-white/20 focus-within:bg-white/[0.04]">
-                <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-white/30">HTTP Proxy (по одному на строку)</span>
-                <textarea
-                  value={draft.soundCloudHttpProxies}
-                  onChange={(event) => updateField("soundCloudHttpProxies", event.target.value)}
-                  className="h-24 w-full resize-none bg-transparent font-mono text-xs font-bold text-white outline-none placeholder:text-white/20"
-                  placeholder={"45.141.185.15:5882\n163.5.189.210:3888"}
-                  spellCheck={false}
-                />
-              </label>
-            </div>
-          </section>
-        </div>
-      </form>
+      </div>
     </div>
-  );
+  </React.Fragment>
+);
 }
 
 function formatDuration(seconds) {
@@ -340,7 +703,7 @@ function formatDuration(seconds) {
   return `${mins}:${secs}`;
 }
 
-function Sidebar({ activeTab, setActiveTab, currentUser, onLoginClick, onLogout }) {
+function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onLoginClick, onLogout, onProfileSave }) {
   const { playHistory, totalListenedSeconds } = useAudioPlayer();
   const [settings, setSettings] = useState(() => getProfileSettings());
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -361,12 +724,17 @@ function Sidebar({ activeTab, setActiveTab, currentUser, onLoginClick, onLogout 
       })
       .catch(() => { });
 
-    window.amyMusicDesktop?.setTrayEnabled?.(settings.appMinimizeToTray).catch(() => { });
+    window.amyMusicDesktop?.getTrayEnabled?.()
+      .then((enabled) => {
+        if (!isMounted) return;
+        setSettings((current) => ({ ...current, appMinimizeToTray: Boolean(enabled) }));
+      })
+      .catch(() => {});
 
     return () => {
       isMounted = false;
     };
-  }, [settings.appMinimizeToTray]);
+  }, []);
 
   useEffect(() => {
     const handleOpenProfile = () => setIsProfileOpen(true);
@@ -374,9 +742,17 @@ function Sidebar({ activeTab, setActiveTab, currentUser, onLoginClick, onLogout 
     return () => window.removeEventListener("amymusic:open-profile", handleOpenProfile);
   }, []);
 
+  const handleProfileSaveEvent = async (data) => {
+    if (currentUser && onProfileSave) {
+      await onProfileSave(data);
+    }
+  };
+
   const proxyCount = settings.soundCloudHttpProxies
     ? settings.soundCloudHttpProxies.split(",").filter(Boolean).length
     : 0;
+
+  const isDesktop = Boolean(typeof window !== "undefined" && window.amyMusicDesktop);
 
   return (
     <aside className={`flex shrink-0 flex-col justify-between py-1 font-medium transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "w-[72px]" : "w-[240px]"}`}>
@@ -395,31 +771,72 @@ function Sidebar({ activeTab, setActiveTab, currentUser, onLoginClick, onLogout 
         </nav>
       </div>
 
-      <div className="mb-4 w-full space-y-3">
-        {currentUser ? (
-          <div className="group flex w-full flex-col gap-2 rounded-2xl py-2.5 px-[18px] text-sm text-white/50 transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden">
-            <div className="flex items-center gap-3.5">
-              <img src="/user.svg" alt="" className="h-9 w-9 shrink-0 rounded-full bg-[var(--player-accent)] object-cover opacity-85 transition group-hover:opacity-100 p-1" />
-              <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
-                <span className="flex flex-col whitespace-nowrap">
-                  <span className="block truncate font-bold text-[#8341EF] max-w-[100px]">
-                    {currentUser}
-                  </span>
-                  <span className="text-[10px] uppercase tracking-wider text-white/40">Облако включено</span>
-                </span>
-              </span>
+      <div className="mb-4 w-full space-y-2">
+        {!isDesktop && (
+          <a
+            href="https://amymusic.ru/api/download-app"
+            target="_blank"
+            rel="noopener noreferrer"
+            download
+            className="group flex w-full items-center gap-3.5 rounded-full py-2 px-[18px] text-left text-xs font-bold text-white transition hover:bg-white/[0.04] overflow-hidden"
+            title={isCollapsed ? "Скачать AmyMusic для ПК" : undefined}
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#8341EF]/20 border border-[#8341EF]/50 text-[#8341EF] group-hover:bg-[#8341EF] group-hover:text-white transition-colors shadow-[0_0_12px_rgba(131,65,239,0.3)]">
+              <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
+              </svg>
             </div>
-            {!isCollapsed && (
-              <button onClick={onLogout} className="text-xs text-red-400 hover:text-red-300 w-fit">
-                Выйти
-              </button>
-            )}
+            <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
+              <span className="flex flex-col whitespace-nowrap">
+                <span className="block truncate font-bold text-white">Скачать ПК</span>
+                <span className="text-[10px] text-[#8341EF]">Приложение</span>
+              </span>
+            </span>
+          </a>
+        )}
+
+        <div className="flex items-center gap-3.5 px-[20px] py-2 text-white/50 overflow-hidden" title={isCollapsed ? `Время: ${timeString}` : undefined}>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 opacity-50">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 16 14"></polyline>
+            </svg>
           </div>
+          <span className={`truncate text-xs font-bold transition-all duration-300 ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
+            {timeString} прослушано
+          </span>
+        </div>
+
+        {currentUser ? (
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("amymusic:open-profile"))}
+            className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
+            title={isCollapsed ? (profileData?.displayName || currentUser) : undefined}
+          >
+            <div className="relative h-9 w-9 shrink-0">
+              <img src={profileData?.avatarUrl || "/user.svg"} alt="" className="h-full w-full rounded-full bg-[var(--player-accent)] object-cover opacity-85 transition group-hover:opacity-100 p-1" />
+              <div className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#181818]">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-2.5 w-2.5 text-white/50 transition-colors group-hover:text-white">
+                  <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </div>
+            </div>
+            <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
+              <span className="flex flex-col whitespace-nowrap">
+                <span className="block truncate font-bold text-white max-w-[120px]">
+                  {profileData?.displayName || currentUser}
+                </span>
+                <span className="text-[10px] uppercase tracking-wider text-[#8341EF]">Облако</span>
+              </span>
+            </span>
+          </button>
         ) : (
           <button
             type="button"
             onClick={onLoginClick}
-            className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden"
+            className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
             title={isCollapsed ? "Войти в аккаунт" : undefined}
           >
             <div className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center bg-white/5 border border-white/10 group-hover:bg-[#8341EF]/20 group-hover:border-[#8341EF]/50 transition-colors">
@@ -430,38 +847,15 @@ function Sidebar({ activeTab, setActiveTab, currentUser, onLoginClick, onLogout 
             </span>
           </button>
         )}
-
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent("amymusic:open-profile"))}
-          className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden"
-          title={isCollapsed ? "Настройки" : undefined}
-        >
-          <div
-            className="h-6 w-6 shrink-0 bg-current transition-transform group-hover:rotate-90 ml-1.5"
-            style={{
-              maskImage: `url(/settings.svg)`,
-              WebkitMaskImage: `url(/settings.svg)`,
-              maskRepeat: "no-repeat",
-              WebkitMaskRepeat: "no-repeat",
-              maskSize: "contain",
-              WebkitMaskSize: "contain",
-              maskPosition: "center",
-              WebkitMaskPosition: "center"
-            }}
-          />
-          <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
-            <span className="block truncate font-medium max-w-[100px]">
-              Настройки
-            </span>
-          </span>
-        </button>
       </div>
 
       {isProfileOpen && (
         <ProfileSettingsModal
           settings={settings}
+          profileData={profileData}
+          onLogout={currentUser ? onLogout : undefined}
           onClose={() => setIsProfileOpen(false)}
+          onProfileSave={handleProfileSaveEvent}
           onSave={async (nextSettings) => {
             const savedSettings = saveProfileSettings(nextSettings);
             await Promise.allSettled([
@@ -469,7 +863,6 @@ function Sidebar({ activeTab, setActiveTab, currentUser, onLoginClick, onLogout 
               window.amyMusicDesktop?.setTrayEnabled?.(savedSettings.appMinimizeToTray)
             ]);
             setSettings(savedSettings);
-            setIsProfileOpen(false);
           }}
         />
       )}
@@ -478,13 +871,17 @@ function Sidebar({ activeTab, setActiveTab, currentUser, onLoginClick, onLogout 
 }
 
 function formatFollowers(count) {
-  if (!count) return "SoundCloud";
+  if (!count) return "0 подписчиков";
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M подписчиков`;
   if (count >= 1_000) return `${Math.round(count / 100) / 10}K подписчиков`;
   return `${count} подписчиков`;
 }
 
 function ArtistCard({ artist, onClick }) {
+  const avatarSrc = (artist.avatar && !artist.avatar.includes("logo.png"))
+    ? artist.avatar
+    : ((artist.cover && !artist.cover.includes("logo.png")) ? artist.cover : "/user.svg");
+
   return (
     <button
       type="button"
@@ -492,7 +889,12 @@ function ArtistCard({ artist, onClick }) {
       className="group flex w-36 shrink-0 flex-col items-center rounded-2xl p-3 text-center transition hover:bg-white/[0.04]"
     >
       <div className="relative h-28 w-28 overflow-hidden rounded-full border border-white/10 bg-white/[0.04] shadow-xl">
-        <img src={artist.avatar} alt={artist.name} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+        <img
+          src={avatarSrc}
+          alt={artist.name}
+          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/user.svg"; }}
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+        />
         <div className="absolute inset-0 bg-black/10 opacity-0 transition group-hover:opacity-100" />
       </div>
       <p className="mt-3 w-full truncate text-sm font-black text-white">{artist.username || artist.name}</p>
@@ -510,7 +912,7 @@ function getTrackArtists(track) {
       id: track.artistId || "",
       name: track.artist,
       username: track.artist,
-      avatar: track.artistAvatar || track.cover || "/logo.png",
+      avatar: (track.artistAvatar && !track.artistAvatar.includes("logo.png")) ? track.artistAvatar : ((track.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg"),
       permalinkUrl: track.artistPermalinkUrl || ""
     }];
 }
@@ -531,7 +933,7 @@ function ArtistLinks({ track, onOpenArtist, className = "text-xs text-white/40" 
                 id: artist.id || "",
                 name: artist.name || artist.username,
                 username: artist.username || artist.name,
-                avatar: artist.avatar || track.artistAvatar || track.cover || "/logo.png",
+                avatar: (artist.avatar && !artist.avatar.includes("logo.png")) ? artist.avatar : ((track.artistAvatar && !track.artistAvatar.includes("logo.png")) ? track.artistAvatar : ((track.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg")),
                 permalinkUrl: artist.permalinkUrl || "",
                 followers: 0,
                 followings: 0,
@@ -710,7 +1112,7 @@ function SearchAlbumView({
 }
 
 function SearchPanel({ onOpenArtist }) {
-  const { playHistory, likedTracks, dislikedTrackIds, dislikedTracks, playTrack, savedReleaseIds, toggleSavedRelease } = useAudioPlayer();
+  const { playHistory, clearHistory, likedTracks, dislikedTrackIds, dislikedTracks, playTrack, savedReleaseIds, toggleSavedRelease } = useAudioPlayer();
   const [query, setQuery] = useState("");
   const [activeSearchTab, setActiveSearchTab] = useState("popular");
   const [tracks, setSearchTracks] = useState([]);
@@ -721,32 +1123,6 @@ function SearchPanel({ onOpenArtist }) {
   const [isAlbumLoading, setIsAlbumLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
-  const [trackWaveLoading, setTrackWaveLoading] = useState(false);
-
-  const openTrackWave = async (track) => {
-    if (trackWaveLoading) return;
-    setTrackWaveLoading(true);
-    try {
-      const waveTracks = await getTrackWaveTracks(track, { likedTracks, dislikedTrackIds, dislikedTracks });
-      if (waveTracks.length) await playTrack(track, [track, ...waveTracks]);
-    } catch (e) { /* silent */ } finally { setTrackWaveLoading(false); }
-  };
-
-  const loadPopular = async () => {
-    setIsSearching(true);
-    setSearchError("");
-    try {
-      const results = await getRecommendedTracks();
-      setSearchTracks(results);
-      setArtists(buildArtistsFromTracks(results));
-      setAlbums([]);
-      setPlaylists([]);
-    } catch (error) {
-      setSearchError(error.message || "Не удалось загрузить рекомендации");
-    } finally {
-      setIsSearching(false);
-    }
-  };
 
   const runSearch = async (nextQuery = query) => {
     const normalizedQuery = nextQuery.trim();
@@ -772,6 +1148,22 @@ function SearchPanel({ onOpenArtist }) {
       setPlaylists(playlistResults);
     } catch (error) {
       setSearchError(error.message || "Не удалось загрузить треки");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const loadPopular = async () => {
+    setIsSearching(true);
+    setSearchError("");
+    try {
+      const results = await getRecommendedTracks();
+      setSearchTracks(results);
+      setArtists(buildArtistsFromTracks(results));
+      setAlbums([]);
+      setPlaylists([]);
+    } catch (error) {
+      setSearchError(error.message || "Не удалось загрузить рекомендации");
     } finally {
       setIsSearching(false);
     }
@@ -1014,19 +1406,35 @@ function SearchPanel({ onOpenArtist }) {
       )}
 
       <div className="mt-6 flex items-center justify-between">
-        <h2 className="text-lg font-black text-white">
-          {isSearching
-            ? "Загружаю..."
-            : activeSearchTab === "history"
-              ? "История"
-              : activeSearchTab === "artists"
-                ? "Артисты"
-                : activeSearchTab === "albums"
-                  ? "Альбомы"
-                  : activeSearchTab === "playlists"
-                    ? "Плейлисты"
-                    : "Рекомендации"}
-        </h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-black text-white">
+            {isSearching
+              ? "Загружаю..."
+              : activeSearchTab === "history"
+                ? "История"
+                : activeSearchTab === "artists"
+                  ? "Артисты"
+                  : activeSearchTab === "albums"
+                    ? "Альбомы"
+                    : activeSearchTab === "playlists"
+                      ? "Плейлисты"
+                      : "Рекомендации"}
+          </h2>
+          {activeSearchTab === "history" && playHistory.length > 0 && (
+            <button
+              type="button"
+              onClick={clearHistory}
+              className="flex items-center gap-2 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-3.5 py-1.5 text-xs font-bold text-red-400 hover:text-red-300 transition shadow-sm active:scale-95"
+              title="Очистить историю прослушиваний"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+              Очистить историю
+            </button>
+          )}
+        </div>
         <span className="text-xs font-semibold text-white/30">
           {activeSearchTab === "artists"
             ? artists.length ? `${artists.length} артистов` : "нет данных"
@@ -1467,23 +1875,15 @@ function PlayerSeekBar() {
     </div>
   );
 }
-
 function PlayerTools({ onOpenFull }) {
-  const { currentTrack, effectiveVolume, playTrack, queue, reorderQueue, setVolume } = useAudioPlayer();
+  const { currentTrack, effectiveVolume, playTrack, queue, reorderQueue, setVolume, isEqualizerOpen, setIsEqualizerOpen } = useAudioPlayer();
   const [isQueueOpen, setIsQueueOpen] = useState(false);
-  const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
   const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
   const [dragOverQueueIndex, setDragOverQueueIndex] = useState(null);
-  const [equalizer, setEqualizer] = useState({
-    bass: 52,
-    mids: 50,
-    treble: 56
-  });
   const volumePercent = Math.round(effectiveVolume * 100);
 
-  useEscapeKey(isQueueOpen || isEqualizerOpen, () => {
+  useEscapeKey(isQueueOpen, () => {
     setIsQueueOpen(false);
-    setIsEqualizerOpen(false);
   });
 
   const profileSettings = getProfileSettings();
@@ -1495,10 +1895,7 @@ function PlayerTools({ onOpenFull }) {
         <PlayerIconButton
           icon="/queue.svg"
           label="Очередь"
-          onClick={() => {
-            setIsQueueOpen((value) => !value);
-            setIsEqualizerOpen(false);
-          }}
+          onClick={() => setIsQueueOpen((value) => !value)}
           active={isQueueOpen}
         />
         {isQueueOpen && (
@@ -1550,31 +1947,40 @@ function PlayerTools({ onOpenFull }) {
                       onDragLeave={() => setDragOverQueueIndex(null)}
                       onDrop={(e) => {
                         e.preventDefault();
-                        if (draggedQueueIndex !== null && draggedQueueIndex !== index) {
-                          reorderQueue(draggedQueueIndex, index);
-                        }
+                        const fromIdx = draggedQueueIndex;
                         setDraggedQueueIndex(null);
                         setDragOverQueueIndex(null);
+                        if (fromIdx !== null && fromIdx !== index) {
+                          reorderQueue(fromIdx, index);
+                        }
                       }}
                       onDragEnd={() => {
                         setDraggedQueueIndex(null);
                         setDragOverQueueIndex(null);
                       }}
-                      onClick={() => playTrack(track, queue)}
-                      className={[
-                        "flex w-full items-center gap-2 rounded-xl p-2 text-left transition cursor-grab active:cursor-grabbing",
-                        isCurrent ? "bg-white/10" : "hover:bg-white/5",
-                        isDragging ? "opacity-30 scale-95" : "opacity-100",
-                        isDragOver ? "border-2 border-[#8341EF]" : "border border-transparent"
-                      ].join(" ")}
+                      className={`group flex items-center justify-between rounded-xl p-2 transition cursor-grab active:cursor-grabbing ${
+                        isCurrent
+                          ? "bg-white/10"
+                          : isDragOver
+                            ? "bg-[#8341EF]/20 border border-[#8341EF]/50"
+                            : "hover:bg-white/5"
+                      } ${isDragging ? "opacity-30 scale-95" : ""}`}
                     >
-                      <svg className="h-3.5 w-3.5 shrink-0 fill-white/20 hover:fill-white/60 transition" viewBox="0 0 24 24">
-                        <path d="M9 18h6v-2H9v2zm0-5h6v-2H9v2zm0-7v2h6V6H9z" />
-                      </svg>
-                      <img src={track.cover} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-bold text-white">{track.title}</p>
-                        <p className="truncate text-[11px] text-white/40">{track.artist}</p>
+                      <button
+                        type="button"
+                        onClick={() => playTrack(track, queue)}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      >
+                        <img src={track.cover} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-sm" />
+                        <div className="min-w-0 flex-1">
+                          <p className={`truncate text-xs font-bold ${isCurrent ? "text-[#8341EF]" : "text-white"}`}>
+                            {track.title}
+                          </p>
+                          <p className="truncate text-[10px] font-semibold text-white/40">{track.artist}</p>
+                        </div>
+                      </button>
+                      <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                        <TrackMenuButton track={track} />
                       </div>
                     </div>
                   );
@@ -1584,49 +1990,12 @@ function PlayerTools({ onOpenFull }) {
           </div>
         )}
       </div>
-      <div className="relative">
-        <PlayerIconButton
-          icon="/equalizer.svg"
-          label="Эквалайзер"
-          onClick={() => {
-            setIsEqualizerOpen((value) => !value);
-            setIsQueueOpen(false);
-          }}
-          active={isEqualizerOpen}
-        />
-        {isEqualizerOpen && (
-          <div className="absolute bottom-11 right-0 z-40 w-56 rounded-2xl border border-white/10 bg-[#171717]/95 p-4 shadow-2xl backdrop-blur-md">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-bold text-white/80">Эквалайзер</p>
-              <button
-                type="button"
-                onClick={() => setEqualizer({ bass: 50, mids: 50, treble: 50 })}
-                className="text-[10px] font-semibold text-white/35 transition hover:text-white/70"
-              >
-                reset
-              </button>
-            </div>
-            {Object.entries(equalizer).map(([band, value]) => (
-              <label key={band} className="mb-3 block last:mb-0">
-                <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-white/45">
-                  <span>{band}</span>
-                  <span>{value}</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={value}
-                  onChange={(event) =>
-                    setEqualizer((next) => ({ ...next, [band]: Number(event.target.value) }))
-                  }
-                  className="w-full accent-[var(--player-accent)]"
-                />
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
+      <PlayerIconButton
+        icon="/equalizer.svg"
+        label="10-Полосный Эквалайзер"
+        onClick={() => setIsEqualizerOpen((val) => !val)}
+        active={isEqualizerOpen}
+      />
       <div className="volume-control group relative grid h-9 w-9 place-items-center">
         <div className="volume-popover pointer-events-none absolute bottom-10 left-1/2 z-30 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-2xl border border-white/10 bg-[#171717]/95 py-3 opacity-0 shadow-2xl backdrop-blur-md transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
           <div
@@ -1755,7 +2124,7 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum }) {
 }
 
 export default function App() {
-  const { isFullOpen, setIsFullOpen } = useAudioPlayer();
+  const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, mergeServerData, likedTracks, dislikedTrackIds, playHistory } = useAudioPlayer();
   const [activeTab, setActiveTab] = useState("wave");
   const [previousTab, setPreviousTab] = useState("wave");
   const [activeArtist, setActiveArtist] = useState(null);
@@ -1765,36 +2134,32 @@ export default function App() {
 
   // --- Auth State ---
   const [currentUser, setCurrentUser] = useState(getUsername() || null);
+  const [profileData, setProfileData] = useState({ displayName: "", avatarUrl: "" });
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  const handleLoginSuccess = async (username) => {
+  const handleLoginSuccess = async ({ username, displayName, avatarUrl }) => {
     setCurrentUser(username);
+    if (displayName !== undefined) {
+      setProfileData({ displayName: displayName || "", avatarUrl: avatarUrl || "" });
+    }
     setShowAuthModal(false);
     
     // Migration logic
     try {
-      const localLiked = localStorage.getItem("amyMusicLiked");
-      const localDislikedIds = localStorage.getItem("amyMusicDislikedIds");
-      const localHistory = localStorage.getItem("amyMusicHistory");
-      
       let needsSync = false;
       
-      if (localLiked || localDislikedIds || localHistory) {
-        if (localLiked) {
-          await syncCollections({ likedTracks: JSON.parse(localLiked) });
-          localStorage.removeItem("amyMusicLiked");
+      if (likedTracks?.length > 0 || dislikedTrackIds?.size > 0 || playHistory?.length > 0) {
+        if (likedTracks?.length > 0) {
+          await syncCollections({ likedTracks });
           needsSync = true;
         }
         
         let waveData = {};
-        if (localDislikedIds) waveData.dislikedTrackIds = JSON.parse(localDislikedIds);
-        if (localHistory) waveData.playHistory = JSON.parse(localHistory);
+        if (dislikedTrackIds?.size > 0) waveData.dislikedTrackIds = Array.from(dislikedTrackIds);
+        if (playHistory?.length > 0) waveData.playHistory = playHistory;
         
         if (Object.keys(waveData).length > 0) {
           await syncWave(waveData);
-          localStorage.removeItem("amyMusicDislikedIds");
-          localStorage.removeItem("amyMusicHistory");
-          localStorage.removeItem("amyMusicDisliked");
           needsSync = true;
         }
       }
@@ -1808,27 +2173,40 @@ export default function App() {
   const handleLogout = () => {
     removeAuthToken();
     setCurrentUser(null);
-    localStorage.removeItem("amyMusicLiked");
-    localStorage.removeItem("amyMusicDislikedIds");
-    localStorage.removeItem("amyMusicHistory");
-    localStorage.removeItem("amyMusicDisliked");
+    setProfileData({ displayName: "", avatarUrl: "" });
+  };
+
+  const handleProfileSave = async (data) => {
+    try {
+      const res = await updateProfile(data);
+      if (res.success) {
+        setProfileData({ displayName: res.displayName, avatarUrl: res.avatarUrl });
+      }
+    } catch (e) {
+      console.error("Failed to update profile", e);
+    }
   };
 
   const loadDataFromServer = async () => {
     try {
       if (getUsername()) {
+        const profile = await getProfile().catch(() => null);
+        if (profile) {
+          setProfileData({ displayName: profile.displayName || "", avatarUrl: profile.avatarUrl || "" });
+        }
+
         const collections = await getCollections();
-        if (collections.likedTracks) {
-          localStorage.setItem("amyMusicLiked", JSON.stringify(collections.likedTracks));
-        }
-        
         const wave = await getWave();
-        if (wave.dislikedTrackIds) {
-          localStorage.setItem("amyMusicDislikedIds", JSON.stringify(wave.dislikedTrackIds));
+
+        if (mergeServerData) {
+          mergeServerData({
+            likedTracks: collections.likedTracks,
+            dislikedTrackIds: wave.dislikedTrackIds,
+            playHistory: wave.playHistory,
+            totalListenedSeconds: profile?.totalListenedSeconds
+          });
         }
-        if (wave.playHistory) {
-          localStorage.setItem("amyMusicHistory", JSON.stringify(wave.playHistory));
-        }
+
         
         // Force reload by changing app settings version
         setApiSettingsVersion((version) => version + 1);
@@ -1940,8 +2318,10 @@ export default function App() {
         activeTab={activeTab} 
         setActiveTab={selectTab}
         currentUser={currentUser}
+        profileData={profileData}
         onLoginClick={() => setShowAuthModal(true)}
         onLogout={handleLogout}
+        onProfileSave={handleProfileSave}
       />
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
         <div key={`${activeTab}-${activeArtist?.id || "none"}-${activeAlbum?.id || "noalbum"}-${apiSettingsVersion}`} className="contents">
@@ -1960,6 +2340,9 @@ export default function App() {
           onOpenArtist={openArtist}
           onOpenAlbum={openAlbum}
         />
+      )}
+      {isEqualizerOpen && (
+        <EqualizerModal onClose={() => setIsEqualizerOpen(false)} />
       )}
       {showAuthModal && (
         <AuthModal 

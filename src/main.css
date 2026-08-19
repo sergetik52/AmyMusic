@@ -413,13 +413,14 @@ button {
   transform: translateX(0) scale(1);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.58);
   transition:
-    left 760ms cubic-bezier(0.2, 0.85, 0.18, 1),
-    bottom 760ms cubic-bezier(0.2, 0.85, 0.18, 1),
-    width 760ms cubic-bezier(0.2, 0.85, 0.18, 1),
-    height 760ms cubic-bezier(0.2, 0.85, 0.18, 1),
-    transform 760ms cubic-bezier(0.2, 0.85, 0.18, 1),
-    border-radius 760ms cubic-bezier(0.2, 0.85, 0.18, 1),
-    box-shadow 420ms ease;
+    left 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
+    bottom 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
+    width 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
+    height 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
+    transform 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
+    border-radius 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
+    box-shadow 800ms ease,
+    opacity 800ms ease;
 }
 
 .is-playing .song-cover {

@@ -300,11 +300,20 @@ export function normalizeTrackMetadata(track = {}) {
         (normName === normalizeComparable(uploaderName) ||
           splitUploader.some((u) => normalizeComparable(u) === normName));
 
+      const rawUserAvatar = track.artistAvatar || "";
+      const isDefaultAvatar = !rawUserAvatar || rawUserAvatar.includes("default_avatar") || rawUserAvatar.includes("logo.png");
+      const trackCover = track.cover || "";
+      const validTrackCover = trackCover && !trackCover.includes("logo.png") ? trackCover : "";
+
+      const resolvedAvatar = isUploaderMatch
+        ? (!isDefaultAvatar ? rawUserAvatar : (validTrackCover || "/user.svg"))
+        : (validTrackCover || "/user.svg");
+
       return {
         id: isUploaderMatch && track.artistId ? String(track.artistId) : "",
         name,
         username: name,
-        avatar: isUploaderMatch ? (track.artistAvatar || track.cover || "/logo.png") : "/logo.png",
+        avatar: resolvedAvatar,
         permalinkUrl: isUploaderMatch ? (track.artistPermalinkUrl || "") : ""
       };
     });
@@ -328,6 +337,10 @@ function safeNormalizeSoundCloudTrack(item, fallback) {
   } catch (err) {
     logWarn("api", "safeNormalizeSoundCloudTrack error", err);
     const source = item?.track || item || {};
+    const rawUserAvatar = getLargeImage(source.user?.avatar_url);
+    const isDefaultAvatar = !rawUserAvatar || rawUserAvatar.includes("default_avatar") || rawUserAvatar.includes("logo.png");
+    const cover = getLargeImage(source.artwork_url) || fallback?.cover || "";
+    const validCover = cover && !cover.includes("logo.png") ? cover : "";
     return {
       id: String(source.id || fallback?.id || Math.random()),
       rawTitle: source.title || fallback?.title || "Без названия",
@@ -335,8 +348,8 @@ function safeNormalizeSoundCloudTrack(item, fallback) {
       artist: source.user?.username || fallback?.artist || "Unknown artist",
       artists: [{ name: source.user?.username || fallback?.artist || "Unknown artist" }],
       artistId: source.user?.id ? String(source.user.id) : "",
-      artistAvatar: getLargeImage(source.user?.avatar_url) || "/logo.png",
-      cover: getLargeImage(source.artwork_url) || "/logo.png",
+      artistAvatar: !isDefaultAvatar ? rawUserAvatar : (validCover || "/user.svg"),
+      cover: validCover || "/logo.png",
       streamUrl: "",
       duration: 0
     };
@@ -365,11 +378,12 @@ function normalizeSoundCloudTrack(track = {}, fallback = {}) {
     }
   }
 
-  const artistAvatar =
-    getLargeImage(user.avatar_url) ||
-    getLargeImage(source.artwork_url) ||
-    fallback.cover ||
-    "/logo.png";
+  const rawUserAvatar = getLargeImage(user.avatar_url);
+  const isDefaultUserAvatar = !rawUserAvatar || rawUserAvatar.includes("default_avatar") || rawUserAvatar.includes("logo.png");
+  const trackArtwork = getLargeImage(source.artwork_url) || fallback.cover || "";
+  const validArtwork = trackArtwork && !trackArtwork.includes("logo.png") ? trackArtwork : "";
+
+  const artistAvatar = !isDefaultUserAvatar ? rawUserAvatar : (validArtwork || "/user.svg");
 
   const primaryArtist = {
     id: user.id ? String(user.id) : "",
@@ -732,7 +746,7 @@ export function buildArtistsFromTracks(tracks) {
         id: track.artistId || "",
         name: track.artist,
         username: track.artist,
-        avatar: track.artistAvatar || track.cover || "/logo.png",
+        avatar: (track.artistAvatar && !track.artistAvatar.includes("logo.png")) ? track.artistAvatar : ((track.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg"),
         permalinkUrl: track.artistPermalinkUrl || ""
       }];
 
@@ -740,12 +754,18 @@ export function buildArtistsFromTracks(tracks) {
       const key = artist.id || artist.name || artist.username;
       if (!key || artists.has(key)) return;
 
+      const validAvatar = (artist.avatar && !artist.avatar.includes("logo.png"))
+        ? artist.avatar
+        : ((track.artistAvatar && !track.artistAvatar.includes("logo.png"))
+          ? track.artistAvatar
+          : ((track.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg"));
+
       artists.set(key, {
         id: artist.id || "",
         name: artist.name || artist.username,
         username: artist.username || artist.name,
         description: "",
-        avatar: artist.avatar || track.artistAvatar || track.cover || "/logo.png",
+        avatar: validAvatar,
         permalinkUrl: artist.permalinkUrl || "",
         followers: 0,
         followings: 0,

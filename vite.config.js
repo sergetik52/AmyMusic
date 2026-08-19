@@ -350,6 +350,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: "./",
+    server: {
+      port: 5173,
+      strictPort: true
+    },
     plugins: [react(), createSoundCloudProxyPlugin(env)]
   };
 });

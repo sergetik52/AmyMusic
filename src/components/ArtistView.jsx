@@ -218,6 +218,10 @@ function TrackRow({
 }
 
 function RelatedArtistCard({ artist, onOpen }) {
+  const avatarSrc = (artist.avatar && !artist.avatar.includes("logo.png"))
+    ? artist.avatar
+    : ((artist.cover && !artist.cover.includes("logo.png")) ? artist.cover : "/user.svg");
+
   return (
     <button
       type="button"
@@ -225,7 +229,12 @@ function RelatedArtistCard({ artist, onOpen }) {
       className="group w-36 shrink-0 text-center"
     >
       <div className="mx-auto h-32 w-32 overflow-hidden rounded-full border border-white/10 bg-white/[0.04]">
-        <img src={artist.avatar} alt={artist.name} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+        <img
+          src={avatarSrc}
+          alt={artist.name}
+          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/user.svg"; }}
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+        />
       </div>
       <p className="mt-3 truncate text-sm font-black text-white">{artist.username || artist.name}</p>
       <p className="truncate text-xs font-semibold text-white/35">{formatCount(artist.followers)} подписчиков</p>
@@ -633,11 +642,20 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
     );
   }
 
+  const profileAvatar = (profile.avatar && !profile.avatar.includes("logo.png"))
+    ? profile.avatar
+    : ((profile.cover && !profile.cover.includes("logo.png")) ? profile.cover : "/user.svg");
+
   return (
     <section className="flex-1 overflow-y-auto rounded-[17.76px] border border-white/[0.04] bg-[#090909] text-white shadow-2xl">
       <div className="relative min-h-[330px] overflow-hidden border-b border-white/[0.05] px-7 pb-7 pt-5">
         <div className="absolute inset-0 opacity-45 blur-3xl">
-          <img src={profile.avatar} alt="" className="h-full w-full object-cover" />
+          <img
+            src={profileAvatar}
+            alt=""
+            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/user.svg"; }}
+            className="h-full w-full object-cover"
+          />
         </div>
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-[#090909]/78 to-[#090909]" />
 
@@ -652,7 +670,12 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
           </button>
 
           <div className="flex items-end gap-7">
-            <img src={profile.avatar} alt={profile.name} className="h-52 w-52 shrink-0 rounded-full border border-white/10 object-cover shadow-2xl" />
+            <img
+              src={profileAvatar}
+              alt={profile.name}
+              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/user.svg"; }}
+              className="h-52 w-52 shrink-0 rounded-full border border-white/10 object-cover shadow-2xl"
+            />
             <div className="max-w-4xl pb-2">
               <h1 className="text-5xl font-black tracking-tight text-white">{profile.username || profile.name}</h1>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-bold text-white/45">

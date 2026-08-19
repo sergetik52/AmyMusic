@@ -15,5 +15,16 @@ contextBridge.exposeInMainWorld("amyMusicDesktop", {
   setTrayEnabled: (enabled) => ipcRenderer.invoke("amymusic:set-tray-enabled", Boolean(enabled)),
   showWindow: () => ipcRenderer.invoke("amymusic:show-window"),
   parsePlaylist: (url) => ipcRenderer.invoke("amymusic:parse-playlist-url", url),
-  getBandlinkChart: () => ipcRenderer.invoke("amymusic:get-bandlink-chart")
+  getBandlinkChart: () => ipcRenderer.invoke("amymusic:get-bandlink-chart"),
+  setDiscordActivity: (activity) => ipcRenderer.invoke("amymusic:set-discord-activity", activity),
+  setDiscordBotToken: (token) => ipcRenderer.invoke("amymusic:set-discord-bot-token", token),
+  getDiscordBotToken: () => ipcRenderer.invoke("amymusic:get-discord-bot-token"),
+  getAppVersion: () => ipcRenderer.invoke("amymusic:get-app-version"),
+  checkUpdate: () => ipcRenderer.invoke("amymusic:check-update"),
+  startUpdate: () => ipcRenderer.invoke("amymusic:start-update"),
+  onUpdateProgress: (callback) => {
+    const subscription = (_event, value) => callback(value);
+    ipcRenderer.on("amymusic:update-progress", subscription);
+    return () => ipcRenderer.removeListener("amymusic:update-progress", subscription);
+  }
 });

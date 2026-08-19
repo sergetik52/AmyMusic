@@ -12,10 +12,16 @@ const db = new sqlite3.Database(dbPath, (err) => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
+        display_name TEXT,
+        avatar_url TEXT,
         total_listen_seconds INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    
+    // Add columns if they don't exist (for migration of existing DB)
+    db.run(`ALTER TABLE users ADD COLUMN display_name TEXT`, () => {});
+    db.run(`ALTER TABLE users ADD COLUMN avatar_url TEXT`, () => {});
     
     db.run(`
       CREATE TABLE IF NOT EXISTS collections (

@@ -8,3 +8,4 @@ out/
 .env.local
 .DS_Store
 postman/.dependencies/
+downloads/*.exe

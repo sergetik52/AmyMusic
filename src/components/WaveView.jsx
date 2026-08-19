@@ -232,8 +232,6 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
   const [isLoadingWave, setIsLoadingWave] = useState(false);
   const [waveError, setWaveError] = useState("");
   const isAppendingWaveRef = useRef(false);
-  // Rolling window of recently queued track IDs (last 80) to avoid immediate repeats
-  // but not block tracks forever — old tracks can come back after ~80 new ones
   const recentWaveIdsRef = useRef(new Set());
   const palette = trackPalette || currentTrack.palette || {
     base: "#2a0a4a",

@@ -5,9 +5,79 @@ const https = require("node:https");
 const os = require("node:os");
 const path = require("node:path");
 const { fileURLToPath } = require("node:url");
+const DiscordRPC = require("discord-rpc");
 
 const isDev = process.env.AMYMUSIC_DEV === "1";
 const mainErrorLogPath = path.join(os.tmpdir(), "amymusic-main-error.log");
+
+const clientId = "1345409409240797194";
+DiscordRPC.register(clientId);
+let rpc = new DiscordRPC.Client({ transport: "ipc" });
+let isRpcReady = false;
+const externalAssetCache = new Map();
+
+async function registerDiscordExternalAsset(imageUrl) {
+  if (!imageUrl || !imageUrl.startsWith("http")) return null;
+  
+  if (externalAssetCache.has(imageUrl)) {
+    return externalAssetCache.get(imageUrl);
+  }
+
+  const config = readMainConfig();
+  const botToken = config.discordBotToken;
+  if (!botToken) return null;
+
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({ urls: [imageUrl] });
+    const req = https.request(
+      `https://discord.com/api/v10/applications/${clientId}/external-assets`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bot ${botToken}`,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(postData)
+        }
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => data += chunk);
+        res.on("end", () => {
+          try {
+            const parsed = JSON.parse(data);
+            if (Array.isArray(parsed) && parsed[0]?.external_asset_path) {
+              const assetPath = parsed[0].external_asset_path;
+              externalAssetCache.set(imageUrl, assetPath);
+              if (externalAssetCache.size > 200) {
+                const firstKey = externalAssetCache.keys().next().value;
+                externalAssetCache.delete(firstKey);
+              }
+              resolve(assetPath);
+            } else {
+              console.error("[AmyMusic] Discord external asset response:", data);
+              resolve(null);
+            }
+          } catch {
+            resolve(null);
+          }
+        });
+      }
+    );
+    req.on("error", () => resolve(null));
+    req.write(postData);
+    req.end();
+  });
+}
+
+function setupDiscordRpc() {
+  rpc.on("ready", () => {
+    isRpcReady = true;
+    console.log("[AmyMusic] Discord RPC ready");
+  });
+  rpc.login({ clientId }).catch(err => {
+    console.error("[AmyMusic] Discord RPC login failed:", err);
+  });
+}
 
 function writeMainErrorLog(label, error) {
   const details = error?.stack || error?.message || String(error);
@@ -420,6 +490,87 @@ function setTrayEnabled(enabled) {
 }
 
 function registerDesktopIpc() {
+  ipcMain.handle("amymusic:get-app-version", () => app.getVersion());
+
+  ipcMain.handle("amymusic:check-update", async () => {
+    return new Promise((resolve) => {
+      const req = https.get("https://amymusic.ru/api/app-version", (res) => {
+        let body = "";
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => {
+          try {
+            const data = JSON.parse(body);
+            const currentVersion = app.getVersion();
+            const hasUpdate = Boolean(data.version && data.version !== currentVersion);
+            resolve({
+              currentVersion,
+              latestVersion: data.version || currentVersion,
+              downloadUrl: data.downloadUrl || "https://amymusic.ru/downloads/AmyMusic-0.1.0-Setup.exe",
+              hasUpdate,
+              releaseNotes: data.releaseNotes || ""
+            });
+          } catch {
+            resolve({ currentVersion: app.getVersion(), hasUpdate: false });
+          }
+        });
+      });
+      req.on("error", () => resolve({ currentVersion: app.getVersion(), hasUpdate: false }));
+      req.setTimeout(5000, () => {
+        req.destroy();
+        resolve({ currentVersion: app.getVersion(), hasUpdate: false });
+      });
+    });
+  });
+
+  ipcMain.handle("amymusic:start-update", async () => {
+    return new Promise((resolve) => {
+      const targetPath = path.join(os.tmpdir(), "AmyMusic-Setup-Update.exe");
+      const fileStream = fs.createWriteStream(targetPath);
+
+      const downloadFile = (url) => {
+        const protocol = url.startsWith("https") ? https : http;
+        protocol.get(url, (res) => {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            return downloadFile(res.headers.location);
+          }
+
+          const totalBytes = parseInt(res.headers["content-length"] || "0", 10);
+          let downloadedBytes = 0;
+
+          res.on("data", (chunk) => {
+            downloadedBytes += chunk.length;
+            if (totalBytes > 0 && mainWindow && !mainWindow.isDestroyed()) {
+              const percent = Math.round((downloadedBytes / totalBytes) * 100);
+              mainWindow.webContents.send("amymusic:update-progress", { percent, downloadedBytes, totalBytes });
+            }
+          });
+
+          res.pipe(fileStream);
+
+          fileStream.on("finish", () => {
+            fileStream.close(() => {
+              try {
+                const child_process = require("node:child_process");
+                child_process.spawn(targetPath, [], { detached: true, stdio: "ignore" }).unref();
+                isQuitting = true;
+                setTimeout(() => app.quit(), 500);
+                resolve({ success: true });
+              } catch (err) {
+                console.error("[AmyMusic] Failed to launch installer:", err);
+                resolve({ success: false, error: err.message });
+              }
+            });
+          });
+        }).on("error", (err) => {
+          fs.unlink(targetPath, () => {});
+          resolve({ success: false, error: err.message });
+        });
+      };
+
+      downloadFile("https://amymusic.ru/downloads/AmyMusic-0.1.0-Setup.exe");
+    });
+  });
+
   ipcMain.handle("amymusic:get-auto-launch", () =>
     app.getLoginItemSettings().openAtLogin
   );
@@ -430,6 +581,50 @@ function registerDesktopIpc() {
       path: process.execPath
     });
     return app.getLoginItemSettings().openAtLogin;
+  });
+
+  ipcMain.handle("amymusic:set-discord-activity", async (_event, activity) => {
+    if (!isRpcReady || !rpc) return false;
+    try {
+      if (!activity) {
+        await rpc.clearActivity();
+      } else {
+        let imageKey = "amymusic";
+
+        if (activity.largeImageKey) {
+          const externalPath = await registerDiscordExternalAsset(activity.largeImageKey);
+          if (externalPath) {
+            imageKey = externalPath;
+          }
+        }
+
+        await rpc.setActivity({
+          type: 2,
+          details: activity.details,
+          state: activity.state,
+          largeImageKey: imageKey,
+          largeImageText: activity.largeImageText || "AmyMusic",
+          instance: false,
+          buttons: [
+            { label: "СКАЧАТЬ", url: "https://github.com/sergetik52/AmyMusic" }
+          ]
+        });
+      }
+      return true;
+    } catch (err) {
+      console.error("[AmyMusic] Failed to set Discord activity:", err);
+      return false;
+    }
+  });
+
+  ipcMain.handle("amymusic:set-discord-bot-token", (_event, token) => {
+    writeMainConfig({ discordBotToken: token || "" });
+    return true;
+  });
+
+  ipcMain.handle("amymusic:get-discord-bot-token", () => {
+    const config = readMainConfig();
+    return config.discordBotToken || "";
   });
 
   ipcMain.handle("amymusic:set-tray-enabled", (_event, enabled) =>
@@ -664,6 +859,7 @@ app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
+  setupDiscordRpc();
   registerDesktopIpc();
   registerFileAssetFallback();
   await startProxyServer();

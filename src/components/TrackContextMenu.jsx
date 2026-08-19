@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
 
 export function TrackContextMenu({
@@ -27,6 +27,27 @@ export function TrackContextMenu({
   const isLiked = likedTrackIds.has(track.id);
   const isDisliked = dislikedTrackIds.has(track.id);
   const [isSubOpen, setIsSubOpen] = useState(false);
+  const [actualPlacement, setActualPlacement] = useState(placement);
+  const [subPlacementLeft, setSubPlacementLeft] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!menuRef.current) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+    const windowWidth = window.innerWidth || document.documentElement.clientWidth;
+
+    if (rect.bottom > windowHeight - 12 && rect.top > 300) {
+      setActualPlacement("top");
+    } else if (rect.top < 10) {
+      setActualPlacement("bottom");
+    }
+
+    if (rect.right + 230 > windowWidth - 10) {
+      setSubPlacementLeft(true);
+    } else {
+      setSubPlacementLeft(false);
+    }
+  }, [placement]);
 
   // Close when clicking outside
   useEffect(() => {
@@ -98,7 +119,7 @@ export function TrackContextMenu({
     <div
       ref={menuRef}
       className={`absolute right-0 z-[100] w-56 rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md animate-slide-up-fade pointer-events-auto ${
-        placement === "top" ? "bottom-full mb-2" : "top-full mt-1"
+        actualPlacement === "top" ? "bottom-full mb-2" : "top-full mt-1"
       }`}
       style={{
         boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
@@ -179,12 +200,11 @@ export function TrackContextMenu({
         {/* Submenu */}
         {isSubOpen && (
           <div
-            className={`absolute left-full w-56 rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md pointer-events-auto animate-slide-up-fade ${
-              placement === "top" ? "bottom-0" : "top-0"
-            }`}
+            className={`absolute w-56 rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md pointer-events-auto animate-slide-up-fade ${
+              subPlacementLeft ? "right-full mr-1" : "left-full ml-1"
+            } ${actualPlacement === "top" ? "bottom-0" : "top-0"}`}
             style={{
-              boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
-              marginLeft: "0px"
+              boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
             }}
             onMouseEnter={openSub}
             onMouseLeave={closeSub}

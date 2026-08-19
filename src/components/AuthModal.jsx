@@ -18,7 +18,7 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
       const data = await action(usernameInput, passwordInput);
       setAuthToken(data.token);
       setUsername(data.username);
-      onLoginSuccess(data.username);
+      onLoginSuccess(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -29,7 +29,7 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
       <div 
-        className="relative w-full max-w-sm flex-col overflow-hidden rounded-[24px] border border-white/[0.04] bg-[#090909] text-white shadow-2xl animate-[slideDownFade_0.4s_ease-out_forwards]"
+        className="relative w-full max-w-sm flex-col overflow-hidden rounded-[24px] border border-white/[0.04] bg-[#090909] text-white shadow-2xl animate-[slideUpFade_0.4s_ease-out_forwards]"
       >
         <div className="absolute inset-0 opacity-30 blur-[60px]">
           <div className="h-full w-full bg-[#8341EF]" />

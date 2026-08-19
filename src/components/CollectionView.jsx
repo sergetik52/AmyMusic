@@ -123,6 +123,10 @@ function TrackArtistLinks({ track, onOpenArtist }) {
 }
 
 function FavoriteArtistCard({ artist, index, onOpen }) {
+  const avatarSrc = (artist.avatar && !artist.avatar.includes("logo.png"))
+    ? artist.avatar
+    : ((artist.cover && !artist.cover.includes("logo.png")) ? artist.cover : "/user.svg");
+
   return (
     <button
       type="button"
@@ -130,7 +134,12 @@ function FavoriteArtistCard({ artist, index, onOpen }) {
       className="group flex w-36 shrink-0 flex-col items-center rounded-2xl p-3 text-center transition hover:bg-white/[0.04]"
     >
       <div className="relative mb-3 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] shadow-2xl">
-        <img src={artist.avatar} alt={artist.name} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+        <img
+          src={avatarSrc}
+          alt={artist.name}
+          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/user.svg"; }}
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+        />
         <div className="absolute inset-0 bg-black/20 opacity-0 transition group-hover:opacity-100" />
         {index === 0 && (
           <img src="/korona.svg" alt="" className="absolute right-3 top-3 h-5 w-5 object-contain" />

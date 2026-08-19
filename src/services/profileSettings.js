@@ -9,7 +9,8 @@ export const defaultProfileSettings = {
   appLaunchOnStartup: false,
   appMinimizeToTray: false,
   crossfadeEnabled: false,
-  crossfadeSeconds: 4
+  crossfadeSeconds: 4,
+  discordRpcEnabled: true
 };
 
 function readJson(value) {
@@ -48,7 +49,8 @@ export function saveProfileSettings(settings) {
     appLaunchOnStartup: Boolean(settings?.appLaunchOnStartup),
     appMinimizeToTray: Boolean(settings?.appMinimizeToTray),
     crossfadeEnabled: Boolean(settings?.crossfadeEnabled),
-    crossfadeSeconds: Math.min(12, Math.max(1, Number(settings?.crossfadeSeconds) || defaultProfileSettings.crossfadeSeconds))
+    crossfadeSeconds: Math.min(12, Math.max(1, Number(settings?.crossfadeSeconds) || defaultProfileSettings.crossfadeSeconds)),
+    discordRpcEnabled: settings?.discordRpcEnabled !== undefined ? Boolean(settings.discordRpcEnabled) : true
   };
 
   window.localStorage.setItem(PROFILE_SETTINGS_KEY, JSON.stringify(normalized));

@@ -15,10 +15,36 @@ import {
   getTrackWaveTracks
 } from "../services/soundCloudApi";
 import { getPlayerRuntimeSettings, subscribeProfileSettings } from "../services/profileSettings";
+import { syncCollections, syncWave, getUsername } from "../api";
 import { logDebug, logWarn } from "../utils/logger";
 import Hls from "hls.js";
 
 const AudioPlayerContext = createContext(null);
+
+export const EQUALIZER_FREQUENCIES = [
+  { freq: 60, label: "60 Гц", type: "lowshelf" },
+  { freq: 170, label: "170 Гц", type: "peaking" },
+  { freq: 310, label: "310 Гц", type: "peaking" },
+  { freq: 600, label: "600 Гц", type: "peaking" },
+  { freq: 1000, label: "1 кГц", type: "peaking" },
+  { freq: 3000, label: "3 кГц", type: "peaking" },
+  { freq: 6000, label: "6 кГц", type: "peaking" },
+  { freq: 12000, label: "12 кГц", type: "peaking" },
+  { freq: 14000, label: "14 кГц", type: "peaking" },
+  { freq: 16000, label: "16 кГц", type: "highshelf" }
+];
+
+export const EQUALIZER_PRESETS = {
+  flat: { name: "Сброс", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  bass: { name: "Усиление баса", gains: [8, 6, 4, 2, 0, 0, 0, 0, 0, 0] },
+  vocal: { name: "Вокал / Речь", gains: [-2, -1, 1, 3, 5, 4, 3, 1, 0, -1] },
+  rock: { name: "Рок", gains: [5, 4, 2, -1, -2, 1, 3, 5, 5, 4] },
+  pop: { name: "Поп", gains: [-1, 2, 4, 5, 3, 0, -1, -2, 1, 2] },
+  electronic: { name: "Электроника", gains: [7, 5, 3, 0, -2, 2, 4, 6, 5, 4] },
+  acoustic: { name: "Акустика", gains: [3, 2, 1, 2, 3, 3, 4, 4, 3, 2] },
+  jazz: { name: "Джаз", gains: [4, 3, 1, 2, -1, -1, 0, 2, 3, 4] },
+  treble: { name: "Высокие частоты", gains: [0, 0, 0, 0, 0, 2, 4, 6, 8, 9] }
+};
 
 const defaultPalette = {
   base: "#2a0a4a",
@@ -477,6 +503,70 @@ export function AudioProvider({ children }) {
   const [error, setError] = useState("");
   const [notifications, setNotifications] = useState([]);
   const [isFullOpen, setIsFullOpen] = useState(false);
+  const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
+
+  const [isEqualizerEnabled, setIsEqualizerEnabled] = useState(() => {
+    try {
+      const stored = localStorage.getItem("amymusic.equalizerEnabled.v1");
+      return stored !== null ? JSON.parse(stored) : true;
+    } catch { return true; }
+  });
+  const [equalizerGains, setEqualizerGains] = useState(() => {
+    try {
+      const stored = localStorage.getItem("amymusic.equalizerGains.v1");
+      return stored ? JSON.parse(stored) : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    } catch { return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; }
+  });
+  const [equalizerPreset, setEqualizerPresetState] = useState(() => {
+    try {
+      return localStorage.getItem("amymusic.equalizerPreset.v1") || "flat";
+    } catch { return "flat"; }
+  });
+
+  const eqFiltersRef = useRef([]);
+  const equalizerGainsRef = useRef(equalizerGains);
+  const isEqualizerEnabledRef = useRef(isEqualizerEnabled);
+
+  useEffect(() => {
+    equalizerGainsRef.current = equalizerGains;
+    isEqualizerEnabledRef.current = isEqualizerEnabled;
+    try {
+      localStorage.setItem("amymusic.equalizerGains.v1", JSON.stringify(equalizerGains));
+      localStorage.setItem("amymusic.equalizerEnabled.v1", JSON.stringify(isEqualizerEnabled));
+      localStorage.setItem("amymusic.equalizerPreset.v1", equalizerPreset);
+    } catch {}
+
+    if (eqFiltersRef.current.length && audioContextRef.current) {
+      const now = audioContextRef.current.currentTime;
+      eqFiltersRef.current.forEach((filter, idx) => {
+        const val = isEqualizerEnabled ? (equalizerGains[idx] ?? 0) : 0;
+        filter.gain.setTargetAtTime(val, now, 0.02);
+      });
+    }
+  }, [equalizerGains, isEqualizerEnabled, equalizerPreset]);
+
+  const setEqualizerGain = useCallback((bandIndex, valueDb) => {
+    const clamped = Math.min(12, Math.max(-12, Number(valueDb) || 0));
+    setEqualizerGains((prev) => {
+      const next = [...prev];
+      next[bandIndex] = clamped;
+      return next;
+    });
+    setEqualizerPresetState("custom");
+  }, []);
+
+  const setEqualizerPreset = useCallback((presetKey) => {
+    const preset = EQUALIZER_PRESETS[presetKey];
+    if (preset) {
+      setEqualizerGains([...preset.gains]);
+      setEqualizerPresetState(presetKey);
+    }
+  }, []);
+
+  const resetEqualizer = useCallback(() => {
+    setEqualizerGains([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    setEqualizerPresetState("flat");
+  }, []);
 
   const showNotification = useCallback((message, type = "info") => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -631,19 +721,25 @@ export function AudioProvider({ children }) {
       compressor.attack.value = 0.003;
       compressor.release.value = 0.25;
 
-      const bassFilter = context.createBiquadFilter();
-      bassFilter.type = "lowshelf";
-      bassFilter.frequency.value = 80;
-      bassFilter.gain.value = 2.2;
+      // 10-Band Real Equalizer BiquadFilterNodes
+      const eqFilters = EQUALIZER_FREQUENCIES.map((band, idx) => {
+        const filter = context.createBiquadFilter();
+        filter.type = band.type;
+        filter.frequency.value = band.freq;
+        filter.Q.value = band.type === "peaking" ? 1.4 : 1;
+        const targetGain = isEqualizerEnabledRef.current ? (equalizerGainsRef.current[idx] ?? 0) : 0;
+        filter.gain.value = targetGain;
+        return filter;
+      });
+      eqFiltersRef.current = eqFilters;
 
-      const trebleFilter = context.createBiquadFilter();
-      trebleFilter.type = "highshelf";
-      trebleFilter.frequency.value = 10000;
-      trebleFilter.gain.value = 2.5;
+      let currentSource = source;
+      eqFilters.forEach((filter) => {
+        currentSource.connect(filter);
+        currentSource = filter;
+      });
 
-      source.connect(bassFilter);
-      bassFilter.connect(trebleFilter);
-      trebleFilter.connect(compressor);
+      currentSource.connect(compressor);
       compressor.connect(analyser);
       analyser.connect(context.destination);
 
@@ -953,16 +1049,6 @@ export function AudioProvider({ children }) {
         return true;
       }
 
-      const crossfadeMs =
-        shouldPlay && playerSettingsRef.current.crossfadeEnabled && audio.src && audio.src !== streamUrl && !isManual
-          ? Math.round(Math.max(1, playerSettingsRef.current.crossfadeSeconds || 4) * 1000)
-          : 0;
-
-      if (crossfadeMs > 0 && !audio.paused && audio.volume > 0) {
-        await fadeAudioVolume(audio, audio.volume, 0, Math.round(crossfadeMs * 0.45));
-      }
-
-      // Destroy any existing HLS instance before loading a new source
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -991,7 +1077,7 @@ export function AudioProvider({ children }) {
         hlsRef.current = hls;
         hls.loadSource(streamUrl);
         hls.attachMedia(audio);
-        audio.volume = shouldPlay && crossfadeMs > 0 ? 0 : targetVolume;
+        audio.volume = targetVolume;
 
         if (shouldPlay) {
           await new Promise((resolve, reject) => {
@@ -1007,7 +1093,6 @@ export function AudioProvider({ children }) {
             };
             hls.once(Hls.Events.MANIFEST_PARSED, onManifest);
             hls.once(Hls.Events.ERROR, onFatalError);
-            // Fallback timeout so we don't hang forever
             setTimeout(() => {
               hls.off(Hls.Events.MANIFEST_PARSED, onManifest);
               hls.off(Hls.Events.ERROR, onFatalError);
@@ -1016,24 +1101,18 @@ export function AudioProvider({ children }) {
           });
           await ensureAudioGraph();
           await audio.play();
-          if (crossfadeMs > 0 && targetVolume > 0) {
-            await fadeAudioVolume(audio, 0, targetVolume, Math.round(crossfadeMs * 0.55));
-          }
         } else {
           audio.volume = targetVolume;
         }
       } else {
         // Progressive MP3 stream — standard HTMLAudioElement flow
         audio.src = streamUrl;
-        audio.volume = shouldPlay && crossfadeMs > 0 ? 0 : targetVolume;
+        audio.volume = targetVolume;
         audio.load();
 
         if (shouldPlay) {
           await ensureAudioGraph();
           await audio.play();
-          if (crossfadeMs > 0 && targetVolume > 0) {
-            await fadeAudioVolume(audio, 0, targetVolume, Math.round(crossfadeMs * 0.55));
-          }
         } else {
           audio.volume = targetVolume;
         }
@@ -1653,6 +1732,98 @@ export function AudioProvider({ children }) {
     };
   }, [currentTime, next, pause, play, previous, seek]);
 
+  const mergeServerData = useCallback((serverData) => {
+    if (!serverData) return;
+    
+    if (serverData.likedTracks && Array.isArray(serverData.likedTracks)) {
+      const normalizedLiked = serverData.likedTracks.map(normalizeStoredTrack).filter(Boolean);
+      setLikedTracks(normalizedLiked);
+      setLikedTrackIds(new Set(normalizedLiked.map(t => String(t.id))));
+    }
+    
+    if (serverData.dislikedTrackIds && Array.isArray(serverData.dislikedTrackIds)) {
+      setDislikedTrackIds(new Set(serverData.dislikedTrackIds.map(String)));
+    }
+    
+    if (serverData.playHistory && Array.isArray(serverData.playHistory)) {
+      setPlayHistory(serverData.playHistory.map(normalizeStoredTrack).filter(Boolean));
+    }
+
+    if (typeof serverData.totalListenedSeconds === "number") {
+      setTotalListenedSeconds(prev => Math.max(prev, serverData.totalListenedSeconds));
+    }
+  }, []);
+
+  const cloudSyncTimeoutRef = useRef(null);
+  const timeSyncTimeoutRef = useRef(null);
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    
+    if (!getUsername()) return;
+
+    if (cloudSyncTimeoutRef.current) {
+      clearTimeout(cloudSyncTimeoutRef.current);
+    }
+    
+    cloudSyncTimeoutRef.current = setTimeout(async () => {
+      try {
+        await Promise.all([
+          syncCollections({ likedTracks }),
+          syncWave({
+            dislikedTrackIds: Array.from(dislikedTrackIds),
+            playHistory
+          })
+        ]);
+        logDebug("audio", "synced collections and wave to cloud");
+      } catch (e) {
+        logWarn("audio", "failed to sync to cloud", e);
+      }
+    }, 2000);
+  }, [likedTracks, dislikedTrackIds, playHistory]);
+
+  useEffect(() => {
+    if (!getUsername()) return;
+
+    if (timeSyncTimeoutRef.current) {
+      clearTimeout(timeSyncTimeoutRef.current);
+    }
+    
+    timeSyncTimeoutRef.current = setTimeout(async () => {
+      try {
+        await import("../api").then(api => api.syncTime(totalListenedSeconds));
+        logDebug("audio", "synced listening time to cloud");
+      } catch (e) {
+        logWarn("audio", "failed to sync listening time", e);
+      }
+    }, 5000);
+  }, [totalListenedSeconds]);
+
+  const [profileSettings, setProfileSettings] = useState(() => getPlayerRuntimeSettings());
+
+  useEffect(() => {
+    return subscribeProfileSettings(setProfileSettings);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.amyMusicDesktop?.setDiscordActivity) {
+      if (profileSettings?.discordRpcEnabled !== false && isPlaying && currentTrack) {
+        window.amyMusicDesktop.setDiscordActivity({
+          details: currentTrack.title || "Unknown Track",
+          state: currentTrack.artist || "Unknown Artist",
+          largeImageKey: currentTrack.cover || "",
+          largeImageText: currentTrack.title || "AmyMusic"
+        });
+      } else {
+        window.amyMusicDesktop.setDiscordActivity(null);
+      }
+    }
+  }, [isPlaying, currentTrack, profileSettings?.discordRpcEnabled]);
+
   const controls = useMemo(
     () => [
       {
@@ -1709,6 +1880,10 @@ export function AudioProvider({ children }) {
       toggleShuffle
     ]
   );
+  const clearHistory = useCallback(() => {
+    setPlayHistory([]);
+  }, []);
+
   const value = useMemo(
     () => ({
       audio: audioRef.current,
@@ -1753,6 +1928,7 @@ export function AudioProvider({ children }) {
       cycleRepeatMode,
       setTracks,
       appendTracks,
+      clearHistory,
       toggleLike,
       toggleDislike,
       toggleSavedRelease,
@@ -1768,7 +1944,17 @@ export function AudioProvider({ children }) {
       reorderQueue,
       reorderPlaylistTracks,
       isFullOpen,
-      setIsFullOpen
+      setIsFullOpen,
+      isEqualizerOpen,
+      setIsEqualizerOpen,
+      isEqualizerEnabled,
+      setIsEqualizerEnabled,
+      equalizerGains,
+      setEqualizerGain,
+      equalizerPreset,
+      setEqualizerPreset,
+      resetEqualizer,
+      mergeServerData
     }),
     [
       controls,
@@ -1803,6 +1989,7 @@ export function AudioProvider({ children }) {
       seek,
       setTracks,
       appendTracks,
+      clearHistory,
       setVolume,
       createUserPlaylist,
       addTrackToUserPlaylist,
@@ -1815,7 +2002,17 @@ export function AudioProvider({ children }) {
       openTrackWave,
       playNext,
       addToQueueEnd,
-      isFullOpen
+      reorderQueue,
+      reorderPlaylistTracks,
+      isFullOpen,
+      isEqualizerOpen,
+      isEqualizerEnabled,
+      equalizerGains,
+      setEqualizerGain,
+      equalizerPreset,
+      setEqualizerPreset,
+      resetEqualizer,
+      mergeServerData
     ]
   );
 
