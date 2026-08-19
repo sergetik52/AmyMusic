@@ -402,19 +402,19 @@ button {
   pointer-events: auto;
   position: absolute;
   z-index: 30;
-  left: calc(50% - 241px);
-  bottom: 171px;
-  height: 44px;
-  width: 44px;
+  left: 50%;
+  top: 42%;
+  height: 185px;
+  width: 185px;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
-  transform: translateX(0) scale(1);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.58);
+  transform: translate(-50%, -50%) scale(1);
+  box-shadow: none;
   transition:
     left 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
-    bottom 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
+    top 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
     width 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
     height 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
     transform 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
@@ -423,13 +423,17 @@ button {
     opacity 800ms ease;
 }
 
+.is-paused .song-cover {
+  box-shadow: none;
+}
+
 .is-playing .song-cover {
   z-index: 9;
   left: 50%;
-  bottom: 50%;
-  height: 176px;
-  width: 176px;
-  transform: translate(-50%, calc(50% + 40px)) scale(1);
+  top: 42%;
+  height: 185px;
+  width: 185px;
+  transform: translate(-50%, -50%) scale(1);
   box-shadow:
     0 32px 95px rgba(0, 0, 0, 0.78),
     0 0 calc(28px + var(--audio-level) * 54px) color-mix(in srgb, var(--cover-line) calc(28% + var(--audio-level) * 44%), transparent);
