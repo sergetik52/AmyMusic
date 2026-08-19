@@ -1168,8 +1168,11 @@ export function AudioProvider({ children }) {
     const nextTrack = queue[currentIndex] || emptyTrack;
     if (!nextTrack?.id || nextTrack.id === "empty") return;
 
-    if (explicitLoadTrackIdRef.current === nextTrack.id) {
-      explicitLoadTrackIdRef.current = "";
+    // If an explicit playTrack call is active, ignore stale useEffect triggers
+    if (explicitLoadTrackIdRef.current) {
+      if (explicitLoadTrackIdRef.current === nextTrack.id) {
+        explicitLoadTrackIdRef.current = "";
+      }
       return;
     }
 
@@ -1225,7 +1228,7 @@ export function AudioProvider({ children }) {
       const resolvedQueue = existingIndex >= 0 ? nextQueue : [track, ...nextQueue];
       const resolvedIndex = existingIndex >= 0 ? existingIndex : 0;
 
-      explicitLoadTrackIdRef.current = track.id;
+      explicitLoadTrackIdRef.current = String(track.id);
       pendingAutoplayRef.current = true;
       manualActionRef.current = true;
       setOriginalQueue(resolvedQueue);
@@ -1244,8 +1247,15 @@ export function AudioProvider({ children }) {
         ...history.filter((item) => item.id !== track.id)
       ].slice(0, 50));
 
-      const didLoad = await loadTrack(track, true, true);
-      return didLoad;
+      try {
+        const didLoad = await loadTrack(track, true, true);
+        return didLoad;
+      } finally {
+        // Clear explicit load marker only after loadTrack completes
+        if (explicitLoadTrackIdRef.current === String(track.id)) {
+          explicitLoadTrackIdRef.current = "";
+        }
+      }
     },
     [loadTrack, queue]
   );
