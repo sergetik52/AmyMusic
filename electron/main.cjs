@@ -575,7 +575,7 @@ function registerDesktopIpc() {
         });
       };
 
-      const finalUrl = customUrl || "https://github.com/sergetik52/AmyMusic/releases/download/v0.1.0/AmyMusic-0.1.0-Setup.exe";
+      const finalUrl = customUrl || "https://amymusic.ru/api/download-app";
       downloadFile(finalUrl);
     });
   });

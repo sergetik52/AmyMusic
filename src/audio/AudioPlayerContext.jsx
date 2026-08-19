@@ -1774,6 +1774,17 @@ export function AudioProvider({ children }) {
       setLikedTracks(normalizedLiked);
       setLikedTrackIds(new Set(normalizedLiked.map(t => String(t.id))));
     }
+
+    if (serverData.userPlaylists && Array.isArray(serverData.userPlaylists)) {
+      const validPlaylists = serverData.userPlaylists.filter(p => p && p.id);
+      setUserPlaylists(validPlaylists);
+    }
+
+    if (serverData.savedReleases && Array.isArray(serverData.savedReleases)) {
+      const validReleases = serverData.savedReleases.filter(r => r && r.id);
+      setSavedReleases(validReleases);
+      setSavedReleaseIds(new Set(validReleases.map(r => String(r.id))));
+    }
     
     if (serverData.dislikedTrackIds && Array.isArray(serverData.dislikedTrackIds)) {
       setDislikedTrackIds(new Set(serverData.dislikedTrackIds.map(String)));
@@ -1807,7 +1818,7 @@ export function AudioProvider({ children }) {
     cloudSyncTimeoutRef.current = setTimeout(async () => {
       try {
         await Promise.all([
-          syncCollections({ likedTracks }),
+          syncCollections({ likedTracks, userPlaylists, savedReleases }),
           syncWave({
             dislikedTrackIds: Array.from(dislikedTrackIds),
             playHistory
@@ -1818,7 +1829,7 @@ export function AudioProvider({ children }) {
         logWarn("audio", "failed to sync to cloud", e);
       }
     }, 2000);
-  }, [likedTracks, dislikedTrackIds, playHistory]);
+  }, [likedTracks, userPlaylists, savedReleases, dislikedTrackIds, playHistory]);
 
   useEffect(() => {
     if (!getUsername()) return;

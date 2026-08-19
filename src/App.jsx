@@ -112,6 +112,7 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
   const [updateStatus, setUpdateStatus] = useState("idle");
   const [updateProgress, setUpdateProgress] = useState(0);
   const [updateMessage, setUpdateMessage] = useState("");
+  const [latestDownloadUrl, setLatestDownloadUrl] = useState("");
 
   React.useEffect(() => {
     window.amyMusicDesktop?.getDiscordBotToken?.().then((t) => setDiscordBotToken(t || "")).catch(() => {});
@@ -135,7 +136,7 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
         }
       });
 
-      const res = await window.amyMusicDesktop.startUpdate();
+      const res = await window.amyMusicDesktop.startUpdate(latestDownloadUrl);
       if (cleanup) cleanup();
       if (!res?.success) {
         setUpdateStatus("error");
@@ -149,6 +150,7 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
     const res = await window.amyMusicDesktop.checkUpdate();
     if (res?.hasUpdate) {
       setUpdateStatus("has-update");
+      if (res.downloadUrl) setLatestDownloadUrl(res.downloadUrl);
       setUpdateMessage(`Доступна новая версия v${res.latestVersion}! ${res.releaseNotes || ""}`);
     } else {
       setUpdateStatus("up-to-date");
@@ -2124,7 +2126,7 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum }) {
 }
 
 export default function App() {
-  const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, mergeServerData, likedTracks, dislikedTrackIds, playHistory } = useAudioPlayer();
+  const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, mergeServerData, likedTracks, userPlaylists, savedReleases, dislikedTrackIds, playHistory } = useAudioPlayer();
   const [activeTab, setActiveTab] = useState("wave");
   const [previousTab, setPreviousTab] = useState("wave");
   const [activeArtist, setActiveArtist] = useState(null);
@@ -2148,9 +2150,9 @@ export default function App() {
     try {
       let needsSync = false;
       
-      if (likedTracks?.length > 0 || dislikedTrackIds?.size > 0 || playHistory?.length > 0) {
-        if (likedTracks?.length > 0) {
-          await syncCollections({ likedTracks });
+      if (likedTracks?.length > 0 || userPlaylists?.length > 0 || savedReleases?.length > 0 || dislikedTrackIds?.size > 0 || playHistory?.length > 0) {
+        if (likedTracks?.length > 0 || userPlaylists?.length > 0 || savedReleases?.length > 0) {
+          await syncCollections({ likedTracks, userPlaylists, savedReleases });
           needsSync = true;
         }
         
@@ -2201,6 +2203,8 @@ export default function App() {
         if (mergeServerData) {
           mergeServerData({
             likedTracks: collections.likedTracks,
+            userPlaylists: collections.userPlaylists,
+            savedReleases: collections.savedReleases,
             dislikedTrackIds: wave.dislikedTrackIds,
             playHistory: wave.playHistory,
             totalListenedSeconds: profile?.totalListenedSeconds
