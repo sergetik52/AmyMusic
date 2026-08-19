@@ -221,7 +221,14 @@ app.use('/api/soundcloud', (req, res) => {
 });
 
 // --- DOWNLOADS & AUTO-UPDATE ROUTES ---
-const pkgInfo = require('../package.json');
+let pkgInfo = { version: '0.1.1' };
+try {
+  pkgInfo = require('./package.json');
+} catch (e) {
+  try {
+    pkgInfo = require('../package.json');
+  } catch (e2) {}
+}
 
 app.get('/api/app-version', (req, res) => {
   const version = pkgInfo.version || '0.1.1';

@@ -83,6 +83,13 @@ conn.on('ready', () => {
 
       try {
         console.log('📤 Uploading backend files...');
+        const rootPkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+        const backendPkgPath = path.join(__dirname, 'backend', 'package.json');
+        if (fs.existsSync(backendPkgPath)) {
+          const backendPkg = JSON.parse(fs.readFileSync(backendPkgPath, 'utf8'));
+          backendPkg.version = rootPkg.version;
+          fs.writeFileSync(backendPkgPath, JSON.stringify(backendPkg, null, 2), 'utf8');
+        }
         const backendDir = path.join(__dirname, 'backend');
         const backendFiles = ['server.js', 'db.js', 'package.json'];
         for (const file of backendFiles) {
@@ -118,10 +125,30 @@ conn.on('ready', () => {
   };
 
   const setupNginxAndStart = () => {
-    const nginxConfig = `
+    const vpnXrayConfig = `map $ssl_preread_server_name $vpn_backend {
+    amymusic.ru 127.0.0.1:8443;
+    www.amymusic.ru 127.0.0.1:8443;
+    185.199.158.106 127.0.0.1:8443;
+    www.mozilla.org 127.0.0.1:14443;
+    www.google.com 127.0.0.1:14444;
+    www.cloudflare.com 127.0.0.1:14445;
+    default 127.0.0.1:8443;
+}
+
 server {
+    listen 443;
+    proxy_pass $vpn_backend;
+    ssl_preread on;
+}
+`;
+
+    const nginxConfig = `server {
     listen 80;
+    listen 127.0.0.1:8443 ssl;
     server_name amymusic.ru www.amymusic.ru 185.199.158.106;
+
+    ssl_certificate /etc/letsencrypt/live/amymusic.ru/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/amymusic.ru/privkey.pem;
 
     client_max_body_size 50M;
 
@@ -138,21 +165,23 @@ server {
 }
 `;
     
-    // Remote script to configure Nginx site & start PM2 & run certbot
+    // Remote script to configure Nginx site & start PM2
     const remoteScript = `
+cat << 'EOF' > /etc/nginx/stream-conf.d/vpn-xray.conf
+${vpnXrayConfig}
+EOF
+
 cat << 'EOF' > /etc/nginx/sites-available/amymusic.conf
 ${nginxConfig}
 EOF
 
 ln -sf /etc/nginx/sites-available/amymusic.conf /etc/nginx/sites-enabled/amymusic.conf
 rm -f /etc/nginx/sites-enabled/default
-nginx -t && systemctl reload nginx || systemctl restart nginx
+pkill -9 nginx || true
+sleep 1
+systemctl restart nginx || true
 
 cd /var/www/amymusic/backend && npm install && pm2 restart amymusic-backend || pm2 start server.js --name "amymusic-backend" && pm2 save
-
-# Attempt SSL installation for amymusic.ru
-certbot --nginx -d amymusic.ru --non-interactive --agree-tos -m admin@amymusic.ru || true
-systemctl reload nginx || true
 `;
 
     conn.exec(remoteScript, (err, stream) => {
