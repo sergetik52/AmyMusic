@@ -10,7 +10,6 @@ import { TrackMenuButton } from "./components/TrackContextMenu";
 import AuthModal from "./components/AuthModal";
 import { AvatarCropperModal } from "./components/AvatarCropperModal";
 import { EqualizerModal } from "./components/EqualizerModal";
-import { OverlayWidget } from "./components/OverlayWidget";
 import { getUsername, removeAuthToken, getCollections, syncCollections, getWave, syncWave, getProfile, updateProfile, changePassword } from "./api";
 import {
   buildArtistsFromTracks,
@@ -1999,18 +1998,6 @@ function PlayerTools({ onOpenFull }) {
         onClick={() => setIsEqualizerOpen((val) => !val)}
         active={isEqualizerOpen}
       />
-      {typeof window !== "undefined" && window.amyMusicDesktop && (
-        <button
-          type="button"
-          onClick={() => window.amyMusicDesktop.toggleOverlay()}
-          title="Поверх всех окон (Мини-оверлей)"
-          className="grid h-9 w-9 place-items-center rounded-full opacity-60 transition hover:bg-white/10 hover:opacity-100 active:scale-95 text-white shrink-0"
-        >
-          <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
-            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h5v-5h-5v5z"/>
-          </svg>
-        </button>
-      )}
       <div className="volume-control group relative grid h-9 w-9 place-items-center">
         <div className="volume-popover pointer-events-none absolute bottom-10 left-1/2 z-30 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-2xl border border-white/10 bg-[#171717]/95 py-3 opacity-0 shadow-2xl backdrop-blur-md transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
           <div
@@ -2139,10 +2126,6 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum }) {
 }
 
 export default function App() {
-  if (typeof window !== "undefined" && window.location.hash === "#overlay") {
-    return <OverlayWidget />;
-  }
-
   const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, mergeServerData, likedTracks, userPlaylists, savedReleases, dislikedTrackIds, playHistory } = useAudioPlayer();
   const [activeTab, setActiveTab] = useState("wave");
   const [previousTab, setPreviousTab] = useState("wave");

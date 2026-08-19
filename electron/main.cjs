@@ -645,23 +645,6 @@ function registerDesktopIpc() {
     return true;
   });
 
-  ipcMain.handle("amymusic:toggle-overlay", () => {
-    if (overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
-      overlayWindow.hide();
-      return false;
-    } else {
-      createOverlayWindow();
-      overlayWindow.show();
-      return true;
-    }
-  });
-
-  ipcMain.handle("amymusic:resize-overlay", (_event, width, height) => {
-    if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.setSize(width, height);
-    }
-  });
-
   ipcMain.handle("amymusic:parse-playlist-url", async (_event, url) => {
     return new Promise((resolve, reject) => {
       const hiddenWindow = new BrowserWindow({
@@ -812,51 +795,6 @@ function registerDesktopIpc() {
       }).on('error', () => resolve([]));
     });
   });
-}
-
-let overlayWindow = null;
-
-function createOverlayWindow() {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.show();
-    return overlayWindow;
-  }
-
-  overlayWindow = new BrowserWindow({
-    width: 410,
-    height: 230,
-    alwaysOnTop: true,
-    frame: false,
-    transparent: true,
-    resizable: true,
-    hasShadow: false,
-    skipTaskbar: true,
-    icon: getAppIconPath(),
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      spellcheck: false,
-      preload: path.join(__dirname, "preload.cjs"),
-      additionalArguments: [`--amymusic-proxy-port=${proxyPort}`]
-    }
-  });
-
-  overlayWindow.setAlwaysOnTop(true, "screen-saver");
-
-  if (isDev) {
-    overlayWindow.loadURL((process.env.AMYMUSIC_DEV_SERVER_URL || "http://127.0.0.1:5173") + "#overlay");
-  } else {
-    overlayWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"), {
-      hash: "overlay",
-      query: { amymusicProxyPort: String(proxyPort) }
-    });
-  }
-
-  overlayWindow.on("closed", () => {
-    overlayWindow = null;
-  });
-
-  return overlayWindow;
 }
 
 function createWindow() {

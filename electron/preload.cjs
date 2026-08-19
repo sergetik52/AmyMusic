@@ -22,8 +22,6 @@ contextBridge.exposeInMainWorld("amyMusicDesktop", {
   getAppVersion: () => ipcRenderer.invoke("amymusic:get-app-version"),
   checkUpdate: () => ipcRenderer.invoke("amymusic:check-update"),
   startUpdate: () => ipcRenderer.invoke("amymusic:start-update"),
-  toggleOverlay: () => ipcRenderer.invoke("amymusic:toggle-overlay"),
-  resizeOverlay: (width, height) => ipcRenderer.invoke("amymusic:resize-overlay", width, height),
   onUpdateProgress: (callback) => {
     const subscription = (_event, value) => callback(value);
     ipcRenderer.on("amymusic:update-progress", subscription);
