@@ -645,7 +645,10 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
           try {
             const results = await searchTracks(query);
             if (results && results.length > 0) {
-              foundTracks.push(results[0]);
+              const bestResult = results[0];
+              if (!foundTracks.some(t => t.id === bestResult.id)) {
+                foundTracks.push(bestResult);
+              }
               found = true;
             }
           } catch (e) {

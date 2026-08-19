@@ -657,11 +657,19 @@ function registerDesktopIpc() {
         }
       });
 
+      hiddenWindow.webContents.on('will-navigate', (event, newUrl) => {
+        if (newUrl.startsWith('spotify:') || newUrl.includes('intent://')) {
+          event.preventDefault();
+        }
+      });
+
       hiddenWindow.loadURL(url, {
         userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
       }).catch((err) => {
-        hiddenWindow.destroy();
-        reject(err);
+        if (err.code !== 'ERR_ABORTED') {
+          hiddenWindow.destroy();
+          reject(err);
+        }
       });
 
       hiddenWindow.webContents.on('did-finish-load', async () => {
@@ -702,7 +710,8 @@ function registerDesktopIpc() {
                     });
                   }
                 } else if (currentUrl.includes("soundcloud.com")) {
-                  const rows = document.querySelectorAll('.trackList__item');
+                  // Only get items within the main playlist container, ignore sidebar/related
+                  const rows = document.querySelectorAll('.playlistTrackList .trackList__item, .systemPlaylistTrackList .trackList__item, [role="listbox"] .trackList__item');
                   if (rows.length > 0) {
                     window.scrollBy(0, 150);
                     const lastRow = rows[rows.length - 1];
