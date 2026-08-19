@@ -673,57 +673,108 @@ function registerDesktopIpc() {
                 let foundAnyNew = false;
                 
                 // Parse tracks first before scrolling
-                const rows = document.querySelectorAll('.CommonTrack_root__i6shE, .d-track');
-                if (rows.length > 0) {
-                  // Fallback generic scroll just in case
-                  window.scrollBy(0, 150);
-                  
-                  // Scroll the last track element into view to force virtual list to render next batch
-                  const lastRow = rows[rows.length - 1];
-                  if (lastRow && typeof lastRow.scrollIntoView === 'function') {
-                    // block: 'start' pushes the last known item to the top, revealing the next items below it
-                    lastRow.scrollIntoView({ behavior: 'auto', block: 'start' });
-                  }
-                  rows.forEach(row => {
-                    const titleEl = row.querySelector('.Meta_title__GGBnH');
-                    const artistEl = row.querySelector('.Meta_artistCaption__JESZi');
-                    const indexContainer = row.closest('[data-index]');
-                    
-                    if (titleEl) {
-                      const title = titleEl.innerText.trim();
-                      const artist = artistEl ? artistEl.innerText.trim() : '';
-                      
-                      let key = indexContainer ? parseInt(indexContainer.getAttribute('data-index'), 10) : (title + '::' + artist);
-                      
-                      if (!tracksMap.has(key)) {
-                        tracksMap.set(key, { 
-                          title, 
-                          artist, 
-                          index: indexContainer ? parseInt(indexContainer.getAttribute('data-index'), 10) : tracksMap.size 
-                        });
-                        foundAnyNew = true;
-                      }
+                const currentUrl = window.location.href;
+                
+                if (currentUrl.includes("spotify.com")) {
+                  const rows = document.querySelectorAll('[data-testid="tracklist-row"]');
+                  if (rows.length > 0) {
+                    window.scrollBy(0, 150);
+                    const lastRow = rows[rows.length - 1];
+                    if (lastRow && typeof lastRow.scrollIntoView === 'function') {
+                      lastRow.scrollIntoView({ behavior: 'auto', block: 'start' });
                     }
-                  });
+                    rows.forEach((row, i) => {
+                      const titleEl = row.querySelector('a[data-testid="internal-track-link"] > div') || row.querySelector('div[dir="auto"]');
+                      const artistEls = Array.from(row.querySelectorAll('a[href^="/artist/"]'));
+                      if (titleEl) {
+                        const title = titleEl.innerText.trim();
+                        const artist = artistEls.map(a => a.innerText.trim()).join(', ');
+                        const ariaRowIndex = row.getAttribute('aria-rowindex');
+                        const index = ariaRowIndex ? parseInt(ariaRowIndex, 10) : tracksMap.size;
+                        const key = title + '::' + artist;
+                        if (!tracksMap.has(key)) {
+                          tracksMap.set(key, { title, artist, index });
+                          foundAnyNew = true;
+                        }
+                      }
+                    });
+                  }
+                } else if (currentUrl.includes("soundcloud.com")) {
+                  const rows = document.querySelectorAll('.trackList__item');
+                  if (rows.length > 0) {
+                    window.scrollBy(0, 150);
+                    const lastRow = rows[rows.length - 1];
+                    if (lastRow && typeof lastRow.scrollIntoView === 'function') {
+                      lastRow.scrollIntoView({ behavior: 'auto', block: 'start' });
+                    }
+                    rows.forEach((row) => {
+                      const titleEl = row.querySelector('.trackItem__trackTitle');
+                      const artistEl = row.querySelector('.trackItem__username');
+                      if (titleEl) {
+                        const title = titleEl.innerText.trim();
+                        const artist = artistEl ? artistEl.innerText.trim() : '';
+                        const key = title + '::' + artist;
+                        if (!tracksMap.has(key)) {
+                          tracksMap.set(key, { title, artist, index: tracksMap.size });
+                          foundAnyNew = true;
+                        }
+                      }
+                    });
+                  }
                 } else {
-                  // Fallback to simple matching if wrapper class is different
-                  const titles = document.querySelectorAll('.Meta_title__GGBnH');
-                  const artists = document.querySelectorAll('.Meta_artistCaption__JESZi');
-                  titles.forEach((titleEl, i) => {
-                     const title = titleEl.innerText.trim();
-                     const artist = artists[i] ? artists[i].innerText.trim() : '';
-                     const indexContainer = titleEl.closest('[data-index]');
-                     
-                     let key = indexContainer ? parseInt(indexContainer.getAttribute('data-index'), 10) : (title + '::' + artist);
-                     if (!tracksMap.has(key)) {
-                       tracksMap.set(key, { 
-                         title, 
-                         artist, 
-                         index: indexContainer ? parseInt(indexContainer.getAttribute('data-index'), 10) : tracksMap.size 
-                       });
-                       foundAnyNew = true;
-                     }
-                  });
+                  // Default (Yandex Music)
+                  const rows = document.querySelectorAll('.CommonTrack_root__i6shE, .d-track');
+                  if (rows.length > 0) {
+                    // Fallback generic scroll just in case
+                    window.scrollBy(0, 150);
+                    
+                    // Scroll the last track element into view to force virtual list to render next batch
+                    const lastRow = rows[rows.length - 1];
+                    if (lastRow && typeof lastRow.scrollIntoView === 'function') {
+                      // block: 'start' pushes the last known item to the top, revealing the next items below it
+                      lastRow.scrollIntoView({ behavior: 'auto', block: 'start' });
+                    }
+                    rows.forEach(row => {
+                      const titleEl = row.querySelector('.Meta_title__GGBnH');
+                      const artistEl = row.querySelector('.Meta_artistCaption__JESZi');
+                      const indexContainer = row.closest('[data-index]');
+                      
+                      if (titleEl) {
+                        const title = titleEl.innerText.trim();
+                        const artist = artistEl ? artistEl.innerText.trim() : '';
+                        
+                        let key = indexContainer ? parseInt(indexContainer.getAttribute('data-index'), 10) : (title + '::' + artist);
+                        
+                        if (!tracksMap.has(key)) {
+                          tracksMap.set(key, { 
+                            title, 
+                            artist, 
+                            index: indexContainer ? parseInt(indexContainer.getAttribute('data-index'), 10) : tracksMap.size 
+                          });
+                          foundAnyNew = true;
+                        }
+                      }
+                    });
+                  } else {
+                    // Fallback to simple matching if wrapper class is different
+                    const titles = document.querySelectorAll('.Meta_title__GGBnH');
+                    const artists = document.querySelectorAll('.Meta_artistCaption__JESZi');
+                    titles.forEach((titleEl, i) => {
+                       const title = titleEl.innerText.trim();
+                       const artist = artists[i] ? artists[i].innerText.trim() : '';
+                       const indexContainer = titleEl.closest('[data-index]');
+                       
+                       let key = indexContainer ? parseInt(indexContainer.getAttribute('data-index'), 10) : (title + '::' + artist);
+                       if (!tracksMap.has(key)) {
+                         tracksMap.set(key, { 
+                           title, 
+                           artist, 
+                           index: indexContainer ? parseInt(indexContainer.getAttribute('data-index'), 10) : tracksMap.size 
+                         });
+                         foundAnyNew = true;
+                       }
+                    });
+                  }
                 }
                 
                 if (foundAnyNew) {
