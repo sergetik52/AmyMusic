@@ -559,7 +559,7 @@ function registerDesktopIpc() {
             fileStream.close(() => {
               try {
                 const child_process = require("node:child_process");
-                child_process.spawn(targetPath, ["/S"], { detached: true, stdio: "ignore" }).unref();
+                child_process.spawn(targetPath, ["/S", "--force-run"], { detached: true, stdio: "ignore" }).unref();
                 isQuitting = true;
                 setTimeout(() => app.quit(), 300);
                 resolve({ success: true });
