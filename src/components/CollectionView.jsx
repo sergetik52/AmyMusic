@@ -595,7 +595,10 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
         throw new Error("Функция импорта недоступна");
       }
       
-      const parsedTracks = await window.amyMusicDesktop.parsePlaylist(importUrl);
+      const parsedResult = await window.amyMusicDesktop.parsePlaylist(importUrl);
+      const parsedTracks = Array.isArray(parsedResult) ? parsedResult : (parsedResult?.tracks || []);
+      const parsedTitle = (!Array.isArray(parsedResult) && parsedResult?.playlistTitle) ? parsedResult.playlistTitle : "";
+      
       if (!parsedTracks || parsedTracks.length === 0) {
         throw new Error("Не найдено треков на странице");
       }
@@ -652,7 +655,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
       }
       
       if (foundTracks.length > 0) {
-        const title = "Импортированный плейлист";
+        const title = parsedTitle || `Импортированный плейлист (${new Date().toLocaleDateString()})`;
         const createdPlaylist = createUserPlaylist(title);
         if (createdPlaylist) {
           updateUserPlaylist(createdPlaylist.id, { 

@@ -657,7 +657,9 @@ function registerDesktopIpc() {
         }
       });
 
-      hiddenWindow.loadURL(url).catch((err) => {
+      hiddenWindow.loadURL(url, {
+        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+      }).catch((err) => {
         hiddenWindow.destroy();
         reject(err);
       });
@@ -792,7 +794,14 @@ function registerDesktopIpc() {
                     .sort((a, b) => a.index - b.index)
                     .map(t => ({ title: t.title, artist: t.artist }));
                   
-                  resolve(tracks);
+                  // Extract playlist title
+                  let playlistTitle = document.title || "";
+                  const h1 = document.querySelector('h1');
+                  if (h1 && h1.innerText) {
+                    playlistTitle = h1.innerText.trim();
+                  }
+                  
+                  resolve({ tracks, playlistTitle });
                 }
               }, 200); // 200ms fast interval for smooth small scrolling
             });
