@@ -402,19 +402,22 @@ button {
   pointer-events: auto;
   position: absolute;
   z-index: 30;
-  left: 50%;
-  top: 42%;
-  height: 185px;
-  width: 185px;
+  left: calc(50% - 239px);
+  bottom: 171px;
+  top: auto;
+  height: 44px;
+  width: 44px;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
-  transform: translate(-50%, -50%) scale(1);
+  border-radius: 999px;
+  transform: translateX(0) scale(1);
   box-shadow: none;
   transition:
     left 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
     top 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
+    bottom 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
     width 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
     height 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
     transform 800ms cubic-bezier(0.2, 0.85, 0.18, 1),
@@ -424,6 +427,13 @@ button {
 }
 
 .is-paused .song-cover {
+  left: calc(50% - 239px);
+  bottom: 171px;
+  top: auto;
+  height: 44px;
+  width: 44px;
+  border-radius: 999px;
+  transform: translateX(0) scale(1);
   box-shadow: none;
 }
 
@@ -431,8 +441,10 @@ button {
   z-index: 9;
   left: 50%;
   top: 42%;
+  bottom: auto;
   height: 185px;
   width: 185px;
+  border-radius: 28px;
   transform: translate(-50%, -50%) scale(1);
   box-shadow:
     0 32px 95px rgba(0, 0, 0, 0.78),
