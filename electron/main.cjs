@@ -823,8 +823,8 @@ function createOverlayWindow() {
   }
 
   overlayWindow = new BrowserWindow({
-    width: 360,
-    height: 140,
+    width: 410,
+    height: 230,
     alwaysOnTop: true,
     frame: false,
     transparent: true,
