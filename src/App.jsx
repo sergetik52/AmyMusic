@@ -50,7 +50,7 @@ function Logo({ isCollapsed, onClick }) {
         className="h-12 w-12 shrink-0 rounded-2xl object-cover shadow-xl transition-transform hover:scale-105"
       />
       <div className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[100px] opacity-100"}`}>
-        <div className="leading-tight drop-shadow-[0_0_8px_rgba(158,125,255,0.4)] whitespace-nowrap">
+        <div className="leading-tight whitespace-nowrap">
           <p className="text-[18px] font-black tracking-wide text-[#9E7DFF]">Amy</p>
           <p className="text-[18px] font-black tracking-wide text-[#9E7DFF]">Music</p>
         </div>
@@ -322,7 +322,7 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
                 <h3 className="text-2xl font-black mb-8 text-white">Профиль</h3>
                 
                 <div className="flex flex-col md:flex-row gap-8 items-start mb-8">
-                  <div className="group relative flex h-40 w-40 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white/10 bg-[#121212] object-cover shadow-xl transition-all hover:border-[#8341EF] hover:shadow-[0_0_30px_rgba(131,65,239,0.3)]" onClick={() => fileInputRef.current?.click()}>
+                  <div className="group relative flex h-40 w-40 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white/10 bg-[#121212] object-cover shadow-xl transition-all hover:border-[#8341EF]" onClick={() => fileInputRef.current?.click()}>
                     {draftProfile.avatarUrl ? (
                       <img src={draftProfile.avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
                     ) : (
@@ -574,7 +574,7 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
                           type="button"
                           disabled={updateStatus === "checking" || updateStatus === "downloading"}
                           onClick={handleCheckOrStartUpdate}
-                          className="rounded-full bg-[#8341EF] hover:bg-[#7231dd] px-5 py-2.5 text-xs font-bold text-white transition active:scale-95 shrink-0 disabled:opacity-50 shadow-[0_0_15px_rgba(131,65,239,0.3)]"
+                          className="rounded-full bg-[#8341EF] hover:bg-[#7231dd] px-5 py-2.5 text-xs font-bold text-white transition active:scale-95 shrink-0 disabled:opacity-50"
                         >
                           {updateStatus === "checking" && "Проверка..."}
                           {updateStatus === "idle" && "Проверить обновления"}
@@ -584,11 +584,11 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
                         </button>
                       ) : (
                         <a
-                          href="https://amymusic.ru/api/download-app"
+                          href="/api/download-app"
                           target="_blank"
                           rel="noopener noreferrer"
                           download
-                          className="rounded-full bg-[#8341EF] hover:bg-[#7231dd] px-5 py-2.5 text-xs font-bold text-white transition active:scale-95 shrink-0 shadow-[0_0_15px_rgba(131,65,239,0.3)]"
+                          className="rounded-full bg-[#8341EF] hover:bg-[#7231dd] px-5 py-2.5 text-xs font-bold text-white transition active:scale-95 shrink-0"
                         >
                           Скачать .exe
                         </a>
@@ -774,14 +774,14 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onLoginCli
       <div className="mb-4 w-full space-y-2">
         {!isDesktop && (
           <a
-            href="https://amymusic.ru/api/download-app"
+            href="/api/download-app"
             target="_blank"
             rel="noopener noreferrer"
             download
             className="group flex w-full items-center gap-3.5 rounded-full py-2 px-[18px] text-left text-xs font-bold text-white transition hover:bg-white/[0.04] overflow-hidden"
             title={isCollapsed ? "Скачать AmyMusic для ПК" : undefined}
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#8341EF]/20 border border-[#8341EF]/50 text-[#8341EF] group-hover:bg-[#8341EF] group-hover:text-white transition-colors shadow-[0_0_12px_rgba(131,65,239,0.3)]">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#8341EF]/20 border border-[#8341EF]/50 text-[#8341EF] group-hover:bg-[#8341EF] group-hover:text-white transition-colors">
               <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
                 <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
               </svg>
@@ -2260,14 +2260,14 @@ export default function App() {
 
   const renderAuthRequired = (title, message) => (
     <div className="flex h-full flex-col items-center justify-center rounded-[17.76px] border border-white/[0.04] bg-[#121212] p-10 text-center shadow-2xl">
-      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#8341EF]/20 to-transparent border border-[#8341EF]/30 shadow-[0_0_50px_rgba(131,65,239,0.2)]">
+      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#8341EF]/20 to-transparent border border-[#8341EF]/30">
         <img src="/logo.png" alt="" className="h-12 w-12 object-cover opacity-50 grayscale" />
       </div>
       <h2 className="text-2xl font-black text-white mb-3">{title}</h2>
       <p className="text-sm font-semibold text-white/40 max-w-sm mb-8">{message}</p>
       <button
         onClick={() => setShowAuthModal(true)}
-        className="rounded-full bg-[#8341EF] px-8 py-3.5 text-sm font-bold text-white shadow-[0_0_20px_rgba(131,65,239,0.3)] transition-all hover:scale-105 hover:shadow-[0_0_30px_rgba(131,65,239,0.5)]"
+        className="rounded-full bg-[#8341EF] px-8 py-3.5 text-sm font-bold text-white transition-transform hover:scale-105"
       >
         Войти в аккаунт
       </button>

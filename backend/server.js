@@ -221,31 +221,23 @@ app.use('/api/soundcloud', (req, res) => {
 });
 
 // --- DOWNLOADS & AUTO-UPDATE ROUTES ---
-const downloadsPath = path.join(__dirname, '../downloads');
-app.use('/downloads', express.static(downloadsPath));
-
 app.get('/api/app-version', (req, res) => {
-  const installerName = 'AmyMusic-0.1.0-Setup.exe';
-  const installerFile = path.join(downloadsPath, installerName);
-  const exists = fs.existsSync(installerFile);
+  const version = '0.1.0';
+  const fileName = `AmyMusic-${version}-Setup.exe`;
+  const githubDownloadUrl = `https://github.com/sergetik52/AmyMusic/releases/download/v${version}/${fileName}`;
 
   res.json({
-    version: '0.1.0',
-    downloadUrl: `https://amymusic.ru/downloads/${installerName}`,
-    fileName: installerName,
-    hasInstaller: exists,
-    releaseNotes: '10-полосный эквалайзер, фильтрация веб-настроек, улучшенные аватарки артистов и однокликовое автообновление.'
+    version,
+    downloadUrl: githubDownloadUrl,
+    fileName,
+    releaseNotes: '10-полосный эквалайзер, фильтрация веб-настроек, улучшенные аватарки артистов и однокликовое автообновление через GitHub.'
   });
 });
 
 app.get('/api/download-app', (req, res) => {
-  const installerName = 'AmyMusic-0.1.0-Setup.exe';
-  const installerFile = path.join(downloadsPath, installerName);
-  if (fs.existsSync(installerFile)) {
-    res.download(installerFile, installerName);
-  } else {
-    res.redirect(`https://amymusic.ru/downloads/${installerName}`);
-  }
+  const version = '0.1.0';
+  const fileName = `AmyMusic-${version}-Setup.exe`;
+  res.redirect(`https://github.com/sergetik52/AmyMusic/releases/download/v${version}/${fileName}`);
 });
 
 // --- FRONTEND STATIC SERVING ---

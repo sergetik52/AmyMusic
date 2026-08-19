@@ -47,7 +47,7 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
           </button>
 
           <div className="mb-6 flex items-center justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-[18px] bg-gradient-to-br from-[#8341EF] to-[#511bb5] shadow-[0_0_40px_rgba(131,65,239,0.5)]">
+            <div className="flex h-16 w-16 items-center justify-center rounded-[18px] bg-gradient-to-br from-[#8341EF] to-[#511bb5]">
               <img src="/logo.png" alt="Logo" className="h-10 w-10 object-cover" />
             </div>
           </div>
@@ -93,7 +93,7 @@ export default function AuthModal({ onClose, onLoginSuccess }) {
             <button 
               type="submit"
               disabled={loading}
-              className="group relative w-full mt-8 overflow-hidden rounded-xl bg-[#8341EF] py-4 text-sm font-black text-white shadow-[0_0_20px_rgba(131,65,239,0.3)] transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(131,65,239,0.5)] disabled:opacity-50 disabled:hover:scale-100"
+              className="group relative w-full mt-8 overflow-hidden rounded-xl bg-[#8341EF] hover:bg-[#7231dd] py-4 text-sm font-black text-white transition-all duration-300 hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
             >
               <div className="absolute inset-0 flex h-full w-full justify-center [transform:skew(-12deg)_translateX(-150%)] group-hover:duration-1000 group-hover:[transform:skew(-12deg)_translateX(150%)]">
                 <div className="relative h-full w-8 bg-white/20" />

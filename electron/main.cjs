@@ -522,14 +522,14 @@ function registerDesktopIpc() {
     });
   });
 
-  ipcMain.handle("amymusic:start-update", async () => {
+  ipcMain.handle("amymusic:start-update", async (_event, customUrl) => {
     return new Promise((resolve) => {
       const targetPath = path.join(os.tmpdir(), "AmyMusic-Setup-Update.exe");
       const fileStream = fs.createWriteStream(targetPath);
 
       const downloadFile = (url) => {
         const protocol = url.startsWith("https") ? https : http;
-        protocol.get(url, (res) => {
+        protocol.get(url, { headers: { "User-Agent": "AmyMusic-Desktop" } }, (res) => {
           if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
             return downloadFile(res.headers.location);
           }
@@ -567,7 +567,8 @@ function registerDesktopIpc() {
         });
       };
 
-      downloadFile("https://amymusic.ru/downloads/AmyMusic-0.1.0-Setup.exe");
+      const finalUrl = customUrl || "https://github.com/sergetik52/AmyMusic/releases/download/v0.1.0/AmyMusic-0.1.0-Setup.exe";
+      downloadFile(finalUrl);
     });
   });
 
