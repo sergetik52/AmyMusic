@@ -852,14 +852,18 @@ export function AudioProvider({ children }) {
       const safeDuration = Number.isFinite(audio.duration) ? audio.duration : 0;
       const safeCurrentTime = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
 
-      // Only ignore ended events that fire VERY early (< 25 s into playback).
-      // Allowing currentTime >= 25 means 30-second HLS snippets always advance
-      // to the next track even when the manifest reports the full track duration.
-      if (safeDuration > 2 && safeCurrentTime < safeDuration - 0.75 && safeCurrentTime < 25) {
-        logDebug("audio", "ignored early ended event", {
+      // A track is genuinely ended ONLY if it reached the end of duration (within 2s)
+      // or if it's a 30-second HLS snippet (duration <= 35s and currentTime >= 25s).
+      const isShortSnippet = safeDuration <= 35 && safeCurrentTime >= 25;
+      const isNearEnd = safeDuration > 2 && safeCurrentTime >= safeDuration - 2.0;
+
+      if (!isNearEnd && !isShortSnippet) {
+        logDebug("audio", "ignored false ended event (buffer underflow)", {
           currentTime: safeCurrentTime,
           duration: safeDuration
         });
+        // Resume playback seamlessly without restarting from 0
+        audio.play().catch(() => {});
         return;
       }
 
@@ -1085,6 +1089,21 @@ export function AudioProvider({ children }) {
         hls.loadSource(streamUrl);
         hls.attachMedia(audio);
         audio.volume = targetVolume;
+
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                hls.recoverMediaError();
+                break;
+              default:
+                break;
+            }
+          }
+        });
 
         if (shouldPlay) {
           await new Promise((resolve, reject) => {
