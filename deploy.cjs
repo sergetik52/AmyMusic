@@ -108,12 +108,7 @@ conn.on('ready', () => {
         await uploadDir(sftp, distDir, '/var/www/amymusic/dist');
         console.log('  ✓ Uploaded dist/ successfully');
 
-        const downloadsDir = path.join(__dirname, 'downloads');
-        if (fs.existsSync(downloadsDir)) {
-          console.log('📤 Uploading setup downloads folder...');
-          await uploadDir(sftp, downloadsDir, '/var/www/amymusic/downloads');
-          console.log('  ✓ Uploaded downloads/ successfully');
-        }
+        // Setup files are served directly via GitHub Releases CDN redirect
 
         console.log('⚙️ Configuring Nginx & SSL for amymusic.ru...');
         setupNginxAndStart();

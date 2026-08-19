@@ -559,9 +559,9 @@ function registerDesktopIpc() {
             fileStream.close(() => {
               try {
                 const child_process = require("node:child_process");
-                child_process.spawn(targetPath, [], { detached: true, stdio: "ignore" }).unref();
+                child_process.spawn(targetPath, ["/S"], { detached: true, stdio: "ignore" }).unref();
                 isQuitting = true;
-                setTimeout(() => app.quit(), 500);
+                setTimeout(() => app.quit(), 300);
                 resolve({ success: true });
               } catch (err) {
                 console.error("[AmyMusic] Failed to launch installer:", err);

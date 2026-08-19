@@ -1,7 +1,7 @@
 {
   "name": "amymusic1",
   "private": true,
-  "version": "0.1.10",
+  "version": "0.1.11",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -41,9 +41,11 @@
       "artifactName": "AmyMusic-${version}-Setup.${ext}"
     },
     "nsis": {
-      "oneClick": false,
+      "oneClick": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
     }
   },
   "dependencies": {
