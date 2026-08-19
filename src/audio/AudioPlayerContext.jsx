@@ -1072,8 +1072,15 @@ export function AudioProvider({ children }) {
       });
 
       if (isHlsStream && Hls.isSupported()) {
-        // Play HLS stream via hls.js (uses MSE internally)
-        const hls = new Hls({ enableWorker: false, lowLatencyMode: false });
+        // Play HLS stream via hls.js with strict memory buffer limits
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+          maxBufferLength: 20,
+          maxMaxBufferLength: 30,
+          maxBufferSize: 8 * 1024 * 1024,
+          maxBufferHole: 0.5
+        });
         hlsRef.current = hls;
         hls.loadSource(streamUrl);
         hls.attachMedia(audio);

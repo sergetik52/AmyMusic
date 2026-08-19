@@ -815,6 +815,8 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      spellcheck: false,
+      backgroundThrottling: true,
       preload: path.join(__dirname, "preload.cjs"),
       additionalArguments: [`--amymusic-proxy-port=${proxyPort}`]
     }
@@ -836,14 +838,32 @@ function createWindow() {
   });
 
   mainWindow.on("minimize", (event) => {
+    if (mainWindow.webContents) {
+      mainWindow.webContents.setFrameRate(15);
+    }
     if (!isTrayEnabled) return;
     event.preventDefault();
     mainWindow.hide();
   });
 
+  mainWindow.on("restore", () => {
+    if (mainWindow.webContents) {
+      mainWindow.webContents.setFrameRate(60);
+    }
+  });
+
+  mainWindow.on("show", () => {
+    if (mainWindow.webContents) {
+      mainWindow.webContents.setFrameRate(60);
+    }
+  });
+
   mainWindow.on("close", (event) => {
     if (!isTrayEnabled || isQuitting) return;
     event.preventDefault();
+    if (mainWindow.webContents) {
+      mainWindow.webContents.setFrameRate(15);
+    }
     mainWindow.hide();
   });
 
@@ -857,14 +877,20 @@ function createWindow() {
 }
 
 // ─── Performance & Memory Optimizations ──────────────────────────────
-// Limit the number of renderer processes to drastically reduce overhead
+// Limit renderer process count to 1 for massive RAM savings
 app.commandLine.appendSwitch("renderer-process-limit", "1");
-// Disable site isolation for massive RAM savings in single-window apps
+// Disable site isolation for single-window desktop app
 app.commandLine.appendSwitch("disable-site-isolation-trials");
-// Limit V8 heap memory size to 256MB to prevent memory bloat over time
-app.commandLine.appendSwitch("js-flags", "--max-old-space-size=256");
-// Avoid calculating window occlusion to prevent CPU spikes in background
-app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+// Limit V8 JS heap memory footprint to 128MB max & enable GC
+app.commandLine.appendSwitch("js-flags", "--max-old-space-size=128 --expose-gc");
+// Avoid calculating window occlusion and media key overhead in background
+app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion,HardwareMediaKeyHandling,MediaSessionService");
+// Disable unused Chromium background services to minimize CPU/RAM usage
+app.commandLine.appendSwitch("disable-breakpad");
+app.commandLine.appendSwitch("disable-[#component-update]");
+app.commandLine.appendSwitch("disable-domain-reliability");
+app.commandLine.appendSwitch("disable-speech-api");
+app.commandLine.appendSwitch("disable-synced-preferences");
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
