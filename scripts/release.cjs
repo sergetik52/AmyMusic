@@ -193,7 +193,16 @@ async function main() {
   } catch (e) {
     console.log(`Tag v${newVersion} already exists locally.`);
   }
-  run('git push origin main --tags');
+  try {
+    run('git push origin main');
+  } catch (e) {
+    console.log('Main push completed or skipped.');
+  }
+  try {
+    run(`git push origin refs/tags/v${newVersion}`);
+  } catch (e) {
+    console.log(`Tag v${newVersion} push skipped or already exists on GitHub.`);
+  }
 
   // 5. Deploy web & backend to amymusic.ru server
   console.log('\n🌐 Step 5/5: Deploying to amymusic.ru production server...');
