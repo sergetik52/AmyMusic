@@ -10,6 +10,7 @@ import { TrackMenuButton } from "./components/TrackContextMenu";
 import AuthModal from "./components/AuthModal";
 import { AvatarCropperModal } from "./components/AvatarCropperModal";
 import { EqualizerModal } from "./components/EqualizerModal";
+import { MyWaveSetupModal } from "./components/MyWaveSetupModal";
 import { getUsername, removeAuthToken, getCollections, syncCollections, getWave, syncWave, getProfile, updateProfile, changePassword } from "./api";
 import {
   buildArtistsFromTracks,
@@ -2277,7 +2278,7 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case "wave": 
-        return currentUser ? <WaveView requestId={waveRequestId} onOpenFull={() => setIsFullOpen(true)} /> : renderAuthRequired("Моя волна недоступна", "Авторизуйтесь, чтобы слушать вашу персональную музыкальную волну и сохранять историю.");
+        return currentUser ? <WaveView requestId={waveRequestId} onOpenFull={() => setIsFullOpen(true)} onOpenSetup={() => setShowMyWaveSetup(true)} /> : renderAuthRequired("Моя волна недоступна", "Авторизуйтесь, чтобы слушать вашу персональную музыкальную волну и сохранять историю.");
       case "collection": 
         return currentUser ? <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} /> : renderAuthRequired("Коллекция недоступна", "Войдите в свой аккаунт, чтобы сохранять любимые треки в облако и слушать их на любом устройстве.");
       case "trends": return <TrendsPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
@@ -2348,6 +2349,15 @@ export default function App() {
         <AuthModal 
           onClose={() => setShowAuthModal(false)}
           onLoginSuccess={handleLoginSuccess}
+        />
+      )}
+      {showMyWaveSetup && (
+        <MyWaveSetupModal
+          isOpen={showMyWaveSetup}
+          onClose={() => setShowMyWaveSetup(false)}
+          onComplete={(payload) => {
+            console.log("MyWave setup completed:", payload);
+          }}
         />
       )}
     </main>

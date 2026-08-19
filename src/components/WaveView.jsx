@@ -200,7 +200,7 @@ function WaveVolumeControl({ effectiveVolume, setVolume }) {
   );
 }
 
-export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
+export function WaveView({ requestId: _requestId = 0, onOpenFull, onOpenSetup }) {
   const {
     currentTrack,
     trackPalette,
@@ -369,6 +369,21 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
       <div className="song-wave-backdrop" />
       <WaveField audioEnergy={audioEnergy} isPlaying={isPlaying} />
       <div className="song-wave-vignette" />
+
+      {/* SETUP MY WAVE BUTTON */}
+      {onOpenSetup && (
+        <button
+          type="button"
+          onClick={onOpenSetup}
+          title="Калибровка Моей волны"
+          className="absolute top-6 right-6 z-20 flex items-center gap-2 rounded-2xl border border-[#FFCC00]/30 bg-black/60 px-4 py-2 text-xs font-black uppercase tracking-wider text-[#FFCC00] backdrop-blur-md transition hover:bg-[#FFCC00] hover:text-black hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,204,0,0.2)]"
+        >
+          <svg className="h-4 w-4 fill-current animate-pulse" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/>
+          </svg>
+          <span>Настроить «Мою волну»</span>
+        </button>
+      )}
       <button
         type="button"
         onClick={onOpenFull}
