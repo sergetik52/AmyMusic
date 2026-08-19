@@ -404,9 +404,14 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
           <button
             type="button"
             onClick={onOpenFull}
-            className="min-w-0 truncate text-center transition hover:text-white/85"
+            className="min-w-0 flex flex-col items-center justify-center text-center transition hover:opacity-90 px-1 overflow-hidden"
           >
-            {currentTrack.title}
+            <span className="w-full truncate text-sm font-bold text-white leading-tight">
+              {currentTrack.title || "Моя волна"}
+            </span>
+            <span className="w-full truncate text-[11px] font-semibold text-white/50 leading-tight mt-0.5">
+              {currentTrack.artist || "AmyMusic"}
+            </span>
           </button>
           <WaveVolumeControl effectiveVolume={effectiveVolume} setVolume={setVolume} />
         </div>
