@@ -400,7 +400,14 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
 
       <div className="absolute bottom-12 left-1/2 z-20 flex w-full max-w-lg -translate-x-1/2 flex-col items-center gap-6">
         <div className="grid min-h-[58px] w-full grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-3 rounded-full border border-white/10 bg-black/45 px-3 py-2 text-sm font-semibold text-white shadow-2xl backdrop-blur-md transition hover:border-white/20 hover:bg-black/55">
-          <span className="h-11 w-11" />
+          <button
+            type="button"
+            onClick={onOpenFull}
+            className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-white/15 shadow-md transition hover:scale-105 active:scale-95"
+            title="Открыть плеер"
+          >
+            <img src={currentTrack.cover} alt="" className="h-full w-full object-cover" />
+          </button>
           <button
             type="button"
             onClick={onOpenFull}
