@@ -1,3 +1,111 @@
+// Custom Native Discord IPC Socket Engine (Auto Pipe Discovery 0-9)
+const net = require("node:net");
+
+let discordIpcSocket = null;
+let isDiscordIpcReady = false;
+const DISCORD_CLIENT_ID = "1345409409240797194";
+
+function getDiscordPipePath(index = 0) {
+  if (process.platform === "win32") {
+    return `\\\\.\\pipe\\discord-ipc-${index}`;
+  }
+  const env = process.env;
+  const pathPrefix = env.XDG_RUNTIME_DIR || env.TMPDIR || env.TMP || env.TEMP || "/tmp";
+  return `${pathPrefix}/discord-ipc-${index}`;
+}
+
+function connectDiscordIpc(index = 0) {
+  if (index > 9) {
+    console.log("[AmyMusic] Could not find an active Discord IPC socket (0-9)");
+    setTimeout(() => connectDiscordIpc(0), 10000);
+    return;
+  }
+
+  const pipePath = getDiscordPipePath(index);
+  const socket = net.createConnection(pipePath, () => {
+    console.log(`[AmyMusic] Connected to Discord IPC Pipe ${index}`);
+    discordIpcSocket = socket;
+
+    // Send Handshake (Opcode 0)
+    const handshake = JSON.stringify({ v: 1, client_id: DISCORD_CLIENT_ID });
+    const hsHeader = Buffer.alloc(8);
+    hsHeader.writeInt32LE(0, 0);
+    hsHeader.writeInt32LE(Buffer.byteLength(handshake), 4);
+    socket.write(Buffer.concat([hsHeader, Buffer.from(handshake)]));
+  });
+
+  socket.on("data", (data) => {
+    try {
+      const opcode = data.readInt32LE(0);
+      const length = data.readInt32LE(4);
+      const body = data.slice(8, 8 + length).toString();
+      if (opcode === 1) {
+        const parsed = JSON.parse(body);
+        if (parsed.cmd === "DISPATCH" && parsed.evt === "READY") {
+          isDiscordIpcReady = true;
+          console.log("[AmyMusic] Discord IPC handshake READY!");
+        }
+      }
+    } catch {}
+  });
+
+  socket.on("error", () => {
+    if (discordIpcSocket === socket) {
+      discordIpcSocket = null;
+      isDiscordIpcReady = false;
+    }
+    connectDiscordIpc(index + 1);
+  });
+
+  socket.on("close", () => {
+    if (discordIpcSocket === socket) {
+      discordIpcSocket = null;
+      isDiscordIpcReady = false;
+      setTimeout(() => connectDiscordIpc(0), 5000);
+    }
+  });
+}
+
+function sendDiscordIpcActivity(activity) {
+  if (!discordIpcSocket || !isDiscordIpcReady) return false;
+
+  try {
+    const activityPayload = {
+      cmd: "SET_ACTIVITY",
+      args: {
+        pid: process.pid,
+        activity: activity ? {
+          type: 2, // 2 = LISTENING ("Слушает AmyMusic")
+          details: activity.details || "Unknown Track",
+          state: activity.state || "Unknown Artist",
+          assets: {
+            large_image: activity.largeImageKey || "amymusic",
+            large_text: activity.largeImageText || activity.details || "AmyMusic",
+            small_image: activity.smallImageKey || "soundcloud",
+            small_text: activity.smallImageText || "SoundCloud"
+          },
+          timestamps: (activity.startTimestamp || activity.endTimestamp) ? {
+            start: activity.startTimestamp ? Number(activity.startTimestamp) : undefined,
+            end: activity.endTimestamp ? Number(activity.endTimestamp) : undefined
+          } : undefined
+        } : null
+      },
+      nonce: String(Math.random())
+    };
+
+    const frame = JSON.stringify(activityPayload);
+    const header = Buffer.alloc(8);
+    header.writeInt32LE(1, 0); // Opcode 1 = Frame
+    header.writeInt32LE(Buffer.byteLength(frame), 4);
+    discordIpcSocket.write(Buffer.concat([header, Buffer.from(frame)]));
+    return true;
+  } catch (err) {
+    console.error("[AmyMusic] sendDiscordIpcActivity error:", err);
+    return false;
+  }
+}
+
+
 const { app, BrowserWindow, ipcMain, Menu, protocol, Tray } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -593,43 +701,8 @@ function registerDesktopIpc() {
   });
 
   ipcMain.handle("amymusic:set-discord-activity", async (_event, activity) => {
-    if (!isRpcReady || !rpc) return false;
     try {
-      if (!activity) {
-        await rpc.clearActivity();
-      } else {
-        let imageKey = activity.largeImageKey || "amymusic";
-
-        if (activity.largeImageKey && activity.largeImageKey.startsWith("http")) {
-          try {
-            const externalPath = await registerDiscordExternalAsset(activity.largeImageKey);
-            if (externalPath) {
-              imageKey = externalPath;
-            }
-          } catch {}
-        }
-
-        const activityPayload = {
-          type: 2,
-          details: activity.details || "Unknown Track",
-          state: activity.state || "Unknown Artist",
-          largeImageKey: imageKey,
-          largeImageText: activity.largeImageText || activity.details || "AmyMusic",
-          smallImageKey: activity.smallImageKey || "soundcloud",
-          smallImageText: activity.smallImageText || "SoundCloud",
-          instance: false
-        };
-
-        if (activity.startTimestamp) {
-          activityPayload.startTimestamp = Number(activity.startTimestamp);
-        }
-        if (activity.endTimestamp) {
-          activityPayload.endTimestamp = Number(activity.endTimestamp);
-        }
-
-        await rpc.setActivity(activityPayload);
-      }
-      return true;
+      return sendDiscordIpcActivity(activity);
     } catch (err) {
       console.error("[AmyMusic] Failed to set Discord activity:", err);
       return false;
@@ -974,7 +1047,7 @@ app.commandLine.appendSwitch("disable-synced-preferences");
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
-  setupDiscordRpc();
+  connectDiscordIpc(0);
   registerDesktopIpc();
   registerFileAssetFallback();
   await startProxyServer();

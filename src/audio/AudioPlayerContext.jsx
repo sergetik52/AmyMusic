@@ -2068,7 +2068,7 @@ export function AudioProvider({ children }) {
     return subscribeProfileSettings(setProfileSettings);
   }, []);
 
-    useEffect(() => {
+      useEffect(() => {
     if (profileSettings?.discordRpcEnabled !== false && isPlaying && currentTrack) {
       const nowMs = Date.now();
       const startTimestamp = nowMs - Math.floor((currentTime || 0) * 1000);
