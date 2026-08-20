@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import https from "node:https";
+import http from "node:http";
 import { defineConfig, loadEnv } from "vite";
 
 function readRequestBody(req) {
@@ -18,7 +19,8 @@ function requestUpstream(upstreamUrl, req, proxy, extraHeaders = {}) {
       ? undefined
       : await readRequestBody(req);
 
-    const upstream = https.request(
+    const transport = upstreamUrl.protocol === "http:" ? http : https;
+    const upstream = transport.request(
       upstreamUrl,
       {
         method: req.method,
@@ -29,8 +31,6 @@ function requestUpstream(upstreamUrl, req, proxy, extraHeaders = {}) {
           accept: "application/json, text/plain, */*",
           "accept-encoding": "identity",
           "accept-language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-          origin: "https://soundcloud.com",
-          referer: "https://soundcloud.com/",
           "user-agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
           ...extraHeaders
@@ -345,6 +345,70 @@ function createSoundCloudProxyPlugin(env) {
   };
 }
 
+function createYandexProxyPlugin() {
+  return {
+    name: "amymusic-yandex-proxy",
+    configureServer(server) {
+      server.middlewares.use("/api/yandex", async (req, res) => {
+        const upstreamUrl = new URL(req.url || "/", "https://api.music.yandex.net");
+        try {
+          const response = await requestUpstream(upstreamUrl, req, null, {
+            "user-agent": "YandexMusicAndroid/24023241",
+            "client-id": "23cabbbdc6cd418abb4b39c32c41195d"
+          });
+          res.statusCode = response.statusCode;
+          Object.entries(response.headers).forEach(([key, value]) => {
+            if (!["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+              res.setHeader(key, value);
+            }
+          });
+          res.end(response.body);
+        } catch (error) {
+          console.error("[AmyMusic:yandex-proxy] failed", error);
+          res.statusCode = 502;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ error: "YANDEX_PROXY_FAILED", message: error.message }));
+        }
+      });
+    }
+  };
+}
+
+function createApiProxyPlugin() {
+  return {
+    name: "amymusic-api-proxy",
+    configureServer(server) {
+      const handleProxy = async (req, res, prefix) => {
+        const fullPath = `${prefix}${req.url || ""}`;
+        const targetHost = process.env.VITE_BACKEND_TARGET || "https://amymusic.ru";
+        const upstreamUrl = new URL(fullPath, targetHost);
+        try {
+          const response = await requestUpstream(upstreamUrl, req, null, {
+            host: upstreamUrl.host
+          });
+          res.statusCode = response.statusCode;
+          Object.entries(response.headers).forEach(([key, value]) => {
+            if (!["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+              res.setHeader(key, value);
+            }
+          });
+          res.end(response.body);
+        } catch (error) {
+          console.error(`[AmyMusic:api-proxy] ${prefix} proxy failed`, error);
+          res.statusCode = 502;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ error: "API_PROXY_FAILED", message: error.message }));
+        }
+      };
+
+      server.middlewares.use("/api/auth", (req, res) => handleProxy(req, res, "/api/auth"));
+      server.middlewares.use("/api/sync", (req, res) => handleProxy(req, res, "/api/sync"));
+      server.middlewares.use("/api/track", (req, res) => handleProxy(req, res, "/api/track"));
+      server.middlewares.use("/api/rating", (req, res) => handleProxy(req, res, "/api/rating"));
+    }
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
@@ -354,6 +418,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true
     },
-    plugins: [react(), createSoundCloudProxyPlugin(env)]
+    plugins: [react(), createSoundCloudProxyPlugin(env), createYandexProxyPlugin(), createApiProxyPlugin()]
   };
 });
+

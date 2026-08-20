@@ -12,12 +12,87 @@ import {
   hydrateSoundCloudTracks,
   normalizeTrackMetadata,
   resolveStreamUrl,
+  searchTracks,
   getTrackWaveTracks
 } from "../services/soundCloudApi";
+import { resolveYandexTrackStream } from "../services/yandexMusicApi";
 import { getPlayerRuntimeSettings, subscribeProfileSettings } from "../services/profileSettings";
 import { syncCollections, syncWave, getUsername } from "../api";
 import { logDebug, logWarn } from "../utils/logger";
 import Hls from "hls.js";
+
+async function resolveChartTrackViaSoundCloud(track) {
+  const queries = [
+    `${track.artist} ${track.title}`.trim(),
+    `${track.title} ${track.artist}`.trim(),
+    track.title?.trim()
+  ].filter(Boolean);
+
+  for (const query of queries) {
+    try {
+      const matches = await searchTracks(query);
+      if (matches && matches.length > 0) {
+        for (const match of matches.slice(0, 5)) {
+          try {
+            const scStreamUrl = await resolveStreamUrl(match);
+            if (scStreamUrl) {
+              logDebug("audio", "Resolved Yandex chart track via SoundCloud API", {
+                query,
+                matchedScTitle: match.title,
+                scStreamUrl
+              });
+              return scStreamUrl;
+            }
+          } catch (resErr) {
+            // continue testing next SoundCloud match
+          }
+        }
+      }
+    } catch (searchErr) {
+      logWarn("audio", `SoundCloud search failed for query "${query}"`, searchErr);
+    }
+  }
+  return null;
+}
+
+async function getTrackAudioUrl(track) {
+  if (!track) return "";
+
+  if (
+    track.streamUrl &&
+    !track.streamUrl.includes("api-v2.soundcloud.com") &&
+    !track.streamUrl.includes("/api/soundcloud") &&
+    !track.streamUrl.includes("api.soundcloud.com")
+  ) {
+    return track.streamUrl;
+  }
+
+  if (track.source === "yandex" || String(track.id).startsWith("yandex_") || track.yandexId) {
+    const scStreamUrl = await resolveChartTrackViaSoundCloud(track);
+    if (scStreamUrl) {
+      track.streamUrl = scStreamUrl;
+      return scStreamUrl;
+    }
+
+    try {
+      const resolvedUrl = await resolveYandexTrackStream(track.yandexId || track.id);
+      if (resolvedUrl) {
+        track.streamUrl = resolvedUrl;
+        return resolvedUrl;
+      }
+    } catch (yandexErr) {
+      logWarn("audio", "Direct Yandex stream resolution failed", yandexErr);
+    }
+
+    throw new Error("Не удалось загрузить аудиопоток для трека");
+  }
+
+  const resolvedUrl = await resolveStreamUrl(track);
+  if (resolvedUrl) {
+    track.streamUrl = resolvedUrl;
+  }
+  return resolvedUrl;
+}
 
 const AudioPlayerContext = createContext(null);
 
@@ -816,6 +891,9 @@ export function AudioProvider({ children }) {
     const handleTimeUpdate = () => {
       const now = audio.currentTime || 0;
       const prev = lastTimeRef.current;
+      if (now > 0) {
+        setIsLoading(false);
+      }
       // Only count time if not seeking and progressing naturally
       if (!isSeekingRef.current && now > prev && now - prev < 2) {
         setTotalListenedSeconds((s) => s + (now - prev));
@@ -830,16 +908,26 @@ export function AudioProvider({ children }) {
     const handlePlay = () => {
       logDebug("audio", "play event", { src: audio.src });
       setIsPlaying(true);
+      setIsLoading(false);
       startAudioAnalysis();
+    };
+    const handlePlaying = () => {
+      logDebug("audio", "playing event");
+      setIsPlaying(true);
+      setIsLoading(false);
     };
     const handlePause = () => {
       logDebug("audio", "pause event");
       setIsPlaying(false);
+      setIsLoading(false);
       stopAudioAnalysis();
     };
     const handleWaiting = () => {
       logDebug("audio", "waiting event");
-      setIsLoading(true);
+      // Only show loading if actually waiting/buffering
+      if (audio.paused) {
+        setIsLoading(true);
+      }
     };
     const handleCanPlay = () => {
       logDebug("audio", "canplay event");
@@ -936,10 +1024,33 @@ export function AudioProvider({ children }) {
           return index;
         });
       } else {
+        const track = currentTrackRef.current;
+        if (track && (track.yandexId || String(track.id).startsWith("yandex_"))) {
+          logWarn("audio", "Audio element error for chart track, attempting direct stream recovery", { id: track.id });
+          track.streamUrl = null;
+          resolveYandexTrackStream(track.yandexId || track.id)
+            .then((directUrl) => {
+              if (directUrl && audioRef.current) {
+                track.streamUrl = directUrl;
+                loadedStreamUrlRef.current = directUrl;
+                audioRef.current.src = directUrl;
+                audioRef.current.play().catch(() => {
+                  setIsPlaying(false);
+                  setError("Не удалось загрузить аудиопоток");
+                });
+              }
+            })
+            .catch(() => {
+              setIsPlaying(false);
+              setError("Не удалось загрузить аудиопоток");
+            });
+          return;
+        }
+
         setIsPlaying(false);
         setError("Не удалось загрузить аудиопоток");
       }
-    };;
+    };
 
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("seeking", handleSeeking);
@@ -947,9 +1058,11 @@ export function AudioProvider({ children }) {
     audio.addEventListener("durationchange", handleDurationChange);
     audio.addEventListener("loadedmetadata", handleDurationChange);
     audio.addEventListener("play", handlePlay);
+    audio.addEventListener("playing", handlePlaying);
     audio.addEventListener("pause", handlePause);
     audio.addEventListener("waiting", handleWaiting);
     audio.addEventListener("canplay", handleCanPlay);
+    audio.addEventListener("canplaythrough", handleCanPlay);
     audio.addEventListener("ended", handleEnded);
     audio.addEventListener("error", handleError);
 
@@ -968,9 +1081,11 @@ export function AudioProvider({ children }) {
       audio.removeEventListener("durationchange", handleDurationChange);
       audio.removeEventListener("loadedmetadata", handleDurationChange);
       audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("playing", handlePlaying);
       audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("waiting", handleWaiting);
       audio.removeEventListener("canplay", handleCanPlay);
+      audio.removeEventListener("canplaythrough", handleCanPlay);
       audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("error", handleError);
       audioContextRef.current?.close?.();
@@ -1026,7 +1141,7 @@ export function AudioProvider({ children }) {
         title: track.title,
         shouldPlay
       });
-      const streamUrl = await resolveStreamUrl(track);
+      const streamUrl = await getTrackAudioUrl(track);
       if (requestId !== loadRequestIdRef.current) {
         logDebug("audio", "loadTrack:stale-request", {
           id: track.id,

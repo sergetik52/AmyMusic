@@ -9,3 +9,4 @@ out/
 .DS_Store
 postman/.dependencies/
 downloads/*.exe
+scratch/

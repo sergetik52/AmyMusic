@@ -2,6 +2,9 @@ import { logDebug, logWarn } from "../utils/logger.js";
 import { getSoundCloudRuntimeSettings } from "./profileSettings.js";
 
 function getSoundCloudApiBase() {
+  if (typeof window === "undefined") {
+    return "https://api-v2.soundcloud.com";
+  }
   const proxyPort = new URLSearchParams(window.location.search).get("amymusicProxyPort");
 
   return window.amyMusicConfig?.soundCloudApiBase ||
@@ -81,9 +84,16 @@ function toApiUrl(pathOrUrl) {
   return pathOrUrl;
 }
 
+function getWindowOrigin() {
+  if (typeof window !== "undefined" && window.location?.origin && window.location.origin.startsWith("http")) {
+    return window.location.origin;
+  }
+  return "https://api-v2.soundcloud.com";
+}
+
 function withClientId(pathOrUrl) {
   const proxiedUrl = toApiUrl(pathOrUrl);
-  const url = new URL(proxiedUrl, window.location.origin);
+  const url = new URL(proxiedUrl, getWindowOrigin());
   applyRuntimeSettings(url);
   return toFetchUrl(url);
 }
@@ -868,7 +878,7 @@ export async function resolveStreamUrl(track) {
 export async function searchTracks(query) {
   assertClientId();
 
-  const url = new URL(`${getSoundCloudApiBase()}/search/tracks`, window.location.origin);
+  const url = new URL(`${getSoundCloudApiBase()}/search/tracks`, getWindowOrigin());
   url.searchParams.set("q", query);
   applyRuntimeSettings(url);
   url.searchParams.set("limit", "20");
@@ -880,7 +890,7 @@ export async function searchTracks(query) {
 async function searchTracksLimited(query, limit = 12) {
   assertClientId();
 
-  const url = new URL(`${getSoundCloudApiBase()}/search/tracks`, window.location.origin);
+  const url = new URL(`${getSoundCloudApiBase()}/search/tracks`, getWindowOrigin());
   url.searchParams.set("q", query);
   applyRuntimeSettings(url);
   url.searchParams.set("limit", String(limit));

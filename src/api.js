@@ -1,6 +1,8 @@
-const API_URL = typeof window !== 'undefined' && window.location.origin.startsWith('http') && !window.location.origin.includes('localhost')
-  ? `${window.location.origin}/api`
-  : 'https://amymusic.ru/api';
+const API_URL = import.meta.env?.VITE_API_URL || (
+  typeof window !== 'undefined' && window.location.origin.startsWith('http')
+    ? `${window.location.origin}/api`
+    : 'https://amymusic.ru/api'
+);
 
 export const getAuthToken = () => localStorage.getItem('amymusic_token');
 export const setAuthToken = (token) => localStorage.setItem('amymusic_token', token);
@@ -23,10 +25,15 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
     options.body = JSON.stringify(body);
   }
 
-  const res = await fetch(`${API_URL}${endpoint}`, options);
+  let res;
+  try {
+    res = await fetch(`${API_URL}${endpoint}`, options);
+  } catch (err) {
+    throw new Error('Ошибка сети: не удалось подключиться к серверу авторизации');
+  }
   
   if (!res.ok) {
-    let errorMsg = 'API Error';
+    let errorMsg = 'Ошибка сервера авторизации';
     try {
       const errorData = await res.json();
       errorMsg = errorData.error || errorMsg;

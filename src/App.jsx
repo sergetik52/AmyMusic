@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Component } from "react";
 import { WaveView } from "./components/WaveView";
@@ -22,6 +22,7 @@ import {
   searchPlaylists,
   searchTracks
 } from "./services/soundCloudApi";
+import { getYandexChartTop100 } from "./services/yandexMusicApi";
 import {
   getProfileSettings,
   saveProfileSettings,
@@ -1565,142 +1566,191 @@ function SearchPanel({ onOpenArtist }) {
   );
 }
 
+function formatListeners(count) {
+  if (!count || count <= 0) return null;
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)} млн`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)} тыс.`;
+  return `${count}`;
+}
+
+function ChartPositionBadge({ position, progress, shift }) {
+  const isTop1 = position === 1;
+  const isTop2 = position === 2;
+  const isTop3 = position === 3;
+
+  return (
+    <div className="flex flex-col items-center justify-center w-10 shrink-0 select-none">
+      <span
+        className={[
+          "text-sm font-black transition-colors",
+          isTop1
+            ? "text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]"
+            : isTop2
+            ? "text-slate-300 drop-shadow-[0_0_6px_rgba(203,213,225,0.4)]"
+            : isTop3
+            ? "text-amber-600 drop-shadow-[0_0_6px_rgba(217,119,6,0.4)]"
+            : "text-white/40 group-hover:text-white/80"
+        ].join(" ")}
+      >
+        {position}
+      </span>
+      {progress === "up" && (
+        <span className="flex items-center text-[10px] font-bold text-emerald-400 leading-none mt-0.5">
+          <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24"><path d="M12 4l-8 8h6v8h4v-8h6z"/></svg>
+          {shift > 0 ? shift : ""}
+        </span>
+      )}
+      {progress === "down" && (
+        <span className="flex items-center text-[10px] font-bold text-rose-400 leading-none mt-0.5">
+          <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24"><path d="M12 20l8-8h-6v-8h-4v8h-6z"/></svg>
+          {shift > 0 ? shift : ""}
+        </span>
+      )}
+      {progress === "new" && (
+        <span className="text-[9px] font-black tracking-wider uppercase text-purple-400 bg-purple-500/20 px-1 py-0.2 rounded mt-0.5">
+          NEW
+        </span>
+      )}
+      {progress === "same" && (
+        <span className="text-[12px] font-bold text-white/20 leading-none mt-0.5">•</span>
+      )}
+    </div>
+  );
+}
+
 function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
-  const {
-    currentTrack,
-    likedTracks,
-    dislikedTrackIds,
-    dislikedTracks,
-    playHistory,
-    playTrack
-  } = useAudioPlayer();
+  const { playTrack } = useAudioPlayer();
   const [tracks, setTracks] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadTrends() {
-      setIsLoading(true);
-      setError("");
-      try {
-        let results = [];
-        let loadedFromChart = false;
-
-        if (window.amyMusicDesktop?.getBandlinkChart) {
-          try {
-            const chartData = await window.amyMusicDesktop.getBandlinkChart();
-            if (chartData && chartData.length > 0) {
-              const searchPromises = chartData.map(async (item) => {
-                try {
-                  const query = `${item.artist} ${item.title}`.trim();
-                  const matched = await searchTracks(query);
-                  return matched && matched.length > 0 ? matched[0] : null;
-                } catch (err) {
-                  return null;
-                }
-              });
-              const scTracks = await Promise.all(searchPromises);
-              results = scTracks.filter(Boolean);
-              if (results.length > 20) {
-                results = results.slice(0, 20);
-              }
-              if (results.length > 0) {
-                loadedFromChart = true;
-              }
-            }
-          } catch (chartErr) {
-            console.warn("Failed to load Bandlink chart, falling back to recommendations", chartErr);
-          }
-        }
-
-        if (!loadedFromChart) {
-          results = await getPersonalWaveTracks({
-            likedTracks,
-            dislikedTrackIds,
-            dislikedTracks,
-            playHistory,
-            currentTrack
-          });
-
-          if (!results.length) {
-            results = await getRecommendedTracks();
-          }
-        }
-
-        if (isMounted) setTracks(results);
-      } catch (loadError) {
-        if (isMounted) setError(loadError.message || "Не удалось загрузить тренды");
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
+  const loadYandexChart = useCallback(async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const top100 = await getYandexChartTop100();
+      setTracks(top100);
+    } catch (err) {
+      console.error("Failed to load Yandex Music Chart Top 100", err);
+      setError(err.message || "Не удалось загрузить чарт Яндекс Музыки");
+    } finally {
+      setIsLoading(false);
     }
+  }, []);
 
-    loadTrends();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [currentTrack, dislikedTrackIds, likedTracks, playHistory]);
+  useEffect(() => {
+    loadYandexChart();
+  }, [loadYandexChart]);
 
   return (
     <section className="flex-1 overflow-y-auto rounded-[17.76px] border border-white/[0.04] bg-[#121212] p-[26.6px] shadow-2xl">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-white/5 pb-5">
         <div>
-          <h2 className="text-2xl font-black tracking-tight text-white">Тренды и Чарты</h2>
-          <p className="mt-1 text-sm font-semibold text-white/35">Самые популярные треки на основе реальных чартов.</p>
+          <h2 className="text-2xl font-black tracking-tight text-white">Топ-100</h2>
+          <p className="mt-1 text-sm font-semibold text-white/40">
+            Самые популярные треки прямо сейчас.
+          </p>
         </div>
-        <span className="text-xs font-semibold text-white/30">
-          {isLoading ? "загрузка" : `${tracks.length} треков`}
-        </span>
+
+        <div className="flex items-center gap-3">
+          {tracks.length > 0 && (
+            <button
+              type="button"
+              onClick={() => playTrack(tracks[0], tracks)}
+              className="flex items-center gap-2 rounded-full bg-[#8341EF] px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-[#9352ff] active:scale-95"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              Слушать чарт
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={loadYandexChart}
+            disabled={isLoading}
+            title="Обновить чарт"
+            className="grid h-9 w-9 place-items-center rounded-full bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white active:scale-95 disabled:opacity-50"
+          >
+            <svg className={`w-4 h-4 fill-current ${isLoading ? "animate-spin" : ""}`} viewBox="0 0 24 24">
+              <path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-300">{error}</p>}
+      {error && (
+        <div className="mb-4 flex items-center justify-between rounded-xl bg-red-500/10 p-4 border border-red-500/20 text-sm text-red-300">
+          <span>{error}</span>
+          <button type="button" onClick={loadYandexChart} className="font-bold underline hover:text-white">Повторить</button>
+        </div>
+      )}
 
-      {(() => {
-        const renderTrackItem = (track, index) => (
-          <div
-            key={track.id || index}
-            className="group flex items-center gap-4 rounded-xl p-3 text-left transition hover:bg-white/5"
-          >
-            <div className="w-6 text-center text-sm font-bold text-white/40 group-hover:text-white/80">
-              {index + 1}
-            </div>
-            <button type="button" onClick={() => playTrack(track, tracks)} className="h-12 w-12 shrink-0">
-              <img src={track.cover} alt="" className="h-12 w-12 rounded-lg object-cover shadow-md" />
-            </button>
-            <div className="min-w-0 flex-1">
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-white/40">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#8341EF]" />
+          <span className="text-sm font-semibold">Загрузка Топ-100 Яндекс Музыки...</span>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1 max-w-5xl">
+          {tracks.map((track, index) => (
+            <div
+              key={track.id || index}
+              className="group flex items-center gap-3 sm:gap-4 rounded-xl p-2.5 sm:p-3 text-left transition hover:bg-white/[0.06] border border-transparent hover:border-white/5"
+            >
+              <ChartPositionBadge
+                position={track.chartPosition || index + 1}
+                progress={track.chartProgress}
+                shift={track.chartShift}
+              />
+
               <button
                 type="button"
                 onClick={() => playTrack(track, tracks)}
-                className="block max-w-full truncate text-left text-[15px] font-bold text-white transition hover:text-white/80"
+                className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg shadow-md group/cover"
               >
-                {track.title}
+                <img src={track.cover} alt={track.title} className="h-12 w-12 object-cover transition duration-300 group-hover/cover:scale-105" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover/cover:opacity-100">
+                  <svg className="h-5 w-5 fill-white" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
               </button>
-              <ArtistLinks track={track} onOpenArtist={onOpenArtist} />
-            </div>
-            <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
-              <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
-                {formatDuration(track.duration)}
-              </span>
-              <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                <TrackMenuButton
-                  track={track}
-                  onOpenArtist={onOpenArtist}
-                  onOpenAlbum={onOpenAlbum}
-                />
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => playTrack(track, tracks)}
+                    className="truncate text-left text-[15px] font-bold text-white transition hover:text-white/80"
+                  >
+                    {track.title}
+                  </button>
+                  {track.listeners > 0 && (
+                    <span className="hidden md:inline-block rounded-md bg-white/5 px-2 py-0.5 text-[11px] font-medium text-white/40 shrink-0">
+                      🎧 {formatListeners(track.listeners)}
+                    </span>
+                  )}
+                </div>
+                <ArtistLinks track={track} onOpenArtist={onOpenArtist} />
+              </div>
+
+              <div className="relative w-16 h-10 flex items-center justify-end shrink-0 select-none">
+                <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
+                  {formatDuration(track.duration)}
+                </span>
+                <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                  <TrackMenuButton
+                    track={track}
+                    onOpenArtist={onOpenArtist}
+                    onOpenAlbum={onOpenAlbum}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        );
-
-        return (
-          <div className="flex flex-col gap-1 max-w-4xl">
-            {tracks.map((track, index) => renderTrackItem(track, index))}
-          </div>
-        );
-      })()}
+          ))}
+        </div>
+      )}
     </section>
   );
 }
