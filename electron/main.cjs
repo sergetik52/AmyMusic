@@ -598,26 +598,36 @@ function registerDesktopIpc() {
       if (!activity) {
         await rpc.clearActivity();
       } else {
-        let imageKey = "amymusic";
+        let imageKey = activity.largeImageKey || "amymusic";
 
-        if (activity.largeImageKey) {
-          const externalPath = await registerDiscordExternalAsset(activity.largeImageKey);
-          if (externalPath) {
-            imageKey = externalPath;
-          }
+        if (activity.largeImageKey && activity.largeImageKey.startsWith("http")) {
+          try {
+            const externalPath = await registerDiscordExternalAsset(activity.largeImageKey);
+            if (externalPath) {
+              imageKey = externalPath;
+            }
+          } catch {}
         }
 
-        await rpc.setActivity({
+        const activityPayload = {
           type: 2,
-          details: activity.details,
-          state: activity.state,
+          details: activity.details || "Unknown Track",
+          state: activity.state || "Unknown Artist",
           largeImageKey: imageKey,
-          largeImageText: activity.largeImageText || "AmyMusic",
-          instance: false,
-          buttons: [
-            { label: "СКАЧАТЬ", url: "https://github.com/sergetik52/AmyMusic" }
-          ]
-        });
+          largeImageText: activity.largeImageText || activity.details || "AmyMusic",
+          smallImageKey: activity.smallImageKey || "soundcloud",
+          smallImageText: activity.smallImageText || "SoundCloud",
+          instance: false
+        };
+
+        if (activity.startTimestamp) {
+          activityPayload.startTimestamp = Number(activity.startTimestamp);
+        }
+        if (activity.endTimestamp) {
+          activityPayload.endTimestamp = Number(activity.endTimestamp);
+        }
+
+        await rpc.setActivity(activityPayload);
       }
       return true;
     } catch (err) {

@@ -51,14 +51,88 @@ function formatDuration(seconds) {
   return `${minutes}:${rest}`;
 }
 
-function splitArtistNames(artist = "") {
-  return String(artist || "Unknown artist")
-    .split(/\s*(?:,|&|\/|\+|\bx\b|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b|;)\s*/i)
-    .map((name) => name.trim())
-    .filter(Boolean);
+function splitArtistNames(value = "") {
+  if (!value) return [];
+  const parts = String(value).split(/\s*(?:,|&|\/|\+|\b[xX]\b|×|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|;)\s*/i);
+  const seen = new Set();
+  const result = [];
+  parts.forEach((p) => {
+    const name = p.trim();
+    const key = name.toLowerCase();
+    if (name && key !== "unknown artist" && !seen.has(key)) {
+      seen.add(key);
+      result.push(name);
+    }
+  });
+  return result;
 }
 
-function buildArtistsFromLikes(tracks) {
+function getTrackArtists(track) {
+  if (!track) return [];
+  const avatar = (track.artistAvatar && !track.artistAvatar.includes("logo.png"))
+    ? track.artistAvatar
+    : ((track.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg");
+
+  const result = [];
+
+  if (Array.isArray(track.artists) && track.artists.length > 0) {
+    track.artists.forEach((art) => {
+      const artName = art.name || art.username || "";
+      const splitNames = splitArtistNames(artName);
+      if (splitNames.length > 1) {
+        splitNames.forEach((n) => {
+          result.push({
+            id: n,
+            name: n,
+            username: n,
+            avatar: art.avatar || avatar,
+            permalinkUrl: art.permalinkUrl || track.artistPermalinkUrl || ""
+          });
+        });
+      } else {
+        result.push({
+          id: art.id || artName,
+          name: artName || track.artist || "Unknown Artist",
+          username: art.username || artName || track.artist,
+          avatar: art.avatar || avatar,
+          permalinkUrl: art.permalinkUrl || track.artistPermalinkUrl || ""
+        });
+      }
+    });
+  } else {
+    const rawArtist = track.artist || track.uploaderName || "";
+    const splitNames = splitArtistNames(rawArtist);
+    if (splitNames.length > 0) {
+      splitNames.forEach((n) => {
+        result.push({
+          id: n,
+          name: n,
+          username: n,
+          avatar,
+          permalinkUrl: track.artistPermalinkUrl || ""
+        });
+      });
+    } else {
+      result.push({
+        id: track.artistId || "",
+        name: rawArtist || "Unknown Artist",
+        username: rawArtist || "Unknown Artist",
+        avatar,
+        permalinkUrl: track.artistPermalinkUrl || ""
+      });
+    }
+  }
+
+  const seen = new Set();
+  return result.filter((art) => {
+    const key = (art.name || art.username || "").toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildArtistsFromLikes(tracks = []) {
   const artists = new Map();
 
   tracks.forEach((track) => {
@@ -66,6 +140,8 @@ function buildArtistsFromLikes(tracks) {
 
     trackArtists.forEach((artistInfo) => {
       const name = artistInfo.name || artistInfo.username;
+      if (!name) return;
+
       const current = artists.get(name) || {
         id: artistInfo.id || "",
         name,
@@ -91,27 +167,18 @@ function buildArtistsFromLikes(tracks) {
     .slice(0, 12);
 }
 
-function getTrackArtists(track) {
-  return track.artists?.length
-    ? track.artists
-    : [{
-      id: track.artistId || "",
-      name: track.artist,
-      username: track.artist,
-      avatar: track.artistAvatar || track.cover || "/logo.png",
-      permalinkUrl: track.artistPermalinkUrl || ""
-    }];
-}
-
 function TrackArtistLinks({ track, onOpenArtist }) {
   return (
-    <div className="flex min-w-0 flex-wrap gap-x-1 overflow-hidden text-xs font-medium text-white/40">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-1 overflow-hidden text-xs font-medium text-white/40">
       {getTrackArtists(track).map((artist, index) => (
         <React.Fragment key={`${artist.id || artist.name}-${index}`}>
-          {index > 0 && <span className="text-white/25">,</span>}
+          {index > 0 && <span className="mx-0.5 font-light text-white/35">×</span>}
           <button
             type="button"
-            onClick={() => onOpenArtist?.(artist, track)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenArtist?.(artist, track);
+            }}
             className="max-w-[150px] truncate transition hover:text-white hover:underline"
           >
             {artist.name || artist.username}
@@ -620,7 +687,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
           queriesToTry.push(`${t.artist} ${t.title}`.trim());
           
           // 2. Main artist + title (if multiple artists)
-          const mainArtist = t.artist.split(',')[0].trim();
+          const mainArtist = splitArtistNames(t.artist)[0] || t.artist;
           if (mainArtist !== t.artist) {
             queriesToTry.push(`${mainArtist} ${t.title}`.trim());
           }

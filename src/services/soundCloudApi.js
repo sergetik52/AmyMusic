@@ -1,3 +1,49 @@
+
+// Global Artist Avatar Resolver & Cache System
+const globalArtistAvatarMap = new Map();
+
+export function getCachedArtistAvatar(artistName = "") {
+  if (!artistName) return "";
+  const key = String(artistName).toLowerCase().trim();
+  return globalArtistAvatarMap.get(key) || "";
+}
+
+export function cacheArtistAvatar(artistName = "", avatarUrl = "") {
+  if (!artistName || !avatarUrl || avatarUrl.includes("logo.png") || avatarUrl.includes("user.svg")) return;
+  const key = String(artistName).toLowerCase().trim();
+  if (!globalArtistAvatarMap.has(key)) {
+    globalArtistAvatarMap.set(key, avatarUrl);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("amymusic:artist-avatar-updated", { detail: { name: artistName, avatar: avatarUrl } }));
+    }
+  }
+}
+
+export async function fetchArtistAvatarByName(artistName = "") {
+  if (!artistName) return "";
+  const key = String(artistName).toLowerCase().trim();
+  if (globalArtistAvatarMap.has(key)) return globalArtistAvatarMap.get(key);
+
+  try {
+    const found = await searchArtists(artistName);
+    if (found && found.length > 0) {
+      const exactMatch = found.find(
+        (a) => (a.username || a.name || "").toLowerCase().trim() === key
+      ) || found[0];
+
+      const resolvedAvatar = exactMatch?.avatar || exactMatch?.artistAvatar || "";
+      if (resolvedAvatar && !resolvedAvatar.includes("logo.png") && !resolvedAvatar.includes("user.svg")) {
+        cacheArtistAvatar(artistName, resolvedAvatar);
+        return resolvedAvatar;
+      }
+    }
+  } catch (err) {
+    logDebug("api", "fetchArtistAvatarByName error", err);
+  }
+  return "";
+}
+
+
 import { logDebug, logWarn } from "../utils/logger.js";
 import { getSoundCloudRuntimeSettings } from "./profileSettings.js";
 
@@ -283,56 +329,75 @@ export function normalizeTrackMetadata(track = {}) {
   try {
     const rawTitle = track.rawTitle || track.originalTitle || track.title || "";
     
-    let uploaderName =
-      track.uploaderName ||
-      track.username ||
-      (typeof track.user?.username === "string" ? track.user.username : "") ||
-      (typeof track.user?.full_name === "string" ? track.user.full_name : "") ||
-      track.artistUsername ||
-      "";
+    // Extract candidate artist strings from all properties
+    const candidateArtistStrings = [
+      track.artist,
+      track.uploaderName,
+      track.username,
+      typeof track.user?.username === "string" ? track.user.username : "",
+      typeof track.user?.full_name === "string" ? track.user.full_name : "",
+      track.artistUsername
+    ].filter(Boolean);
 
-    if (!uploaderName) {
-      const candidate = track.artists?.[0]?.name || track.artists?.[0]?.username || (typeof track.artist === "string" ? track.artist : "");
-      if (candidate && typeof candidate === "string" && !candidate.includes("(") && !candidate.includes("[") && candidate.length <= 50) {
-        uploaderName = candidate;
-      }
+    if (Array.isArray(track.artists)) {
+      track.artists.forEach((a) => {
+        if (a?.name) candidateArtistStrings.push(a.name);
+        if (a?.username) candidateArtistStrings.push(a.username);
+      });
     }
 
-    const parsed = parseCleanTrackInfo(rawTitle, uploaderName);
-    const safeArtistNames = Array.isArray(parsed.artistNames) && parsed.artistNames.length ? parsed.artistNames : ["Unknown artist"];
+    const allNames = [];
+    candidateArtistStrings.forEach((str) => {
+      splitArtistNames(str).forEach((n) => allNames.push(n));
+    });
 
-    const splitUploader = splitArtistNames(uploaderName);
+    const uploaderFallback = candidateArtistStrings[0] || "";
+    const parsed = parseCleanTrackInfo(rawTitle, uploaderFallback);
+
+    if (Array.isArray(parsed.artistNames)) {
+      parsed.artistNames.forEach((n) => {
+        splitArtistNames(n).forEach((s) => allNames.push(s));
+      });
+    }
+
+    const seen = new Set();
+    const safeArtistNames = [];
+    allNames.forEach((n) => {
+      const key = n.trim().toLowerCase();
+      if (key && key !== "unknown artist" && !seen.has(key)) {
+        seen.add(key);
+        safeArtistNames.push(n.trim());
+      }
+    });
+
+    if (safeArtistNames.length === 0) {
+      safeArtistNames.push(track.artist || uploaderFallback || "Unknown artist");
+    }
+
+    const trackCover = track.cover || "";
+    const rawUserAvatar = track.artistAvatar || "";
+    const isDefaultAvatar = !rawUserAvatar || rawUserAvatar.includes("default_avatar") || rawUserAvatar.includes("logo.png") || (trackCover && rawUserAvatar === trackCover);
+    const defaultAvatar = !isDefaultAvatar ? rawUserAvatar : "/user.svg";
 
     const artistsObjects = safeArtistNames.map((name) => {
-      const normName = normalizeComparable(name);
-      const isUploaderMatch =
-        uploaderName &&
-        (normName === normalizeComparable(uploaderName) ||
-          splitUploader.some((u) => normalizeComparable(u) === normName));
-
-      const rawUserAvatar = track.artistAvatar || "";
-      const isDefaultAvatar = !rawUserAvatar || rawUserAvatar.includes("default_avatar") || rawUserAvatar.includes("logo.png");
-      const trackCover = track.cover || "";
-      const validTrackCover = trackCover && !trackCover.includes("logo.png") ? trackCover : "";
-
-      const resolvedAvatar = isUploaderMatch
-        ? (!isDefaultAvatar ? rawUserAvatar : (validTrackCover || "/user.svg"))
-        : (validTrackCover || "/user.svg");
+      const existingObj = Array.isArray(track.artists)
+        ? track.artists.find((a) => (a.name || a.username || "").toLowerCase() === name.toLowerCase())
+        : null;
 
       return {
-        id: isUploaderMatch && track.artistId ? String(track.artistId) : "",
+        id: existingObj?.id || track.artistId || name,
         name,
         username: name,
-        avatar: resolvedAvatar,
-        permalinkUrl: isUploaderMatch ? (track.artistPermalinkUrl || "") : ""
+        avatar: existingObj?.avatar || defaultAvatar,
+        permalinkUrl: existingObj?.permalinkUrl || track.artistPermalinkUrl || ""
       };
     });
 
     return {
       ...track,
       rawTitle,
-      title: parsed.title || track.title || "Без названия",
-      artist: safeArtistNames.join(", "),
+      title: parsed.title || track.title || "Untitled",
+      artist: safeArtistNames.join(" & "),
       artists: artistsObjects
     };
   } catch (err) {
@@ -349,7 +414,7 @@ function safeNormalizeSoundCloudTrack(item, fallback) {
     const source = item?.track || item || {};
     const rawUserAvatar = getLargeImage(source.user?.avatar_url);
     const isDefaultAvatar = !rawUserAvatar || rawUserAvatar.includes("default_avatar") || rawUserAvatar.includes("logo.png");
-    const cover = getLargeImage(source.artwork_url) || fallback?.cover || "";
+    const cover = getLargeImage(source.artwork_url) || getLargeImage(source.user?.avatar_url) || fallback?.cover || "";
     const validCover = cover && !cover.includes("logo.png") ? cover : "";
     return {
       id: String(source.id || fallback?.id || Math.random()),
@@ -390,7 +455,7 @@ function normalizeSoundCloudTrack(track = {}, fallback = {}) {
 
   const rawUserAvatar = getLargeImage(user.avatar_url);
   const isDefaultUserAvatar = !rawUserAvatar || rawUserAvatar.includes("default_avatar") || rawUserAvatar.includes("logo.png");
-  const trackArtwork = getLargeImage(source.artwork_url) || fallback.cover || "";
+  const trackArtwork = getLargeImage(source.artwork_url) || getLargeImage(user.avatar_url) || fallback.cover || "";
   const validArtwork = trackArtwork && !trackArtwork.includes("logo.png") ? trackArtwork : "";
 
   const artistAvatar = !isDefaultUserAvatar ? rawUserAvatar : (validArtwork || "/user.svg");
@@ -425,7 +490,7 @@ function normalizeSoundCloudTrack(track = {}, fallback = {}) {
     artistAvatar,
     artistPermalinkUrl: user.permalink_url || "",
     mood: source.genre || fallback.genre || "AmyMusic",
-    cover: getLargeImage(source.artwork_url) || fallback.cover || artistAvatar || "/logo.png",
+    cover: getLargeImage(source.artwork_url) || getLargeImage(user.avatar_url) || fallback.cover || artistAvatar || "/logo.png",
     streamUrl: transcoding?.url || "",
     isSnippet,
     permalinkUrl: source.permalink_url,

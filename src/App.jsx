@@ -92,13 +92,12 @@ function SidebarItem({ item, isActive, isCollapsed, onClick }) {
 }
 
 function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfileSave, onLogout }) {
-  const { setIsEqualizerOpen } = useAudioPlayer();
+  const { setIsEqualizerOpen, isAudioCacheEnabled, toggleAudioCache, clearAudioCache, audioCacheSize } = useAudioPlayer();
   const isDesktop = Boolean(typeof window !== "undefined" && window.amyMusicDesktop);
   const [draft, setDraft] = useState(settings);
   const [draftProfile, setDraftProfile] = useState(profileData || { displayName: "", avatarUrl: "" });
   const [isClosing, setIsClosing] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
-  const [discordBotToken, setDiscordBotToken] = useState("");
   const [croppingImageSrc, setCroppingImageSrc] = useState(null);
 
   // Password change state
@@ -116,7 +115,6 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
   const [latestDownloadUrl, setLatestDownloadUrl] = useState("");
 
   React.useEffect(() => {
-    window.amyMusicDesktop?.getDiscordBotToken?.().then((t) => setDiscordBotToken(t || "")).catch(() => {});
     if (isDesktop && window.amyMusicDesktop?.getAppVersion) {
       window.amyMusicDesktop.getAppVersion().then((v) => {
         if (v) setAppVersion(v);
@@ -192,10 +190,6 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
     });
   };
 
-  const handleDiscordBotTokenChange = (value) => {
-    setDiscordBotToken(value);
-    window.amyMusicDesktop?.setDiscordBotToken?.(value).catch(() => {});
-  };
 
   const handlePasswordChangeSubmit = async (e) => {
     e.preventDefault();
@@ -419,6 +413,47 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
                 <h3 className="text-2xl font-black mb-8 text-white">Аудио</h3>
                 
                 <div className="space-y-4">
+                  {/* Audio Cache Card */}
+                  <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors hover:bg-white/[0.04]">
+                    <label className="flex cursor-pointer items-center justify-between gap-6">
+                      <div>
+                        <span className="block text-base font-bold text-white mb-1">
+                          Кэширование треков
+                        </span>
+                        <span className="block text-xs font-semibold text-white/40">
+                          Сохранять прослушанные треки для мгновенного повторного воспроизведения
+                        </span>
+                      </div>
+                      <div className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 ${draft.audioCacheEnabled !== false ? "bg-[#8341EF]" : "bg-white/10"}`}>
+                        <div className={`absolute bottom-1 left-1 top-1 w-5 rounded-full bg-white transition-transform duration-300 shadow-md ${draft.audioCacheEnabled !== false ? "translate-x-5" : "translate-x-0"}`} />
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={draft.audioCacheEnabled !== false}
+                        onChange={(event) => updateField("audioCacheEnabled", event.target.checked)}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {draft.audioCacheEnabled !== false && (
+                      <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-4">
+                        <span className="text-xs font-semibold text-white/60">
+                          Занято памяти: <strong className="text-white font-bold">{audioCacheSize || "0 MB"}</strong>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            clearAudioCache();
+                          }}
+                          className="rounded-full bg-red-500/20 px-4 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/30 transition active:scale-95"
+                        >
+                          Очистить кэш
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Equalizer Card */}
                   <div className="flex items-center justify-between gap-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors hover:bg-white/[0.04]">
                     <div>
@@ -613,7 +648,7 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
               </div>
             )}
 
-            {activeTab === "developer" && (
+                        {activeTab === "developer" && (
               <div key="developer" className="animate-[fadeIn_0.3s_ease-out]">
                 <h3 className="text-2xl font-black mb-8 text-white">Для разработчиков</h3>
                 
@@ -622,7 +657,7 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
                     <div className="flex items-start gap-3">
                       <svg className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                       <div className="text-xs font-semibold text-yellow-500/80 leading-relaxed">
-                        Эти настройки предназначены для отладки приложения. Не изменяйте их, если не уверены в том, что делаете.
+                        Эти настройки предназначены для опытных пользователей. Не изменяйте их, если не уверены в том, что делаете.
                       </div>
                     </div>
                   </div>
@@ -660,32 +695,6 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
                         placeholder={"45.141.185.15:5882\n163.5.189.210:3888"}
                         spellCheck={false}
                       />
-                    </div>
-
-                    <div className="relative overflow-hidden rounded-2xl pt-4 border-t border-white/5">
-                      {!isDesktop && (
-                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-[1.5px] border border-white/10 rounded-2xl">
-                          <span className="flex items-center gap-2 text-xs font-bold text-white/70 bg-black/80 px-4 py-2 rounded-full border border-white/10 shadow-xl">
-                            🔒 Доступно только в ПК приложении
-                          </span>
-                        </div>
-                      )}
-                      <div className={!isDesktop ? "opacity-30 filter blur-[1px] pointer-events-none select-none" : ""}>
-                        <div className="flex items-center gap-2 mb-3">
-                          <svg className="w-4 h-4 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
-                          <label className="block text-[11px] font-black uppercase tracking-widest text-white/40">Discord Bot Token</label>
-                        </div>
-                        <input
-                          value={discordBotToken}
-                          onChange={(event) => handleDiscordBotTokenChange(event.target.value)}
-                          type="password"
-                          disabled={!isDesktop}
-                          className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 font-mono text-sm font-bold text-white outline-none focus:border-[#5865F2] transition-colors"
-                          placeholder="Для отображения обложек треков в Discord"
-                          spellCheck={false}
-                        />
-                        <p className="mt-2 text-[10px] text-white/30 leading-relaxed">Нужен для показа обложек треков в Discord Rich Presence. Получите в <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer" className="text-[#5865F2] hover:underline">Developer Portal</a> → Bot → Reset Token</p>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -908,50 +917,134 @@ function ArtistCard({ artist, onClick }) {
   );
 }
 
-function getTrackArtists(track) {
-  return track.artists?.length
-    ? track.artists
-    : [{
-      id: track.artistId || "",
-      name: track.artist,
-      username: track.artist,
-      avatar: (track.artistAvatar && !track.artistAvatar.includes("logo.png")) ? track.artistAvatar : ((track.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg"),
-      permalinkUrl: track.artistPermalinkUrl || ""
-    }];
+function splitArtistNames(value = "") {
+  if (!value) return [];
+  const parts = String(value).split(/\s*(?:,|&|\/|\+|\b[xX]\b|×|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|;)\s*/i);
+  const seen = new Set();
+  const result = [];
+  parts.forEach((p) => {
+    const name = p.trim();
+    const key = name.toLowerCase();
+    if (name && key !== "unknown artist" && !seen.has(key)) {
+      seen.add(key);
+      result.push(name);
+    }
+  });
+  return result;
 }
 
-function ArtistLinks({ track, onOpenArtist, className = "text-xs text-white/40" }) {
+function getTrackArtists(track) {
+  if (!track) return [];
+  const avatar = (track.artistAvatar && !track.artistAvatar.includes("logo.png"))
+    ? track.artistAvatar
+    : ((track.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg");
+
+  const result = [];
+
+  if (Array.isArray(track.artists) && track.artists.length > 0) {
+    track.artists.forEach((art) => {
+      const artName = art.name || art.username || "";
+      const splitNames = splitArtistNames(artName);
+      if (splitNames.length > 1) {
+        splitNames.forEach((n) => {
+          result.push({
+            id: n,
+            name: n,
+            username: n,
+            avatar: art.avatar || avatar,
+            permalinkUrl: art.permalinkUrl || track.artistPermalinkUrl || ""
+          });
+        });
+      } else {
+        result.push({
+          id: art.id || artName,
+          name: artName || track.artist || "Unknown Artist",
+          username: art.username || artName || track.artist,
+          avatar: art.avatar || avatar,
+          permalinkUrl: art.permalinkUrl || track.artistPermalinkUrl || ""
+        });
+      }
+    });
+  } else {
+    const rawArtist = track.artist || track.uploaderName || "";
+    const splitNames = splitArtistNames(rawArtist);
+    if (splitNames.length > 0) {
+      splitNames.forEach((n) => {
+        result.push({
+          id: n,
+          name: n,
+          username: n,
+          avatar,
+          permalinkUrl: track.artistPermalinkUrl || ""
+        });
+      });
+    } else {
+      result.push({
+        id: track.artistId || "",
+        name: rawArtist || "Unknown Artist",
+        username: rawArtist || "Unknown Artist",
+        avatar,
+        permalinkUrl: track.artistPermalinkUrl || ""
+      });
+    }
+  }
+
+  const seen = new Set();
+  return result.filter((art) => {
+    const key = (art.name || art.username || "").toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function ArtistLinks({ track, onOpenArtist, className = "text-xs text-white/40", showAvatar = true }) {
   const artists = getTrackArtists(track).filter((artist) => artist.name || artist.username);
 
   return (
-    <div className={`flex min-w-0 flex-wrap items-center gap-x-1 overflow-hidden ${className}`}>
-      {artists.map((artist, index) => (
-        <React.Fragment key={`${artist.id || artist.name}-${index}`}>
-          {index > 0 && <span className="text-white/25">,</span>}
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpenArtist?.({
-                id: artist.id || "",
-                name: artist.name || artist.username,
-                username: artist.username || artist.name,
-                avatar: (artist.avatar && !artist.avatar.includes("logo.png")) ? artist.avatar : ((track.artistAvatar && !track.artistAvatar.includes("logo.png")) ? track.artistAvatar : ((track.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg")),
-                permalinkUrl: artist.permalinkUrl || "",
-                followers: 0,
-                followings: 0,
-                trackCount: 0,
-                city: "",
-                country: "",
-                tags: []
-              });
-            }}
-            className="max-w-[180px] truncate transition hover:text-white hover:underline"
-          >
-            {artist.name || artist.username}
-          </button>
-        </React.Fragment>
-      ))}
+    <div className={`flex min-w-0 flex-wrap items-center gap-x-1.5 overflow-hidden ${className}`}>
+      {artists.map((artist, index) => {
+        const avatarUrl = (artist.avatar && !artist.avatar.includes("logo.png"))
+          ? artist.avatar
+          : ((track.artistAvatar && !track.artistAvatar.includes("logo.png"))
+            ? track.artistAvatar
+            : ((track.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg"));
+
+        return (
+          <React.Fragment key={`${artist.id || artist.name}-${index}`}>
+            {index > 0 && <span className="mx-0.5 font-light text-white/35">×</span>}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenArtist?.({
+                  id: artist.id || "",
+                  name: artist.name || artist.username,
+                  username: artist.username || artist.name,
+                  avatar: avatarUrl,
+                  permalinkUrl: artist.permalinkUrl || "",
+                  followers: 0,
+                  followings: 0,
+                  trackCount: 0,
+                  city: "",
+                  country: "",
+                  tags: []
+                });
+              }}
+              className="inline-flex items-center gap-1.5 max-w-[200px] truncate transition hover:text-white hover:underline group/artist"
+            >
+              {showAvatar && (
+                <img
+                  src={avatarUrl}
+                  alt={artist.name || artist.username}
+                  className="h-4 w-4 shrink-0 rounded-full object-cover ring-1 ring-white/20 transition group-hover/artist:scale-110 group-hover/artist:ring-[var(--player-accent)]"
+                />
+              )}
+              <span className="truncate">{artist.name || artist.username}</span>
+            </button>
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }
@@ -1759,8 +1852,12 @@ function TrackInfo({ onOpenFull, onOpenArtist, onOpenAlbum }) {
   const { currentTrack } = useAudioPlayer();
 
   return (
-    <div onClick={onOpenFull} className="group flex w-[300px] cursor-pointer items-center gap-3">
-      <div className="relative shrink-0 overflow-hidden rounded-[6.66px]">
+    <div className="flex w-[320px] items-center gap-3">
+      {/* Track cover */}
+      <div 
+        onClick={onOpenFull}
+        className="group relative shrink-0 cursor-pointer overflow-hidden rounded-[6.66px]"
+      >
         <img
           src={currentTrack.cover}
           alt={currentTrack.title}
@@ -1772,9 +1869,14 @@ function TrackInfo({ onOpenFull, onOpenArtist, onOpenAlbum }) {
           </svg>
         </div>
       </div>
-      <div className="min-w-0">
+
+      {/* Track Title & Artist Info with Avatars for ALL Artists */}
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <p className="truncate text-[15.5px] font-medium text-white group-hover:underline">
+          <p 
+            onClick={onOpenFull}
+            className="cursor-pointer truncate text-[15.5px] font-medium text-white hover:underline"
+          >
             {currentTrack.title}
           </p>
           <span className="rounded bg-white/10 px-1 text-[10px] text-white/50">67+</span>
@@ -1787,11 +1889,16 @@ function TrackInfo({ onOpenFull, onOpenArtist, onOpenAlbum }) {
             />
           </div>
         </div>
-        <ArtistLinks
-          track={currentTrack}
-          onOpenArtist={onOpenArtist}
-          className="text-[15.5px] text-white/50"
-        />
+
+        {/* Display ALL Artists with round avatars & × separator */}
+        <div className="mt-0.5">
+          <ArtistLinks
+            track={currentTrack}
+            onOpenArtist={onOpenArtist}
+            showAvatar={true}
+            className="text-[13.5px] text-white/60 font-medium"
+          />
+        </div>
       </div>
     </div>
   );
@@ -2176,6 +2283,8 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum }) {
 }
 
 export default function App() {
+  
+
   const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, mergeServerData, likedTracks, userPlaylists, savedReleases, dislikedTrackIds, playHistory } = useAudioPlayer();
   const [activeTab, setActiveTab] = useState("wave");
   const [previousTab, setPreviousTab] = useState("wave");

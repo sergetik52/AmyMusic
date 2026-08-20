@@ -1,3 +1,38 @@
+
+const yandexArtistAvatarMap = new Map();
+
+export function getYandexCachedArtistAvatar(artistName = "") {
+  if (!artistName) return "";
+  const key = String(artistName).toLowerCase().trim();
+  return yandexArtistAvatarMap.get(key) || "";
+}
+
+export async function fetchYandexArtistAvatar(artistName = "") {
+  if (!artistName) return "";
+  const key = String(artistName).toLowerCase().trim();
+  if (yandexArtistAvatarMap.has(key)) return yandexArtistAvatarMap.get(key);
+
+  try {
+    const data = await fetchYandexApi(`/search?text=${encodeURIComponent(artistName)}&type=all&page=0`);
+    const artists = data?.artists?.results || [];
+    if (artists.length > 0) {
+      const exact = artists.find((a) => (a.name || "").toLowerCase().trim() === key) || artists[0];
+      if (exact?.cover?.uri) {
+        const avatarUrl = `https://${exact.cover.uri.replace("%%", "400x400")}`;
+        yandexArtistAvatarMap.set(key, avatarUrl);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("amymusic:artist-avatar-updated", { detail: { name: artistName, avatar: avatarUrl } }));
+        }
+        return avatarUrl;
+      }
+    }
+  } catch (err) {
+    // Fallback search silently
+  }
+  return "";
+}
+
+
 // Pure JS MD5 implementation for client-side stream URL hashing
 function md5(string) {
   function rotateLeft(lValue, iShiftBits) {

@@ -1,3 +1,4 @@
+import { updateDiscordStatus, clearDiscordStatus } from "../services/discordRpc";
 import React, {
   createContext,
   useCallback,
@@ -208,16 +209,17 @@ function normalizeStoredPlaylist(playlist) {
 }
 
 function shouldRepairTrackMetadata(track) {
-  return Boolean(
-    track?.id &&
-    track.id !== "empty" &&
-    (
-      !track.rawTitle ||
-      !Array.isArray(track.artists) ||
-      track.artists.length <= 1 ||
-      // Also repair tracks whose duration looks like a 30-second snippet placeholder
-      (typeof track.duration === "number" && track.duration > 0 && track.duration <= 30)
-    )
+  if (!track || !track.id || track.id === "empty") return false;
+  // Always repair tracks if duration is snippet (<=30s) or if artist string contains multiple artists
+  const hasMultipleInString = Boolean(
+    track.artist && /\s*(?:,|&|\/|\+|\b[xX]\b|\bfeat\.?|\bft\.?|\bfeaturing\b|;)\s*/i.test(track.artist)
+  );
+  return (
+    !track.rawTitle ||
+    !Array.isArray(track.artists) ||
+    track.artists.length <= 1 ||
+    hasMultipleInString ||
+    (typeof track.duration === "number" && track.duration > 0 && track.duration <= 30)
   );
 }
 
@@ -580,6 +582,33 @@ export function AudioProvider({ children }) {
   const [isFullOpen, setIsFullOpen] = useState(false);
   const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
 
+  // Audio Cache Engine State
+  const [isAudioCacheEnabled, setIsAudioCacheEnabled] = useState(() => {
+    try {
+      const stored = localStorage.getItem("amymusic.profileSettings.v1");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed.audioCacheEnabled !== false;
+      }
+    } catch {}
+    return true;
+  });
+
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      try {
+        const stored = localStorage.getItem("amymusic.profileSettings.v1");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setIsAudioCacheEnabled(parsed.audioCacheEnabled !== false);
+        }
+      } catch {}
+    };
+    window.addEventListener("amymusic:profile-settings-changed", handleSettingsChange);
+    return () => window.removeEventListener("amymusic:profile-settings-changed", handleSettingsChange);
+  }, []);
+  const [audioCacheSize, setAudioCacheSize] = useState("0 MB");
+
   const [isEqualizerEnabled, setIsEqualizerEnabled] = useState(() => {
     try {
       const stored = localStorage.getItem("amymusic.equalizerEnabled.v1");
@@ -650,6 +679,26 @@ export function AudioProvider({ children }) {
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     }, 3000);
   }, []);
+
+  const toggleAudioCache = useCallback(() => {
+    setIsAudioCacheEnabled((prev) => {
+      const nextVal = !prev;
+      localStorage.setItem("amymusic.audioCacheEnabled", String(nextVal));
+      return nextVal;
+    });
+  }, []);
+
+  const clearAudioCache = useCallback(async () => {
+    if (typeof window !== "undefined" && "caches" in window) {
+      try {
+        await caches.delete("amymusic-audio-cache-v1");
+        setAudioCacheSize("0 MB");
+        showNotification("Кэш аудио успешно очищен", "success");
+      } catch (err) {
+        logWarn("audio", "clear cache error", err);
+      }
+    }
+  }, [showNotification]);
 
   const currentTrack = queue[currentIndex] || emptyTrack;
   const queueRef = useRef(queue);
@@ -972,8 +1021,17 @@ export function AudioProvider({ children }) {
         if (nextQueue.length <= 1) return index;
         if (nextIsShuffle) {
           pendingAutoplayRef.current = true;
-          const nextIndex = Math.floor(Math.random() * nextQueue.length);
-          return nextIndex === index ? (index + 1) % nextQueue.length : nextIndex;
+          if (index < nextQueue.length - 1) {
+            return index + 1;
+          }
+          if (nextRepeatMode === "playlist") {
+            // Re-shuffle when loop finishes
+            setQueue((prev) => shuffleTracks(prev));
+            return 0;
+          }
+          pendingAutoplayRef.current = false;
+          setIsPlaying(false);
+          return index;
         }
         if (index < nextQueue.length - 1) {
           pendingAutoplayRef.current = true;
@@ -2010,20 +2068,36 @@ export function AudioProvider({ children }) {
     return subscribeProfileSettings(setProfileSettings);
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.amyMusicDesktop?.setDiscordActivity) {
-      if (profileSettings?.discordRpcEnabled !== false && isPlaying && currentTrack) {
-        window.amyMusicDesktop.setDiscordActivity({
-          details: currentTrack.title || "Unknown Track",
-          state: currentTrack.artist || "Unknown Artist",
-          largeImageKey: currentTrack.cover || "",
-          largeImageText: currentTrack.title || "AmyMusic"
-        });
-      } else {
+    useEffect(() => {
+    if (profileSettings?.discordRpcEnabled !== false && isPlaying && currentTrack) {
+      const nowMs = Date.now();
+      const startTimestamp = nowMs - Math.floor((currentTime || 0) * 1000);
+      const endTimestamp = currentTrack.duration
+        ? startTimestamp + Math.floor(currentTrack.duration * 1000)
+        : undefined;
+
+      const payload = {
+        details: currentTrack.title || "Unknown Track",
+        state: currentTrack.artist || "Unknown Artist",
+        largeImageKey: currentTrack.cover || currentTrack.artistAvatar || "amymusic",
+        largeImageText: currentTrack.title || "AmyMusic",
+        smallImageKey: "soundcloud",
+        smallImageText: "SoundCloud",
+        startTimestamp,
+        endTimestamp
+      };
+
+      if (typeof window !== "undefined" && window.amyMusicDesktop?.setDiscordActivity) {
+        window.amyMusicDesktop.setDiscordActivity(payload);
+      }
+      updateDiscordStatus(currentTrack, isPlaying, currentTime);
+    } else {
+      if (typeof window !== "undefined" && window.amyMusicDesktop?.setDiscordActivity) {
         window.amyMusicDesktop.setDiscordActivity(null);
       }
+      clearDiscordStatus();
     }
-  }, [isPlaying, currentTrack, profileSettings?.discordRpcEnabled]);
+  }, [isPlaying, currentTrack, currentTime, profileSettings?.discordRpcEnabled]);
 
   const controls = useMemo(
     () => [

@@ -9,6 +9,7 @@ export const defaultProfileSettings = {
   appLaunchOnStartup: false,
   appMinimizeToTray: false,
   crossfadeEnabled: false,
+  audioCacheEnabled: true,
   crossfadeSeconds: 4,
   discordRpcEnabled: true
 };
@@ -49,6 +50,7 @@ export function saveProfileSettings(settings) {
     appLaunchOnStartup: Boolean(settings?.appLaunchOnStartup),
     appMinimizeToTray: Boolean(settings?.appMinimizeToTray),
     crossfadeEnabled: Boolean(settings?.crossfadeEnabled),
+    audioCacheEnabled: settings?.audioCacheEnabled !== undefined ? Boolean(settings.audioCacheEnabled) : true,
     crossfadeSeconds: Math.min(12, Math.max(1, Number(settings?.crossfadeSeconds) || defaultProfileSettings.crossfadeSeconds)),
     discordRpcEnabled: settings?.discordRpcEnabled !== undefined ? Boolean(settings.discordRpcEnabled) : true
   };

@@ -59,16 +59,85 @@ function getCachedLyricsForTrack(track, duration) {
   return request;
 }
 
+function splitArtistNames(value = "") {
+  if (!value) return [];
+  const parts = String(value).split(/\s*(?:,|&|\/|\+|\b[xX]\b|×|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|;)\s*/i);
+  const seen = new Set();
+  const result = [];
+  parts.forEach((p) => {
+    const name = p.trim();
+    const key = name.toLowerCase();
+    if (name && key !== "unknown artist" && !seen.has(key)) {
+      seen.add(key);
+      result.push(name);
+    }
+  });
+  return result;
+}
+
 function getTrackArtists(track) {
-  return track.artists?.length
-    ? track.artists
-    : [{
-      id: track.artistId || "",
-      name: track.artist,
-      username: track.artist,
-      avatar: track.artistAvatar || track.cover || "/logo.png",
-      permalinkUrl: track.artistPermalinkUrl || ""
-    }];
+  if (!track) return [];
+  const avatar = (track.artistAvatar && !track.artistAvatar.includes("logo.png"))
+    ? track.artistAvatar
+    : ((track.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg");
+
+  const result = [];
+
+  if (Array.isArray(track.artists) && track.artists.length > 0) {
+    track.artists.forEach((art) => {
+      const artName = art.name || art.username || "";
+      const splitNames = splitArtistNames(artName);
+      if (splitNames.length > 1) {
+        splitNames.forEach((n) => {
+          result.push({
+            id: n,
+            name: n,
+            username: n,
+            avatar: art.avatar || avatar,
+            permalinkUrl: art.permalinkUrl || track.artistPermalinkUrl || ""
+          });
+        });
+      } else {
+        result.push({
+          id: art.id || artName,
+          name: artName || track.artist || "Unknown Artist",
+          username: art.username || artName || track.artist,
+          avatar: art.avatar || avatar,
+          permalinkUrl: art.permalinkUrl || track.artistPermalinkUrl || ""
+        });
+      }
+    });
+  } else {
+    const rawArtist = track.artist || track.uploaderName || "";
+    const splitNames = splitArtistNames(rawArtist);
+    if (splitNames.length > 0) {
+      splitNames.forEach((n) => {
+        result.push({
+          id: n,
+          name: n,
+          username: n,
+          avatar,
+          permalinkUrl: track.artistPermalinkUrl || ""
+        });
+      });
+    } else {
+      result.push({
+        id: track.artistId || "",
+        name: rawArtist || "Unknown Artist",
+        username: rawArtist || "Unknown Artist",
+        avatar,
+        permalinkUrl: track.artistPermalinkUrl || ""
+      });
+    }
+  }
+
+  const seen = new Set();
+  return result.filter((art) => {
+    const key = (art.name || art.username || "").toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
@@ -557,19 +626,27 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
 
           <div className="text-center">
             <h2 className="text-base font-bold text-white">{currentTrack.title}</h2>
-            <div className="mt-1 flex max-w-80 flex-wrap justify-center gap-x-1 overflow-hidden text-xs font-semibold text-white/50">
-              {getTrackArtists(currentTrack).map((artist, index) => (
-                <React.Fragment key={`${artist.id || artist.name}-${index}`}>
-                  {index > 0 && <span className="text-white/25">,</span>}
-                  <button
-                    type="button"
-                    onClick={() => handleArtistClick(artist)}
-                    className="max-w-[140px] truncate transition hover:text-white hover:underline"
-                  >
-                    {artist.name || artist.username}
-                  </button>
-                </React.Fragment>
-              ))}
+            <div className="mt-2 flex max-w-80 flex-wrap items-center justify-center gap-1.5 overflow-hidden text-xs font-semibold text-white/60">
+              {getTrackArtists(currentTrack).map((artist, index) => {
+                const avatarUrl = artist.avatar || currentTrack.artistAvatar || currentTrack.cover || "/logo.png";
+                return (
+                  <React.Fragment key={`${artist.id || artist.name}-${index}`}>
+                    {index > 0 && <span className="mx-0.5 font-light text-white/35">×</span>}
+                    <button
+                      type="button"
+                      onClick={() => handleArtistClick(artist)}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 transition hover:bg-white/15 hover:text-white group/artist"
+                    >
+                      <img
+                        src={avatarUrl}
+                        alt={artist.name || artist.username}
+                        className="h-4 w-4 shrink-0 rounded-full object-cover ring-1 ring-white/20 transition group-hover/artist:scale-110"
+                      />
+                      <span>{artist.name || artist.username}</span>
+                    </button>
+                  </React.Fragment>
+                );
+              })}
             </div>
           </div>
 
