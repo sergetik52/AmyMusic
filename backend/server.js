@@ -249,7 +249,10 @@ app.get('/api/download-app', (req, res) => {
   res.redirect(`https://github.com/sergetik52/AmyMusic/releases/download/v${version}/${fileName}`);
 });
 
-// --- FRONTEND STATIC SERVING ---
+// --- DOWNLOADS & FRONTEND STATIC SERVING ---
+const downloadsPath = path.join(__dirname, '../downloads');
+app.use('/downloads', express.static(downloadsPath));
+
 const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
 

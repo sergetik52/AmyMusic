@@ -125,7 +125,8 @@ async function main() {
 
   const token = getGitHubToken();
   if (!token) {
-    throw new Error('GitHub token not found. Please log in or set GH_TOKEN environment variable.');
+    console.log('\x1b[33m⚠️ GH_TOKEN not found in environment or git credentials.\x1b[0m');
+    console.log('\x1b[33m  (Skipping GitHub Releases asset upload. The setup installer will be deployed directly to amymusic.ru)\x1b[0m');
   }
 
   // Read current version
@@ -162,6 +163,9 @@ async function main() {
 
   // 2. Build Windows Electron Setup installer
   console.log('\n💻 Step 2/5: Packaging Windows Setup installer (.exe)...');
+  try {
+    execSync('taskkill /F /IM AmyMusic.exe /T 2>nul', { stdio: 'ignore' });
+  } catch {}
   run('npx electron-builder --win --x64');
 
   const fileName = `AmyMusic-${newVersion}-Setup.exe`;
@@ -175,33 +179,46 @@ async function main() {
   const downloadsDir = path.join(rootDir, 'downloads');
   if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
   fs.copyFileSync(setupFilePath, path.join(downloadsDir, fileName));
+  console.log(`✓ Copied ${fileName} to downloads/`);
 
-  // 3. Upload installer to GitHub Releases
-  console.log('\n🐙 Step 3/5: Uploading release asset to GitHub...');
-  await uploadToGitHub(token, 'sergetik52', 'AmyMusic', `v${newVersion}`, setupFilePath, fileName);
+  // 3. Upload installer to GitHub Releases (if token available)
+  if (token) {
+    console.log('\n🐙 Step 3/5: Uploading release asset to GitHub...');
+    try {
+      await uploadToGitHub(token, 'sergetik52', 'AmyMusic', `v${newVersion}`, setupFilePath, fileName);
+    } catch (ghErr) {
+      console.error('⚠️ Failed to upload to GitHub Releases:', ghErr.message);
+    }
+  } else {
+    console.log('\n🐙 Step 3/5: Skipping GitHub upload (no token provided)...');
+  }
 
   // 4. Commit and push git tag
   console.log('\n🏷️ Step 4/5: Pushing Git commit & release tag...');
-  run('git add .');
   try {
-    run(`git commit -m "Release v${newVersion}"`);
-  } catch (e) {
-    console.log('No new git changes to commit.');
-  }
-  try {
-    run(`git tag -a v${newVersion} -m "Release v${newVersion}"`);
-  } catch (e) {
-    console.log(`Tag v${newVersion} already exists locally.`);
-  }
-  try {
-    run('git push origin main');
-  } catch (e) {
-    console.log('Main push completed or skipped.');
-  }
-  try {
-    run(`git push origin refs/tags/v${newVersion}`);
-  } catch (e) {
-    console.log(`Tag v${newVersion} push skipped or already exists on GitHub.`);
+    run('git add .');
+    try {
+      run(`git commit -m "Release v${newVersion}"`);
+    } catch (e) {
+      console.log('No new git changes to commit.');
+    }
+    try {
+      run(`git tag -a v${newVersion} -m "Release v${newVersion}"`);
+    } catch (e) {
+      console.log(`Tag v${newVersion} already exists locally.`);
+    }
+    try {
+      run('git push origin main');
+    } catch (e) {
+      console.log('Main push completed or skipped.');
+    }
+    try {
+      run(`git push origin refs/tags/v${newVersion}`);
+    } catch (e) {
+      console.log(`Tag v${newVersion} push skipped or already exists on GitHub.`);
+    }
+  } catch (gitErr) {
+    console.log('⚠️ Git push skipped or git not in PATH.');
   }
 
   // 5. Deploy web & backend to amymusic.ru server

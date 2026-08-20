@@ -36,24 +36,8 @@ function WaveField({ audioEnergy, isPlaying }) {
         preserveAspectRatio="none"
       >
         <defs>
-          <filter id="rough-wave-edge">
-            <feTurbulence
-              type="fractalNoise"
-              baseFrequency={isPlaying ? String(0.012 + treble * 0.028) : "0.01"}
-              numOctaves="2"
-              seed="8"
-              result="noise"
-            />
-            <feDisplacementMap
-              in="SourceGraphic"
-              in2="noise"
-              scale={isPlaying ? String(10 + bass * 44) : "8"}
-              xChannelSelector="R"
-              yChannelSelector="G"
-            />
-          </filter>
-          <filter id="wave-glow">
-            <feGaussianBlur stdDeviation={isPlaying ? "8" : "5"} result="blur" />
+          <filter id="wave-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
@@ -160,7 +144,7 @@ function WaveVolumeControl({ effectiveVolume, setVolume }) {
 
   return (
     <div className="volume-control group relative grid h-11 w-11 shrink-0 place-items-center">
-      <div className="volume-popover pointer-events-none absolute bottom-12 left-1/2 z-30 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-2xl border border-white/10 bg-[#171717]/95 py-3 opacity-0 shadow-2xl backdrop-blur-md transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+      <div className="volume-popover pointer-events-none absolute bottom-12 left-1/2 z-30 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-[var(--cover-radius,16px)] border border-white/10 bg-[#171717]/95 py-3 opacity-0 shadow-2xl backdrop-blur-md transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
         <div
           className="volume-live-fill pointer-events-none absolute left-1/2 w-[9px] -translate-x-1/2 rounded-full bg-[var(--player-accent-muted)]"
           style={{
@@ -321,21 +305,30 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
     setWaveError("");
     // Reset rolling window on fresh wave start
     recentWaveIdsRef.current = new Set();
+    const prevTrackId = currentTrack?.id && currentTrack.id !== "empty" ? String(currentTrack.id) : null;
+    if (prevTrackId) {
+      recentWaveIdsRef.current.add(prevTrackId);
+    }
+
     try {
       let tracks = await getPersonalWaveTracks({
         likedTracks,
         dislikedTrackIds,
         dislikedTracks,
         playHistory,
-        currentTrack
+        currentTrack: null
       });
 
       if (!tracks.length) {
         tracks = await getWaveTracks("dark underground rap");
       }
 
-      if (tracks.length) {
-        const waveTracks = shuffleWaveTracks(tracks);
+      // Filter out the old previous track from the first position
+      const freshTracks = prevTrackId ? tracks.filter((t) => String(t.id) !== prevTrackId) : tracks;
+      const waveList = freshTracks.length ? freshTracks : tracks;
+
+      if (waveList.length) {
+        const waveTracks = shuffleWaveTracks(waveList);
         // Seed the recent-IDs window so the first append batch doesn't repeat these
         waveTracks.forEach((track) => recentWaveIdsRef.current.add(String(track.id)));
         await playTrack(waveTracks[0], waveTracks);

@@ -990,9 +990,21 @@ function createWindow() {
     mainWindow = null;
   });
 
+  mainWindow.on("blur", () => {
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.setFrameRate(10);
+    }
+  });
+
+  mainWindow.on("focus", () => {
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.setFrameRate(60);
+    }
+  });
+
   mainWindow.on("minimize", (event) => {
-    if (mainWindow.webContents) {
-      mainWindow.webContents.setFrameRate(15);
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.setFrameRate(10);
     }
     if (!isTrayEnabled) return;
     event.preventDefault();
@@ -1000,13 +1012,13 @@ function createWindow() {
   });
 
   mainWindow.on("restore", () => {
-    if (mainWindow.webContents) {
+    if (mainWindow && mainWindow.webContents) {
       mainWindow.webContents.setFrameRate(60);
     }
   });
 
   mainWindow.on("show", () => {
-    if (mainWindow.webContents) {
+    if (mainWindow && mainWindow.webContents) {
       mainWindow.webContents.setFrameRate(60);
     }
   });
@@ -1014,8 +1026,8 @@ function createWindow() {
   mainWindow.on("close", (event) => {
     if (!isTrayEnabled || isQuitting) return;
     event.preventDefault();
-    if (mainWindow.webContents) {
-      mainWindow.webContents.setFrameRate(15);
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.setFrameRate(10);
     }
     mainWindow.hide();
   });

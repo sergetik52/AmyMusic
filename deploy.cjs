@@ -108,7 +108,21 @@ conn.on('ready', () => {
         await uploadDir(sftp, distDir, '/var/www/amymusic/dist');
         console.log('  ✓ Uploaded dist/ successfully');
 
-        // Setup files are served directly via GitHub Releases CDN redirect
+        // Upload installer binaries if present in downloads/
+        const downloadsDir = path.join(__dirname, 'downloads');
+        if (fs.existsSync(downloadsDir)) {
+          const downloadFiles = fs.readdirSync(downloadsDir);
+          for (const df of downloadFiles) {
+            if (df.endsWith('.exe') || df.endsWith('.blockmap')) {
+              const localDf = path.join(downloadsDir, df);
+              const remoteDf = `/var/www/amymusic/downloads/${df}`;
+              await new Promise((resolve, reject) => {
+                sftp.fastPut(localDf, remoteDf, (e) => e ? reject(e) : resolve());
+              });
+              console.log(`  ✓ Uploaded downloads/${df}`);
+            }
+          }
+        }
 
         console.log('⚙️ Configuring Nginx & SSL for amymusic.ru...');
         setupNginxAndStart();

@@ -383,7 +383,7 @@ button {
   stroke: var(--cover-line);
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: url("#rough-wave-edge") url("#wave-glow");
+  filter: drop-shadow(0 0 6px var(--cover-line));
   opacity: 0.72;
   vector-effect: non-scaling-stroke;
   stroke-width: 10;
@@ -391,7 +391,7 @@ button {
   animation:
     song-wave-flow 8.5s linear infinite,
     song-wave-idle 5.4s ease-in-out infinite;
-  will-change: transform, stroke-width, opacity, filter;
+  will-change: transform, stroke-width, opacity;
 }
 
 .song-wave-strand-1 {
@@ -429,10 +429,7 @@ button {
     song-wave-flow calc(5.2s - var(--audio-level) * 2.4s) linear infinite,
     song-wave-idle 3.2s ease-in-out infinite,
     song-wave-bass 1.58s cubic-bezier(0.37, 0, 0.25, 1) infinite;
-  filter:
-    url("#rough-wave-edge")
-    url("#wave-glow")
-    drop-shadow(0 0 calc(10px + var(--audio-level) * 28px) var(--cover-line));
+  filter: drop-shadow(0 0 calc(8px + var(--audio-level) * 16px) var(--cover-line));
 }
 
 .is-playing .song-wave-strand-1 {

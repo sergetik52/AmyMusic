@@ -40,8 +40,9 @@ function addUnique(list, value) {
 }
 
 function splitArtistCandidates(value = "") {
+  if (!value) return [];
   return cleanText(value)
-    .split(/\s*(?:,|&|\/|\+|\bx\b|\bX\b|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b|\bwith\b|;)\s*/i)
+    .split(/\s*(?:,|&|\/|\+|\bx\b|\bX\b|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|при\s+уч(?:\.|астии)?|\bуч\.?|;)\s*/i)
     .map(cleanText)
     .filter((item) => item.length >= 2 && item.length <= 64);
 }
@@ -57,11 +58,11 @@ function splitTrailingFeatureBlock(value = "") {
     };
   }
 
-  const featureMatch = cleaned.match(/\b(?:feat\.?|ft\.?|featuring|with)\b/i);
-  if (featureMatch?.index > 0) {
+  const featureMatch = cleaned.match(/(?:feat\.?|ft\.?|featuring|with|при\s+уч(?:\.|астии)?|\bуч\.?)\s+(.+)$/i);
+  if (featureMatch && featureMatch.index > 0) {
     return {
-      title: cleaned.slice(0, featureMatch.index),
-      features: cleaned.slice(featureMatch.index + featureMatch[0].length)
+      title: cleaned.slice(0, featureMatch.index).trim(),
+      features: featureMatch[1].trim()
     };
   }
 
@@ -78,7 +79,7 @@ function extractArtistsFromTitle(rawTitle = "") {
     splitArtistCandidates(splitTrailingFeatureBlock(dashMatch[2]).features).forEach((artist) => addUnique(artists, artist));
   }
 
-  const featureMatches = source.matchAll(/\b(?:feat\.?|ft\.?|featuring|with)\s+([^\)\]\-–—]+)/gi);
+  const featureMatches = source.matchAll(/(?:feat\.?|ft\.?|featuring|with|при\s+уч(?:\.|астии)?|\bуч\.?)\s+([^\)\]\-–—]+)/gi);
   for (const match of featureMatches) {
     splitArtistCandidates(match[1]).forEach((artist) => addUnique(artists, artist));
   }
@@ -88,23 +89,25 @@ function extractArtistsFromTitle(rawTitle = "") {
   return artists;
 }
 
-function getTitleCandidates(rawTitle = "") {
+function generateTitleVariants(rawTitle = "") {
   const titles = [];
-  const cleaned = cleanText(rawTitle);
-  const dashMatch = cleaned.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  const source = String(rawTitle || "");
+  const dashMatch = source.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  const trackTitle = dashMatch ? dashMatch[2] : source;
 
-  if (dashMatch) {
-    addUnique(titles, dashMatch[2]);
-    addUnique(titles, splitTrailingFeatureBlock(dashMatch[2]).title);
-  }
+  addUnique(titles, trackTitle);
+  addUnique(titles, splitTrailingFeatureBlock(trackTitle).title);
 
+  const cleaned = cleanText(trackTitle);
   addUnique(titles, cleaned);
-  addUnique(titles, splitTrailingFeatureBlock(cleaned).title);
-  addUnique(titles, cleaned.replace(/\b(?:feat\.?|ft\.?|featuring|with)\b.+$/i, ""));
+  addUnique(titles, cleaned.replace(/\s*[\(\[](?:feat\.?|ft\.?|featuring|with|при\s+уч(?:\.|астии)?|\bуч\.?).*?[\)\]]/gi, "").trim());
+  addUnique(titles, cleaned.replace(/\s+(?:feat\.?|ft\.?|featuring|with|при\s+уч(?:\.|астии)?|\bуч\.?).*$/gi, "").trim());
   addUnique(titles, stripAllBrackets(cleaned));
 
   return titles;
 }
+
+const getTitleCandidates = generateTitleVariants;
 
 function getLyricsSignature(track) {
   const rawTitle = track?.title || "";
@@ -348,3 +351,50 @@ export async function fetchLyricsForTrack(track, signal) {
 
   return normalizeLyricsRecord(best, signature.duration);
 }
+
+export function getActiveLyricIndex(lines, currentTime) {
+  if (!lines || !lines.length) return -1;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (Number.isFinite(lines[index].time) && currentTime + 0.08 >= lines[index].time) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+const lyricsRequestCache = new Map();
+
+export function getLyricsCacheKey(track, duration) {
+  return [
+    track?.id || "",
+    track?.title || "",
+    track?.artist || "",
+    Math.round(track?.duration || duration || 0)
+  ].join("|");
+}
+
+export function getCachedLyricsForTrack(track, duration) {
+  const key = getLyricsCacheKey(track, duration);
+  if (lyricsRequestCache.has(key)) {
+    return lyricsRequestCache.get(key);
+  }
+
+  const request = fetchLyricsForTrack({
+    ...track,
+    duration: track.duration || duration
+  })
+    .then((lyrics) => ({
+      status: lyrics.status,
+      lines: lyrics.lines || [],
+      error: ""
+    }))
+    .catch((error) => ({
+      status: "error",
+      lines: [],
+      error: error.message || "Не удалось загрузить текст"
+    }));
+
+  lyricsRequestCache.set(key, request);
+  return request;
+}
+

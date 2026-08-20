@@ -212,7 +212,7 @@ function shouldRepairTrackMetadata(track) {
   if (!track || !track.id || track.id === "empty") return false;
   // Always repair tracks if duration is snippet (<=30s) or if artist string contains multiple artists
   const hasMultipleInString = Boolean(
-    track.artist && /\s*(?:,|&|\/|\+|\b[xX]\b|\bfeat\.?|\bft\.?|\bfeaturing\b|;)\s*/i.test(track.artist)
+    track.artist && /\s*(?:,|&|\/|\+|\b[xX]\b|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|при\s+уч(?:\.|астии)?|\bуч\.?|;)\s*/i.test(track.artist)
   );
   return (
     !track.rawTitle ||
@@ -784,8 +784,6 @@ export function AudioProvider({ children }) {
 
     async function repairStoredMetadata() {
       const needsRepair =
-        queue.some(shouldRepairTrackMetadata) ||
-        originalQueue.some(shouldRepairTrackMetadata) ||
         likedTracks.some(shouldRepairTrackMetadata) ||
         playHistory.some(shouldRepairTrackMetadata) ||
         savedReleases.some((release) => release.tracks?.some(shouldRepairTrackMetadata)) ||
@@ -795,16 +793,12 @@ export function AudioProvider({ children }) {
 
       try {
         logDebug("audio", "repairing stored track metadata");
-        const repairedQueue = await repairTrackListMetadata(queue);
-        const repairedOriginalQueue = await repairTrackListMetadata(originalQueue);
         const repairedLikedTracks = await repairTrackListMetadata(likedTracks);
         const repairedPlayHistory = await repairTrackListMetadata(playHistory);
         const repairedSavedReleases = await repairReleaseListMetadata(savedReleases);
         const repairedUserPlaylists = await repairReleaseListMetadata(userPlaylists);
 
         if (!isMounted) return;
-        setQueue(repairedQueue);
-        setOriginalQueue(repairedOriginalQueue);
         setLikedTracks(repairedLikedTracks);
         setPlayHistory(repairedPlayHistory);
         setSavedReleases(repairedSavedReleases);
@@ -887,36 +881,73 @@ export function AudioProvider({ children }) {
     setAudioEnergy({ bass: 0, mids: 0, treble: 0, level: 0 });
   }, []);
 
+  const isWindowFocusedRef = useRef(true);
+
   const startAudioAnalysis = useCallback(() => {
     if (animationFrameRef.current) return;
+    if (document.hidden || !isWindowFocusedRef.current) return;
 
     const tick = (time) => {
       const analyser = analyserRef.current;
       const data = frequencyDataRef.current;
 
-      if (analyser && data && time - lastAnalysisAtRef.current > 42) {
-        if (!document.hidden) {
-          analyser.getByteFrequencyData(data);
-          const bass = averageRange(data, 1, 12);
-          const mids = averageRange(data, 12, 70);
-          const treble = averageRange(data, 70, data.length);
-          const level = Math.min(1, bass * 0.58 + mids * 0.3 + treble * 0.18);
+      if (!document.hidden && isWindowFocusedRef.current && analyser && data && time - lastAnalysisAtRef.current > 66) {
+        analyser.getByteFrequencyData(data);
+        const bass = averageRange(data, 1, 12);
+        const mids = averageRange(data, 12, 70);
+        const treble = averageRange(data, 70, data.length);
+        const level = Math.min(1, bass * 0.58 + mids * 0.3 + treble * 0.18);
 
-          setAudioEnergy({
-            bass: Number(bass.toFixed(3)),
-            mids: Number(mids.toFixed(3)),
-            treble: Number(treble.toFixed(3)),
-            level: Number(level.toFixed(3))
-          });
-        }
+        setAudioEnergy({
+          bass: Number(bass.toFixed(2)),
+          mids: Number(mids.toFixed(2)),
+          treble: Number(treble.toFixed(2)),
+          level: Number(level.toFixed(2))
+        });
         lastAnalysisAtRef.current = time;
       }
 
-      animationFrameRef.current = requestAnimationFrame(tick);
+      if (!document.hidden && isWindowFocusedRef.current) {
+        animationFrameRef.current = requestAnimationFrame(tick);
+      } else {
+        animationFrameRef.current = null;
+      }
     };
 
     animationFrameRef.current = requestAnimationFrame(tick);
   }, []);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      isWindowFocusedRef.current = true;
+      if (isPlayingRef.current) {
+        startAudioAnalysis();
+      }
+    };
+
+    const handleBlur = () => {
+      isWindowFocusedRef.current = false;
+      stopAudioAnalysis();
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopAudioAnalysis();
+      } else if (isPlayingRef.current && isWindowFocusedRef.current) {
+        startAudioAnalysis();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [startAudioAnalysis, stopAudioAnalysis]);
 
   useEffect(() => {
     const audio = new Audio();
@@ -1351,6 +1382,12 @@ export function AudioProvider({ children }) {
 
     // Fix: don't reload the track if it's already playing and we didn't manually request a change
     if (String(nextTrack.id) === String(loadedTrackIdRef.current) && !manualActionRef.current && !pendingAutoplayRef.current) {
+      return;
+    }
+
+    // Only load or play when explicitly requested via user action or pending navigation
+    const isManualOrPending = manualActionRef.current || pendingAutoplayRef.current;
+    if (!isManualOrPending) {
       return;
     }
 

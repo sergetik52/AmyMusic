@@ -224,7 +224,7 @@ function splitArtistNames(value = "") {
   if (!value) return [];
   return cleanTrackTitle(value)
     .replace(/^[\(\[]+|[\)\]]+$/g, "")
-    .split(/\s*(?:,|&|\/|\+|\bx\b|\bX\b|feat\.?|ft\.?|\bfeaturing\b|\bwith\b|;)\s*/i)
+    .split(/\s*(?:,|&|\/|\+|\bx\b|\bX\b|feat\.?|ft\.?|\bfeaturing\b|\bwith\b|при\s+уч(?:\.|астии)?|\bуч\.?|;)\s*/i)
     .map((name) => name.replace(/^[\s.\-–—:;()[\]]+|[\s.\-–—:;()[\]]+$/g, "").trim())
     .filter((name) => {
       if (!name || name.length < 2 || name.length > 50) return false;
@@ -237,8 +237,19 @@ function splitArtistNames(value = "") {
 function splitTrailingFeatureBlock(value = "") {
   const cleaned = cleanTrackTitle(value);
 
-  // Match (feat. X) or [ft. X] or feat. X or with X
-  const featureMatch = cleaned.match(/\s*[\(\[]?\s*(?:feat\.?|ft\.?|\bfeaturing\b|\bwith\b)\s+(.+?)[\)\]]?$/i);
+  // Check for (feat. X) / [ft. X] / (при уч. X) / (при участии X) anywhere in parentheses/brackets
+  const parenMatch = cleaned.match(/\s*[\(\[]\s*(?:feat\.?|ft\.?|\bfeaturing\b|\bwith\b|при\s+уч(?:\.|астии)?|\bуч\.?)\s+([^\)\]]+)[\)\]]/i);
+  if (parenMatch) {
+    const titlePart = (cleaned.slice(0, parenMatch.index) + cleaned.slice(parenMatch.index + parenMatch[0].length)).replace(/[\(\[]+$/g, "").trim();
+    const featurePart = parenMatch[1].trim();
+    return {
+      title: titlePart || cleaned,
+      features: featurePart
+    };
+  }
+
+  // Match (feat. X) or [ft. X] or feat. X or with X or при уч. X or при участии X
+  const featureMatch = cleaned.match(/\s*[\(\[]?\s*(?:feat\.?|ft\.?|\bfeaturing\b|\bwith\b|при\s+уч(?:\.|астии)?|\bуч\.?)\s+(.+?)[\)\]]?$/i);
   if (featureMatch && featureMatch.index > 0) {
     const titlePart = cleaned.slice(0, featureMatch.index).replace(/[\(\[]+$/g, "").trim();
     const featurePart = featureMatch[1].replace(/[\)\]]+$/g, "").trim();
@@ -509,7 +520,7 @@ function normalizeSoundCloudTrack(track = {}, fallback = {}) {
 }
 
 async function resolveArtistUser(artist) {
-  if (artist?.id && artist.id !== "empty") return artist;
+  if (artist?.id && artist.id !== "empty" && !String(artist.id).startsWith("artist-")) return artist;
   const name = artist?.username || artist?.name;
   if (!name) return null;
 
@@ -520,7 +531,7 @@ async function resolveArtistUser(artist) {
       const exact = found.find(
         (a) => normalizeComparable(a.username || a.name) === normName
       );
-      return exact || found[0];
+      return exact || null;
     }
   } catch (err) {
     logWarn("api", "resolveArtistUser search failed", err);
@@ -531,14 +542,14 @@ async function resolveArtistUser(artist) {
 export async function getArtistProfile(artist) {
   assertClientId();
   const resolved = await resolveArtistUser(artist);
-  const targetId = resolved?.id || artist?.id;
+  const targetId = resolved?.id || (artist?.id && !String(artist.id).startsWith("artist-") ? artist.id : null);
 
   if (!targetId || targetId === "empty") {
     return {
       id: "",
       name: artist?.name || artist?.username || "Unknown artist",
       username: artist?.username || artist?.name || "Unknown artist",
-      avatar: artist?.avatar || "/logo.png",
+      avatar: (artist?.avatar && !artist.avatar.includes("logo.png")) ? artist.avatar : ((artist?.cover && !artist.cover.includes("logo.png")) ? artist.cover : "/user.svg"),
       followers: 0,
       followings: 0,
       trackCount: 0
@@ -557,7 +568,7 @@ export async function getArtistProfile(artist) {
       id: targetId,
       name: artist?.name || artist?.username || "Unknown artist",
       username: artist?.username || artist?.name || "Unknown artist",
-      avatar: artist?.avatar || "/logo.png",
+      avatar: (artist?.avatar && !artist.avatar.includes("logo.png")) ? artist.avatar : ((artist?.cover && !artist.cover.includes("logo.png")) ? artist.cover : "/user.svg"),
       followers: 0
     };
   }
@@ -567,46 +578,44 @@ export async function getArtistTracks(artist, limit = 200) {
   assertClientId();
   const query = artist?.username || artist?.name || "";
   const resolved = await resolveArtistUser(artist);
-  const targetId = resolved?.id || artist?.id;
+  const targetId = resolved?.id || (artist?.id && !String(artist.id).startsWith("artist-") ? artist.id : null);
 
-  const promises = [];
   if (targetId && targetId !== "empty") {
-    const url = new URL(`${getSoundCloudApiBase()}/users/${targetId}/tracks`, window.location.origin);
-    applyRuntimeSettings(url);
-    url.searchParams.set("limit", String(limit));
-    promises.push(
-      requestJson(toFetchUrl(url), "getArtistTracks")
-        .then((data) => (Array.isArray(data) ? data : data.collection || []).map((t) => safeNormalizeSoundCloudTrack(t)))
-        .catch((e) => {
-          logWarn("api", "getArtistTracks profile fetch failed", e);
-          return [];
-        })
-    );
-  }
-
-  if (query) {
-    promises.push(
-      searchTracksLimited(query, 50).catch((e) => {
-        logWarn("api", "getArtistTracks search fallback failed", e);
-        return [];
-      })
-    );
-  }
-
-  const results = await Promise.allSettled(promises);
-  const trackMap = new Map();
-
-  results.forEach((res) => {
-    if (res.status === "fulfilled" && Array.isArray(res.value)) {
-      res.value.forEach((t) => {
-        if (t?.id && !trackMap.has(String(t.id))) {
-          trackMap.set(String(t.id), t);
-        }
-      });
+    try {
+      const url = new URL(`${getSoundCloudApiBase()}/users/${targetId}/tracks`, window.location.origin);
+      applyRuntimeSettings(url);
+      url.searchParams.set("limit", String(limit));
+      const data = await requestJson(toFetchUrl(url), "getArtistTracks");
+      const list = (Array.isArray(data) ? data : data.collection || []).map((t) => safeNormalizeSoundCloudTrack(t));
+      if (list.length > 0) {
+        return list;
+      }
+    } catch (e) {
+      logWarn("api", "getArtistTracks profile fetch failed", e);
     }
-  });
+  }
 
-  return Array.from(trackMap.values());
+  // Fallback if artist profile has no direct tracks: search by artist name and filter to matching tracks
+  if (query) {
+    try {
+      const searched = await searchTracksLimited(query, 50);
+      const normQuery = normalizeComparable(query);
+      return searched.filter((t) => {
+        const trackArtist = normalizeComparable(t.artist || "");
+        const rawTitle = normalizeComparable(t.rawTitle || t.title || "");
+        return (
+          trackArtist.includes(normQuery) ||
+          rawTitle.startsWith(normQuery) ||
+          t.artists?.some((a) => normalizeComparable(a.name || a.username || "").includes(normQuery))
+        );
+      });
+    } catch (e) {
+      logWarn("api", "getArtistTracks search fallback failed", e);
+      return [];
+    }
+  }
+
+  return [];
 }
 
 export async function getArtistAlbums(artist) {
@@ -723,8 +732,56 @@ async function getTrackDetails(track, fallback = {}) {
   }
 }
 
+export async function fetchTracksBatch(trackIds = []) {
+  if (!trackIds.length) return new Map();
+  const uniqueIds = [...new Set(trackIds.map(String).filter((id) => id && id !== "empty" && !id.startsWith("single-")))];
+  if (!uniqueIds.length) return new Map();
+
+  const chunkSize = 50;
+  const chunks = [];
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    chunks.push(uniqueIds.slice(i, i + chunkSize));
+  }
+
+  const results = await Promise.allSettled(
+    chunks.map(async (chunk) => {
+      const url = new URL(`${getSoundCloudApiBase()}/tracks`, window.location.origin);
+      url.searchParams.set("ids", chunk.join(","));
+      applyRuntimeSettings(url);
+      const data = await requestJson(toFetchUrl(url), "fetchTracksBatch");
+      const list = Array.isArray(data) ? data : (data?.collection || []);
+      return list.map((t) => safeNormalizeSoundCloudTrack(t));
+    })
+  );
+
+  const trackMap = new Map();
+  results.forEach((res) => {
+    if (res.status === "fulfilled" && Array.isArray(res.value)) {
+      res.value.forEach((t) => {
+        if (t?.id) trackMap.set(String(t.id), t);
+      });
+    }
+  });
+
+  return trackMap;
+}
+
 async function hydrateAlbumTracks(album, artist = {}) {
   if (!album?.tracks?.length) return album;
+
+  const stubTrackIds = album.tracks
+    .filter((t) => shouldHydrateTrack(t))
+    .map((t) => String(t.id))
+    .filter(Boolean);
+
+  let batchMap = new Map();
+  if (stubTrackIds.length > 0) {
+    try {
+      batchMap = await fetchTracksBatch(stubTrackIds);
+    } catch (e) {
+      logWarn("api", "hydrateAlbumTracks batch fetch failed", e);
+    }
+  }
 
   const fallbackUser = {
     id: artist.id,
@@ -734,80 +791,75 @@ async function hydrateAlbumTracks(album, artist = {}) {
     permalink_url: artist.permalinkUrl
   };
 
-  const hydrated = await Promise.allSettled(
+  const hydratedTracks = await Promise.all(
     album.tracks.map(async (track) => {
-      if (!shouldHydrateTrack(track)) return track;
+      const fromBatch = batchMap.get(String(track.id));
+      if (fromBatch) {
+        return {
+          ...track,
+          ...fromBatch,
+          rawTitle: fromBatch.rawTitle || track.rawTitle || track.title,
+          cover: fromBatch.cover || track.cover || album.cover,
+          artist: fromBatch.artist || track.artist || album.artist,
+          title: fromBatch.title || track.title
+        };
+      }
 
-      const detailedTrack = await getTrackDetails(track, {
-        user: fallbackUser,
-        artist: album.artist || artist.username || artist.name,
-        cover: track.cover || album.cover,
-        title: track.title
-      });
+      if (shouldHydrateTrack(track)) {
+        try {
+          const detailedTrack = await getTrackDetails(track, {
+            user: fallbackUser,
+            artist: album.artist || artist.username || artist.name,
+            cover: track.cover || album.cover,
+            title: track.title
+          });
+          return {
+            ...track,
+            ...detailedTrack,
+            rawTitle: detailedTrack.rawTitle || track.rawTitle || track.title,
+            cover: detailedTrack.cover || track.cover || album.cover,
+            artist: detailedTrack.artist || track.artist || album.artist,
+            title: detailedTrack.title || track.title
+          };
+        } catch {
+          return track;
+        }
+      }
 
-      return {
-        ...track,
-        ...detailedTrack,
-        rawTitle: detailedTrack.rawTitle || track.rawTitle || track.title,
-        cover: detailedTrack.cover || track.cover || album.cover,
-        artist: detailedTrack.artist || track.artist || album.artist,
-        title: detailedTrack.title || track.title
-      };
+      return track;
     })
   );
 
   return {
     ...album,
-    tracks: hydrated.map((result, index) => {
-      if (result.status === "fulfilled") return result.value;
-      logWarn("api", "album track hydration failed", {
-        albumId: album.id,
-        trackId: album.tracks[index]?.id,
-        reason: result.reason?.message
-      });
-      return album.tracks[index];
-    })
+    tracks: hydratedTracks
   };
 }
 
 export async function hydrateSoundCloudTracks(tracks = [], fallback = {}) {
   if (!tracks.length) return [];
 
-  const hydrated = await Promise.allSettled(
-    tracks.map(async (track) => {
-      const shouldLoad =
-        fallback.forceMetadata ||
-        shouldHydrateTrack(track) ||
-        !track.title ||
-        track.title === "Untitled" ||
-        track.title === "Без названия";
+  const neededIds = tracks.filter((t) => fallback.forceMetadata || shouldHydrateTrack(t)).map((t) => String(t.id));
+  let batchMap = new Map();
+  if (neededIds.length > 0) {
+    try {
+      batchMap = await fetchTracksBatch(neededIds);
+    } catch {}
+  }
 
-      if (!shouldLoad) return track;
-
-      const detailedTrack = await getTrackDetails(track, {
-        artist: fallback.artist || track.artist,
-        cover: track.cover || fallback.cover,
-        title: track.rawTitle || track.title
-      });
-
+  return tracks.map((track) => {
+    const fromBatch = batchMap.get(String(track.id));
+    if (fromBatch) {
       return {
         ...track,
-        ...detailedTrack,
-        rawTitle: detailedTrack.rawTitle || track.rawTitle || track.title,
-        cover: detailedTrack.cover || track.cover || fallback.cover,
-        artist: detailedTrack.artist || track.artist || fallback.artist,
-        title: detailedTrack.title || track.title
+        ...fromBatch,
+        rawTitle: fromBatch.rawTitle || track.rawTitle || track.title,
+        cover: fromBatch.cover || track.cover || fallback.cover,
+        artist: fromBatch.artist || track.artist || fallback.artist,
+        title: fromBatch.title || track.title
       };
-    })
-  );
-
-  return hydrated.map((result, index) => {
-    if (result.status === "fulfilled") return result.value;
-    logWarn("api", "track hydration failed", {
-      trackId: tracks[index]?.id,
-      reason: result.reason?.message
-    });
-    return tracks[index];
+    }
+    return track;
   });
 }
 
@@ -1223,8 +1275,8 @@ function scoreWaveTrack(track, context) {
   score += Math.min(34, Math.log10((track.playbackCount || 0) + 1) * 6);
   score += Math.min(18, Math.log10((track.likesCount || 0) + 1) * 4);
 
-  if (context.historyIds.has(track.id)) score -= 8;
-  if (context.likedIds.has(track.id)) score += 12;
+  if (context.historyIds.has(track.id)) score -= 25;
+  if (context.likedIds.has(track.id)) score += 6;
   if (context.dislikedIds.has(track.id)) score -= 1000;
 
   return score;

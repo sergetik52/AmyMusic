@@ -61,9 +61,9 @@ function isFeatureTrack(track, artistName = "") {
   const artist = String(track.artist || "");
   const profileName = String(artistName || "").toLowerCase();
   const text = `${title} ${artist}`.toLowerCase();
-  const hasFeatureMarker = /\b(feat|ft|featuring|with)\.?\b|\sx\s|[,+/&]/i.test(text);
+  const hasFeatureMarker = /\b(feat|ft|featuring|with)\.?\b|при\s+уч(?:\.|астии)?|\bуч\.?|\sx\s|[,+/&]/i.test(text);
   const artistParts = artist
-    .split(/\s*(?:,|&|\/|\+|\bx\b|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b|;)\s*/i)
+    .split(/\s*(?:,|&|\/|\+|\bx\b|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b|\bwith\b|при\s+уч(?:\.|астии)?|\bуч\.?|;)\s*/i)
     .map((part) => part.trim().toLowerCase())
     .filter(Boolean);
 
@@ -466,93 +466,36 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
     setIsTracksViewOpen(false);
 
     async function loadArtist() {
-      let resolvedArtist = artist;
-      const artistQuery = artist?.username || artist?.name || "";
-
-      if (artistQuery) {
-        try {
-          const foundArtists = await searchArtists(artistQuery);
-          if (foundArtists.length > 0) {
-            const normQuery = (artistQuery || "").toLowerCase().trim();
-            const exactMatch = foundArtists.find(
-              (a) => (a.username || a.name || "").toLowerCase().trim() === normQuery
-            );
-            resolvedArtist = exactMatch || foundArtists[0];
-            if (isMounted) setProfile(resolvedArtist);
-          }
-        } catch {
-          resolvedArtist = artist;
-        }
-      }
-
       const results = await Promise.allSettled([
-        getArtistProfile(resolvedArtist),
-        getArtistTracks(resolvedArtist, 200),
-        artistQuery ? searchTracks(artistQuery) : Promise.resolve([]),
-        getArtistAlbums(resolvedArtist),
-        getArtistPlaylists(resolvedArtist),
-        getRelatedArtists(resolvedArtist)
+        getArtistProfile(artist),
+        getArtistTracks(artist, 100),
+        getArtistAlbums(artist),
+        getArtistPlaylists(artist),
+        getRelatedArtists(artist)
       ]);
 
       if (!isMounted) return;
 
-      const [profileResult, tracksResult, searchedTracksResult, albumsResult, playlistsResult, relatedResult] = results;
+      const [profileResult, tracksResult, albumsResult, playlistsResult, relatedResult] = results;
 
       if (profileResult.status === "fulfilled" && profileResult.value) {
         setProfile(profileResult.value);
       }
 
       const directTracks = tracksResult.status === "fulfilled" ? tracksResult.value || [] : [];
-      const searchedTracks = searchedTracksResult.status === "fulfilled" ? searchedTracksResult.value || [] : [];
+      setTracks(directTracks);
 
-      // Merge and deduplicate all tracks (by track ID)
-      const trackMap = new Map();
-      directTracks.forEach((t) => {
-        if (t?.id) trackMap.set(String(t.id), t);
-      });
-
-      searchedTracks.forEach((t) => {
-        if (t?.id && !trackMap.has(String(t.id))) {
-          trackMap.set(String(t.id), t);
-        }
-      });
-
-      const mergedTracks = Array.from(trackMap.values());
-      setTracks(mergedTracks);
-
-      let loadedAlbums = albumsResult.status === "fulfilled" ? albumsResult.value || [] : [];
-      const knownAlbumTitles = new Set(loadedAlbums.map((a) => (a.title || "").toLowerCase().trim()));
-
-      // Automatically turn standalone searched tracks into single release cards if not in albums
-      searchedTracks.forEach((t) => {
-        const normTitle = (t.title || "").toLowerCase().trim();
-        if (normTitle && !knownAlbumTitles.has(normTitle)) {
-          knownAlbumTitles.add(normTitle);
-          loadedAlbums.push({
-            id: `single-${t.id}`,
-            title: t.title,
-            kind: "single",
-            artist: t.artist || resolvedArtist.name || artistQuery,
-            cover: t.cover,
-            tracks: [t],
-            trackCount: 1,
-            createdAt: t.createdAt
-          });
-        }
-      });
-
+      const loadedAlbums = albumsResult.status === "fulfilled" ? albumsResult.value || [] : [];
       setAlbums(loadedAlbums);
 
       if (playlistsResult.status === "fulfilled") {
         const albumIds = new Set(loadedAlbums.map((a) => String(a.id)));
-        const uniquePlaylists = (playlistsResult.value || []).filter((p) => {
-          return !albumIds.has(String(p.id)) && !knownAlbumTitles.has((p.title || "").toLowerCase().trim());
-        });
+        const uniquePlaylists = (playlistsResult.value || []).filter((p) => !albumIds.has(String(p.id)));
         setPlaylists(uniquePlaylists);
       }
 
       if (relatedResult.status === "fulfilled") {
-        setRelatedArtists(relatedResult.value);
+        setRelatedArtists(relatedResult.value || []);
       }
     }
 

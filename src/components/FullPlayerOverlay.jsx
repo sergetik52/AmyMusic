@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
-import { fetchLyricsForTrack } from "../services/lyricsApi";
+import { getCachedLyricsForTrack, getActiveLyricIndex } from "../services/lyricsApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { TrackContextMenu, TrackMenuButton } from "./TrackContextMenu";
 
@@ -11,57 +11,9 @@ function formatTime(seconds) {
   return `${minutes}:${rest}`;
 }
 
-function getActiveLyricIndex(lines, currentTime) {
-  if (!lines.length) return -1;
-
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    if (Number.isFinite(lines[index].time) && currentTime + 0.08 >= lines[index].time) {
-      return index;
-    }
-  }
-
-  return -1;
-}
-
-const lyricsRequestCache = new Map();
-
-function getLyricsCacheKey(track, duration) {
-  return [
-    track?.id || "",
-    track?.title || "",
-    track?.artist || "",
-    Math.round(track?.duration || duration || 0)
-  ].join("|");
-}
-
-function getCachedLyricsForTrack(track, duration) {
-  const key = getLyricsCacheKey(track, duration);
-  if (lyricsRequestCache.has(key)) {
-    return lyricsRequestCache.get(key);
-  }
-
-  const request = fetchLyricsForTrack({
-    ...track,
-    duration: track.duration || duration
-  })
-    .then((lyrics) => ({
-      status: lyrics.status,
-      lines: lyrics.lines || [],
-      error: ""
-    }))
-    .catch((error) => ({
-      status: "error",
-      lines: [],
-      error: error.message || "Не удалось загрузить текст"
-    }));
-
-  lyricsRequestCache.set(key, request);
-  return request;
-}
-
 function splitArtistNames(value = "") {
   if (!value) return [];
-  const parts = String(value).split(/\s*(?:,|&|\/|\+|\b[xX]\b|×|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|;)\s*/i);
+  const parts = String(value).split(/\s*(?:,|&|\/|\+|\b[xX]\b|×|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|при\s+уч(?:\.|астии)?|\bуч\.?|;)\s*/i);
   const seen = new Set();
   const result = [];
   parts.forEach((p) => {
@@ -140,7 +92,7 @@ function getTrackArtists(track) {
   });
 }
 
-export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
+export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlbum }) {
   const [isHovered, setIsHovered] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [showLyrics, setShowLyrics] = useState(true);
@@ -180,6 +132,16 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
     removeFromQueue
   } = useAudioPlayer();
 
+  const prevIndex = useRef(currentIndex);
+  const slideClass = useRef("animate-slideInRight");
+
+  if (currentIndex !== prevIndex.current) {
+    slideClass.current = currentIndex > prevIndex.current ? "animate-slideInRight" : "animate-slideInLeft";
+    prevIndex.current = currentIndex;
+  }
+
+  const coverUrl = currentTrack?.cover || "/logo.png";
+
   const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
   const [dragOverQueueIndex, setDragOverQueueIndex] = useState(null);
   const [queueContextMenu, setQueueContextMenu] = useState(null);
@@ -193,7 +155,7 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
     Number.isFinite(firstLyricTime) && currentTime + 0.08 < firstLyricTime;
   const lyricsAnchorIndex = isBeforeFirstLyric ? -1 : activeLyricIndex;
   const shouldShowLyricsPanel =
-    sidePanel === "lyrics" && showLyrics && (lyricsState.status === "loading" || lyricsState.lines.length > 0);
+    sidePanel === "lyrics" && showLyrics && lyricsState.lines.length > 0;
   const shouldShowQueuePanel = sidePanel === "queue";
   const shouldShowSidePanel = shouldShowLyricsPanel || shouldShowQueuePanel;
 
@@ -500,7 +462,8 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
 
       <div className={`flex flex-col items-center justify-center p-8 transition-all duration-500 ease-in-out ${shouldShowSidePanel ? "w-1/2" : "w-full"}`}>
         <div
-          className={`flex flex-col items-center gap-4 transition-all duration-300 ease-out ${isVisible && !isClosing ? "translate-y-0 scale-100" : "translate-y-4 scale-95"
+          key={currentTrack?.id}
+          className={`flex flex-col items-center gap-4 transition-all duration-300 ease-out ${slideClass.current} ${isVisible && !isClosing ? "translate-y-0 scale-100" : "translate-y-4 scale-95"
             }`}
         >
           <div
@@ -509,7 +472,7 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
             className="relative h-80 w-80 cursor-pointer rounded-2xl shadow-2xl"
             style={{ boxShadow: "0 30px 90px rgba(0,0,0,.62)" }}
           >
-            <img src={currentTrack.cover} alt={currentTrack.title} className="h-full w-full object-cover rounded-2xl" />
+            <img src={coverUrl} alt={currentTrack?.title || ""} className="h-full w-full object-cover rounded-2xl" />
 
             <div
               className={`absolute inset-0 bg-black/50 rounded-2xl transition-opacity duration-300 ${isHovered ? "opacity-100" : "pointer-events-none opacity-0"
@@ -696,11 +659,48 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
               onWheel={handleLyricsWheel}
               className="relative h-screen w-full overflow-hidden px-12"
             >
-              <div
-                className="absolute left-0 right-0 top-0 flex flex-col items-center gap-6 px-12 text-center transition-transform duration-500 ease-out"
+              <div 
+                className="mx-auto flex max-w-[760px] flex-col gap-8 text-center text-[36px] font-extrabold leading-[1.2] tracking-tight transition-transform duration-500 ease-out"
                 style={{ transform: `translateY(${lyricsOffset}px)` }}
               >
-                {renderLyrics()}
+                {/* Intro Bouncing Dots */}
+                {lyricsState.lines.length > 0 && (
+                  <div
+                    ref={(el) => {
+                      if (el) lyricRefs.current[-1] = el;
+                    }}
+                    className={`flex items-center justify-center gap-3 py-4 transition-all duration-300 ${
+                      isBeforeFirstLyric ? "opacity-100 scale-110 blur-none" : "opacity-20 blur-[2px]"
+                    }`}
+                  >
+                    <div className={`h-4 w-4 rounded-full bg-white ${isBeforeFirstLyric ? 'animate-bounce' : ''}`} style={{ animationDelay: "0ms" }} />
+                    <div className={`h-4 w-4 rounded-full bg-white ${isBeforeFirstLyric ? 'animate-bounce' : ''}`} style={{ animationDelay: "150ms" }} />
+                    <div className={`h-4 w-4 rounded-full bg-white ${isBeforeFirstLyric ? 'animate-bounce' : ''}`} style={{ animationDelay: "300ms" }} />
+                  </div>
+                )}
+                {lyricsState.lines.map((line, index) => {
+                  const isActive = !isBeforeFirstLyric && index === activeLyricIndex;
+                  const isPast = index < activeLyricIndex || (isBeforeFirstLyric && index <= activeLyricIndex);
+                  
+                  return (
+                    <p
+                      key={`${index}-${line.time}`}
+                      ref={(el) => {
+                        if (el) lyricRefs.current[index] = el;
+                      }}
+                      onClick={() => seekToLyric(line, index)}
+                      className={`cursor-pointer transition-all duration-300 ${
+                        isActive
+                          ? "scale-[1.02] text-white blur-none"
+                          : isPast
+                          ? "text-white/30 blur-[1px]"
+                          : "text-white/20 hover:text-white/40 blur-[1px] hover:blur-none"
+                      }`}
+                    >
+                      {line.text}
+                    </p>
+                  );
+                })}
               </div>
             </div>
           )

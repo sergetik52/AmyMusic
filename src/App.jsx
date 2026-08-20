@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Component } from "react";
 import { WaveView } from "./components/WaveView";
@@ -28,6 +28,7 @@ import {
   saveProfileSettings,
   subscribeProfileSettings
 } from "./services/profileSettings";
+import { getCachedLyricsForTrack, getActiveLyricIndex } from "./services/lyricsApi";
 import { useEscapeKey } from "./utils/useEscapeKey";
 import "./main.css";
 
@@ -178,6 +179,9 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
     setDraft((current) => {
       const nextSettings = { ...current, [field]: value };
       onSave(nextSettings);
+      if (field === "appearance") {
+        applyAppearanceSettings(value);
+      }
       return nextSettings;
     });
   };
@@ -1081,7 +1085,7 @@ function ArtistCard({ artist, onClick }) {
 
 function splitArtistNames(value = "") {
   if (!value) return [];
-  const parts = String(value).split(/\s*(?:,|&|\/|\+|\b[xX]\b|×|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|;)\s*/i);
+  const parts = String(value).split(/\s*(?:,|&|\/|\+|\b[xX]\b|×|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|при\s+уч(?:\.|астии)?|\bуч\.?|;)\s*/i);
   const seen = new Set();
   const result = [];
   parts.forEach((p) => {
@@ -2011,21 +2015,28 @@ function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
 }
 
 function TrackInfo({ onOpenFull, onOpenArtist, onOpenAlbum }) {
-  const { currentTrack } = useAudioPlayer();
+  const { currentTrack, currentIndex } = useAudioPlayer();
+  const prevIndex = React.useRef(currentIndex);
+  const slideClass = React.useRef("animate-slideInRight");
+
+  if (currentIndex !== prevIndex.current) {
+    slideClass.current = currentIndex > prevIndex.current ? "animate-slideInRight" : "animate-slideInLeft";
+    prevIndex.current = currentIndex;
+  }
 
   return (
-    <div className="flex w-[320px] items-center gap-3">
+    <div key={currentTrack?.id} className={`flex w-[320px] items-center gap-3 ${slideClass.current}`}>
       {/* Track cover */}
       <div 
         onClick={onOpenFull}
-        className="group relative shrink-0 cursor-pointer overflow-hidden rounded-[6.66px]"
+        className="group/cover relative shrink-0 cursor-pointer overflow-hidden rounded-[var(--cover-radius,12px)] transition-all duration-300"
       >
         <img
           src={currentTrack.cover}
           alt={currentTrack.title}
-          className="h-[50px] w-[50px] object-cover transition duration-300 group-hover:scale-105"
+          className="h-[50px] w-[50px] object-cover transition duration-300 group-hover/cover:scale-105"
         />
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover/cover:opacity-100">
           <svg className="h-5 w-5 fill-white" viewBox="0 0 24 24">
             <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z" />
           </svg>
@@ -2072,7 +2083,7 @@ function PlayerIconButton({ id, icon, label, onClick, active = false, badge = ""
       return (
         <svg 
           style={{ fill: active ? "var(--player-accent, #8341EF)" : "currentColor" }}
-          className={`h-5 w-5 transition-colors ${active ? "" : "text-white/60 hover:text-white"}`} 
+          className="h-5 w-5 transition-colors" 
           viewBox="0 0 24 22"
         >
           <path fillRule="evenodd" clipRule="evenodd" d="M17.8212 16.7055L21.081 19.4508L22.5105 17.7534L1.42948 0L0 1.69743L2.46855 3.77631C1.70961 4.89297 1.26953 6.33731 1.26953 8.06101C1.26953 11.9861 4.22921 14.5651 6.67973 16.5225C6.94981 16.7383 7.21387 16.9463 7.47062 17.1487C8.44852 17.9193 9.3203 18.6061 10.0123 19.3128C10.8831 20.2018 11.2558 20.9169 11.2558 21.5858H13.475C13.475 20.9169 13.8477 20.2018 14.7184 19.3128C15.4105 18.6061 16.2821 17.9192 17.26 17.1487C17.4435 17.0041 17.6308 16.8566 17.8212 16.7055ZM16.0882 15.2461L4.1805 5.21803C3.7654 5.91242 3.48871 6.84633 3.48871 8.06101C3.48871 10.7933 5.52215 12.7576 8.06476 14.7886C8.30011 14.9766 8.54083 15.1661 8.78332 15.357C9.77472 16.1373 10.7953 16.9407 11.5977 17.7599C11.8676 18.0356 12.1284 18.3278 12.3653 18.6383C12.6023 18.3278 12.8631 18.0356 13.133 17.7599C13.9355 16.9407 14.956 16.1373 15.9475 15.357C15.9944 15.32 16.0414 15.283 16.0882 15.2461ZM17.3352 1.23124C15.509 1.26961 13.7485 2.14104 12.5963 3.74083L14.3034 5.17015C15.0718 4.01573 16.262 3.47345 17.3818 3.44992C18.3427 3.42972 19.2908 3.78206 20.0004 4.5031C20.7027 5.21665 21.2421 6.36524 21.2421 8.06101C21.2421 8.9416 21.0308 9.7424 20.6594 10.4914L22.3964 11.9456C23.0454 10.8145 23.4612 9.53222 23.4612 8.06101C23.4612 5.87314 22.7522 4.13532 21.5821 2.94644C20.4193 1.76506 18.8709 1.19897 17.3352 1.23124Z" />
@@ -2196,9 +2207,11 @@ function PlayerSeekBar() {
     </div>
   );
 }
-function PlayerTools({ onOpenFull }) {
+function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
   const { currentTrack, effectiveVolume, playTrack, queue, reorderQueue, setVolume, isEqualizerOpen, setIsEqualizerOpen } = useAudioPlayer();
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [isVolumeOpen, setIsVolumeOpen] = useState(false);
+  const volumeRef = useRef(null);
   const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
   const [dragOverQueueIndex, setDragOverQueueIndex] = useState(null);
   const volumePercent = Math.round(effectiveVolume * 100);
@@ -2206,6 +2219,23 @@ function PlayerTools({ onOpenFull }) {
   useEscapeKey(isQueueOpen, () => {
     setIsQueueOpen(false);
   });
+  useEscapeKey(isVolumeOpen, () => {
+    setIsVolumeOpen(false);
+  });
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (volumeRef.current && !volumeRef.current.contains(event.target)) {
+        setIsVolumeOpen(false);
+      }
+    };
+    if (isVolumeOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isVolumeOpen]);
 
   const profileSettings = getProfileSettings();
   useEffect(() => {
@@ -2215,7 +2245,7 @@ function PlayerTools({ onOpenFull }) {
 
   return (
     <div className="flex w-auto items-center justify-end gap-2">
-      <PlayerIconButton icon="/lyrics.svg" label="Текст песни" onClick={onOpenFull} />
+      <PlayerIconButton icon="/lyrics.svg" label="Караоке" onClick={onToggleKaraoke} active={isKaraokeOpen} />
       <div className="relative">
         <PlayerIconButton
           icon="/queue.svg"
@@ -2224,7 +2254,7 @@ function PlayerTools({ onOpenFull }) {
           active={isQueueOpen}
         />
         {isQueueOpen && (
-          <div className="absolute bottom-11 right-0 z-40 w-80 rounded-2xl border border-white/10 bg-[#171717]/95 p-3 shadow-2xl backdrop-blur-md">
+          <div className="absolute bottom-11 right-0 z-50 w-80 rounded-2xl border border-white/10 bg-[#171717]/95 p-3 shadow-2xl backdrop-blur-md">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-bold text-white/80">Очередь</p>
               <span className="text-[10px] font-semibold text-white/35">{queue.length} треков</span>
@@ -2321,39 +2351,44 @@ function PlayerTools({ onOpenFull }) {
         onClick={() => setIsEqualizerOpen((val) => !val)}
         active={isEqualizerOpen}
       />
-      <div className="volume-control group relative grid h-9 w-9 place-items-center">
-        <div className="volume-popover pointer-events-none absolute bottom-10 left-1/2 z-30 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-2xl border border-white/10 bg-[#171717]/95 py-3 opacity-0 shadow-2xl backdrop-blur-md transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-          <div
-            className="volume-live-fill pointer-events-none absolute left-1/2 w-[9px] -translate-x-1/2 rounded-full bg-[var(--player-accent-muted)]"
-            style={{
-              height: `${Math.max(12, effectiveVolume * 221)}px`,
-              bottom: "8px"
-            }}
-          />
-          <div
-            className="volume-live-thumb pointer-events-none absolute left-1/2 h-[19px] w-[19px] -translate-x-1/2 rounded-full bg-[var(--player-accent)]"
-            style={{
-              bottom: `${8 + effectiveVolume * (221 - 19)}px`
-            }}
-          />
-          <img
-            src="/volume-input.svg"
-            alt=""
-            className="pointer-events-none absolute h-[221px] w-[19px] select-none opacity-70"
-          />
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={volumePercent}
-            onChange={(event) => setVolume(Number(event.target.value) / 100)}
-            aria-label="Громкость"
-            className="volume-slider"
-          />
-        </div>
-        <button type="button" aria-label="Громкость" className="grid h-9 w-9 place-items-center rounded-full opacity-60 transition hover:bg-white/10 hover:opacity-100 active:scale-95 group-focus-within:bg-white/10 group-focus-within:opacity-100">
-          <img src={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"} alt="Громкость" className="h-5 w-5" />
-        </button>
+      <div ref={volumeRef} className="relative grid h-9 w-9 place-items-center">
+        {isVolumeOpen && (
+          <div className="absolute bottom-[44px] left-1/2 z-50 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-2xl border border-white/10 bg-[#171717]/95 py-3 shadow-2xl backdrop-blur-md">
+            <div
+              className="volume-live-fill pointer-events-none absolute left-1/2 w-[9px] -translate-x-1/2 rounded-full bg-[var(--player-accent-muted)]"
+              style={{
+                height: `${Math.max(12, effectiveVolume * 221)}px`,
+                bottom: "8px"
+              }}
+            />
+            <div
+              className="volume-live-thumb pointer-events-none absolute left-1/2 h-[19px] w-[19px] -translate-x-1/2 rounded-full bg-[var(--player-accent)]"
+              style={{
+                bottom: `${8 + effectiveVolume * (221 - 19)}px`
+              }}
+            />
+            <img
+              src="/volume-input.svg"
+              alt=""
+              className="pointer-events-none absolute h-[221px] w-[19px] select-none opacity-70"
+            />
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={volumePercent}
+              onChange={(event) => setVolume(Number(event.target.value) / 100)}
+              aria-label="Громкость"
+              className="volume-slider"
+            />
+          </div>
+        )}
+        <PlayerIconButton
+          icon={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"}
+          label="Громкость"
+          onClick={() => setIsVolumeOpen((val) => !val)}
+          active={isVolumeOpen}
+        />
       </div>
     </div>
   );
@@ -2424,26 +2459,356 @@ function AlbumViewContainer({ album, onBack, onOpenArtist, onOpenAlbum }) {
   );
 }
 
-function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum }) {
-  const { trackPalette } = useAudioPlayer();
+function MiniKaraoke({ isOpen, onClose, onOpenFull }) {
+  const { currentTrack, currentTime, duration, seek, trackPalette } = useAudioPlayer();
+  const [lyricsState, setLyricsState] = useState({ status: "idle", lines: [] });
+  const [lyricsOffset, setLyricsOffset] = useState(0);
+  const lyricRefs = useRef([]);
+  const containerRef = useRef(null);
+
+  // Appearance / Disappearance animation state
+  const [isRendered, setIsRendered] = useState(isOpen);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsRendered(true);
+      const timer = setTimeout(() => setIsVisible(true), 20);
+      return () => clearTimeout(timer);
+    } else {
+      setIsVisible(false);
+      const timer = setTimeout(() => setIsRendered(false), 240);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  // Drag state
+  const [pos, setPos] = useState({ x: window.innerWidth - 340, y: window.innerHeight - 580 });
+  const dragRef = useRef(null);
+
+  const onDragStart = useCallback((e) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX - pos.x, startY: e.clientY - pos.y };
+    const onMove = (ev) => {
+      if (!dragRef.current) return;
+      const newX = Math.max(0, Math.min(window.innerWidth - 320, ev.clientX - dragRef.current.startX));
+      const newY = Math.max(0, Math.min(window.innerHeight - 100, ev.clientY - dragRef.current.startY));
+      setPos({ x: newX, y: newY });
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [pos]);
+
+  // Reset position when opened
+  useEffect(() => {
+    if (isOpen) {
+      setPos({ x: window.innerWidth - 340, y: window.innerHeight - 580 });
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    lyricRefs.current = [];
+    setLyricsOffset(0);
+
+    if (!currentTrack?.id || currentTrack.id === "empty") {
+      setLyricsState({ status: "empty", lines: [] });
+      return;
+    }
+    setLyricsState({ status: "loading", lines: [] });
+    getCachedLyricsForTrack(currentTrack, duration).then((result) => {
+      setLyricsState(result);
+    });
+  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artist, duration]);
+
+  const isSynced = lyricsState.status === "synced";
+  const lines = isSynced ? lyricsState.lines : [];
+
+  const activeLyricIndex = useMemo(
+    () => getActiveLyricIndex(lines, currentTime),
+    [currentTime, lines]
+  );
+
+  const firstLyricTime = lines[0]?.time;
+  const isBeforeFirstLyric = isSynced && Number.isFinite(firstLyricTime) && currentTime + 0.08 < firstLyricTime;
+
+  const isUserScrollingRef = useRef(false);
+  const userScrollTimeoutRef = useRef(null);
+
+  const handleWheel = () => {
+    isUserScrollingRef.current = true;
+    clearTimeout(userScrollTimeoutRef.current);
+    userScrollTimeoutRef.current = setTimeout(() => {
+      isUserScrollingRef.current = false;
+    }, 2500);
+  };
+
+  // Auto-scroll active line to top
+  useEffect(() => {
+    if (isUserScrollingRef.current) return;
+
+    if (isBeforeFirstLyric && containerRef.current) {
+      containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    if (activeLyricIndex >= 0) {
+      const anchor = lyricRefs.current[activeLyricIndex];
+      if (anchor && containerRef.current) {
+        containerRef.current.scrollTo({
+          top: Math.max(0, anchor.offsetTop - 12),
+          behavior: "smooth"
+        });
+      }
+    }
+  }, [activeLyricIndex, isBeforeFirstLyric]);
+
+  if (!isRendered) return null;
+
+  const isLoading = lyricsState.status === "loading";
+  const noSyncedLyrics = !isLoading && !isSynced;
 
   return (
     <div
-      className="w-full rounded-[13.32px] border border-white/[0.04] px-4 py-3 shadow-2xl"
+      className="fixed z-50 select-none"
       style={{
-        "--player-accent": `color-mix(in srgb, ${trackPalette.line} 58%, #3a3a3a)`,
-        "--player-accent-muted": `color-mix(in srgb, ${trackPalette.line} 42%, #8a8a8a)`,
-        "--player-accent-soft": `color-mix(in srgb, ${trackPalette.line} 18%, transparent)`,
-        backgroundColor: `color-mix(in srgb, ${trackPalette.shadow} 52%, #161616)`,
-        boxShadow: "0 22px 60px rgba(0,0,0,.48)"
+        width: "320px",
+        left: `${pos.x}px`,
+        top: `${pos.y}px`,
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "scale(1) translateY(0)" : "scale(0.95) translateY(12px)",
+        transition: "opacity 240ms cubic-bezier(0.16, 1, 0.3, 1), transform 240ms cubic-bezier(0.16, 1, 0.3, 1)",
+        pointerEvents: isVisible ? "auto" : "none"
       }}
     >
-      <div className="flex items-center justify-between gap-4">
+      <div
+        className="flex flex-col rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden"
+        style={{
+          backgroundColor: `color-mix(in srgb, ${trackPalette.shadow} 55%, #0e0e0e)`,
+          backdropFilter: "blur(24px)",
+          boxShadow: "0 16px 48px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,0.04)"
+        }}
+      >
+        {/* Header — drag handle */}
+        <div
+          className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/[0.06] cursor-grab active:cursor-grabbing select-none"
+          onMouseDown={onDragStart}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <img src="/lyrics.svg" alt="" className="h-4 w-4 brightness-200 opacity-50 shrink-0" />
+            <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Караоке</span>
+          </div>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button type="button" onClick={onOpenFull} title="Открыть полный экран" className="grid h-7 w-7 place-items-center rounded-full transition hover:bg-white/10">
+              <svg className="h-3.5 w-3.5 fill-white/40" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" /></svg>
+            </button>
+            <button type="button" onClick={onClose} title="Закрыть" className="grid h-7 w-7 place-items-center rounded-full transition hover:bg-white/10">
+              <svg className="h-3.5 w-3.5 fill-white/40" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Lyrics scrollable viewport */}
+        <div
+          ref={containerRef}
+          onWheel={handleWheel}
+          className="relative overflow-y-auto overflow-x-hidden px-2 py-2 select-text"
+          style={{ height: "360px", scrollbarWidth: "none" }}
+        >
+          {isLoading && (
+            <div className="flex items-center justify-center h-full gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="h-2 w-2 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="h-2 w-2 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
+          )}
+          {noSyncedLyrics && (
+            <div className="flex flex-col items-center justify-center h-full gap-2">
+              <img src="/lyrics.svg" alt="" className="h-8 w-8 brightness-200 opacity-20" />
+              <p className="text-[13px] text-white/25 text-center leading-relaxed">Синхронизированный текст<br />не найден для этого трека</p>
+            </div>
+          )}
+          {isSynced && (
+            <div className="relative space-y-1 pt-2 pb-24">
+              {/* Bouncing dots before first lyric */}
+              {isBeforeFirstLyric && (
+                <div className="flex items-center gap-1.5 px-3 py-3">
+                  <span className="h-2.5 w-2.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="h-2.5 w-2.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="h-2.5 w-2.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              )}
+              {lines.map((line, index) => {
+                const isActive = index === activeLyricIndex;
+                const isPast = index < activeLyricIndex;
+                return (
+                  <p
+                    key={`${index}-${line.text}`}
+                    ref={(el) => {
+                      if (el) lyricRefs.current[index] = el;
+                    }}
+                    onClick={() => {
+                      isUserScrollingRef.current = false;
+                      if (Number.isFinite(line.time)) seek(Math.max(0, line.time));
+                      if (containerRef.current && lyricRefs.current[index]) {
+                        containerRef.current.scrollTo({
+                          top: Math.max(0, lyricRefs.current[index].offsetTop - 12),
+                          behavior: "smooth"
+                        });
+                      }
+                    }}
+                    className={[
+                      "cursor-pointer rounded-lg px-3 py-1.5 text-[15px] font-bold transition-all duration-300 leading-snug",
+                      isActive ? "text-white scale-[1.02] origin-left" : isPast ? "opacity-30" : "opacity-45 hover:opacity-70"
+                    ].join(" ")}
+                  >
+                    {line.text}
+                  </p>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center gap-2.5 px-4 py-2.5 border-t border-white/[0.06] bg-black/20">
+          <img src={currentTrack?.cover || "/logo.png"} alt="" className="h-8 w-8 rounded-lg object-cover shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[12px] font-semibold text-white/70">{currentTrack?.title}</p>
+            <p className="truncate text-[11px] text-white/35">{currentTrack?.artist}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, isKaraokeOpen }) {
+  const { currentTime, duration, progress, seek, trackPalette } = useAudioPlayer();
+  const [hoverState, setHoverState] = useState({ visible: false, percent: 0, time: 0 });
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPercent, setScrubPercent] = useState(null);
+
+  const rawPercent = currentTime > 0 && duration > 0 ? Math.min(100, Math.max(0, Math.round((progress || 0) * 1000) / 10)) : 0;
+  const percent = isScrubbing && scrubPercent !== null ? scrubPercent : rawPercent;
+
+  const handleSeekMouseMove = (e) => {
+    if (!duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const percentX = (x / rect.width) * 100;
+    const timeAtX = (x / rect.width) * duration;
+    setHoverState({ visible: true, percent: percentX, time: timeAtX });
+    if (isScrubbing) {
+      setScrubPercent(percentX);
+    }
+  };
+
+  const handleSeekMouseLeave = () => {
+    setHoverState({ visible: false, percent: 0, time: 0 });
+    setIsScrubbing(false);
+    setScrubPercent(null);
+  };
+
+  const handleInputChange = (e) => {
+    const val = Number(e.target.value);
+    if (duration > 0) {
+      setScrubPercent((val / duration) * 100);
+    }
+    seek(val);
+  };
+
+  const handleInputPointerDown = () => {
+    setIsScrubbing(true);
+  };
+
+  const handleInputPointerUp = () => {
+    setIsScrubbing(false);
+    setScrubPercent(null);
+  };
+
+  return (
+    <div
+      className="group relative z-30 w-full rounded-[var(--player-radius,16px)] border border-white/[0.06] shadow-2xl transition-all duration-300 select-none"
+      style={{
+        "--player-accent": `color-mix(in srgb, ${trackPalette.line} 70%, #ffffff)`,
+        "--player-accent-muted": `color-mix(in srgb, ${trackPalette.line} 45%, #8a8a8a)`,
+        "--player-accent-soft": `color-mix(in srgb, ${trackPalette.line} 20%, transparent)`,
+        backgroundColor: `color-mix(in srgb, ${trackPalette.shadow} 45%, #121214)`,
+        boxShadow: "0 22px 60px rgba(0,0,0,.55)"
+      }}
+    >
+      {/* Dynamic minimal background fill layer following progress */}
+      {percent > 0 && (
+        <div
+          className={`pointer-events-none absolute inset-y-0 left-0 z-0 rounded-l-[var(--player-radius,16px)] rounded-tr-[var(--player-radius,16px)] rounded-br-none ${
+            isScrubbing ? "transition-none" : "transition-[width] duration-200 ease-linear"
+          }`}
+          style={{
+            width: `${percent}%`,
+            backgroundColor: `color-mix(in srgb, var(--player-accent) 14%, transparent)`
+          }}
+        />
+      )}
+
+      {/* Top integrated progress bar with hover tooltip */}
+      <div 
+        onMouseMove={handleSeekMouseMove}
+        onMouseLeave={handleSeekMouseLeave}
+        className="relative z-20 w-full h-[3px] group-hover:h-[5px] transition-all duration-200 cursor-pointer bg-white/10 overflow-visible rounded-t-[var(--player-radius,16px)]"
+      >
+        {/* Floating timing tooltip on hover */}
+        {hoverState.visible && duration > 0 && (
+          <div
+            className="pointer-events-none absolute -top-8 z-50 -translate-x-1/2 rounded-md bg-[#18181b]/95 px-2 py-0.5 text-[10.5px] font-mono font-semibold text-white shadow-xl border border-white/15 backdrop-blur-md whitespace-nowrap"
+            style={{
+              left: `${Math.max(4, Math.min(96, hoverState.percent))}%`
+            }}
+          >
+            {formatTime(hoverState.time)} <span className="text-white/40">/</span> {formatTime(duration)}
+          </div>
+        )}
+
+        {/* Outer bar overflow hidden wrapper for progress fill */}
+        <div className="absolute inset-0 overflow-hidden rounded-t-[var(--player-radius,16px)] pointer-events-none">
+          {percent > 0 && (
+            <div
+              className={`h-full bg-[var(--player-accent)] ${
+                isScrubbing ? "transition-none" : "transition-[width] duration-200 ease-linear"
+              }`}
+              style={{ width: `${percent}%` }}
+            />
+          )}
+        </div>
+
+        <input
+          type="range"
+          min="0"
+          max={Math.max(duration || 0, 1)}
+          step="0.1"
+          value={Math.min(currentTime || 0, duration || 0)}
+          onInput={handleInputChange}
+          onChange={handleInputChange}
+          onMouseDown={handleInputPointerDown}
+          onMouseUp={handleInputPointerUp}
+          onTouchStart={handleInputPointerDown}
+          onTouchEnd={handleInputPointerUp}
+          disabled={!duration}
+          aria-label="Перемотка трека"
+          className="player-seek-slider absolute -top-1 bottom-0 left-0 right-0 h-4 z-30 opacity-0 cursor-pointer"
+        />
+      </div>
+
+      {/* Main player controls row */}
+      <div className="relative z-10 flex items-center justify-between gap-4 px-4 py-2.5">
         <TrackInfo onOpenFull={onOpenFull} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
         <PlayerControls />
-        <PlayerTools onOpenFull={onOpenFull} />
+        <PlayerTools onOpenFull={onOpenFull} onToggleKaraoke={onToggleKaraoke} isKaraokeOpen={isKaraokeOpen} />
       </div>
-      <PlayerSeekBar />
     </div>
   );
 }
@@ -2480,6 +2845,8 @@ export default function App() {
   const [activeAlbum, setActiveAlbum] = useState(null);
   const [waveRequestId, setWaveRequestId] = useState(0);
   const [apiSettingsVersion, setApiSettingsVersion] = useState(0);
+  const [isMiniKaraokeOpen, setIsMiniKaraokeOpen] = useState(false);
+  const profileSettings = getProfileSettings();
 
   // --- Auth State ---
   const [currentUser, setCurrentUser] = useState(getUsername() || null);
@@ -2679,12 +3046,23 @@ export default function App() {
           {renderContent()}
         </div>
         {activeTab !== "wave" && (
-          <div className="flex shrink-0 flex-col gap-1">
-            <BottomPlayer onOpenFull={() => setIsFullOpen(true)} onOpenArtist={openArtist} onOpenAlbum={openAlbum} />
+          <div className="relative z-40 flex shrink-0 flex-col gap-1">
+            <BottomPlayer
+              onOpenFull={() => setIsFullOpen(true)}
+              onOpenArtist={openArtist}
+              onOpenAlbum={openAlbum}
+              onToggleKaraoke={() => setIsMiniKaraokeOpen((v) => !v)}
+              isKaraokeOpen={isMiniKaraokeOpen}
+            />
             <p className="self-end pr-1 text-[10px] text-neutral-600">Copyright © 2026 AmyMusic. Все права НЕ защищены.</p>
           </div>
         )}
       </div>
+      <MiniKaraoke
+        isOpen={isMiniKaraokeOpen}
+        onClose={() => setIsMiniKaraokeOpen(false)}
+        onOpenFull={() => { setIsMiniKaraokeOpen(false); setIsFullOpen(true); }}
+      />
       {isFullOpen && (
         <FullPlayerOverlay
           appearance={profileSettings?.appearance}
