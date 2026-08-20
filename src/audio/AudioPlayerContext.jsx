@@ -1177,7 +1177,7 @@ export function AudioProvider({ children }) {
     }
 
     // Fix: don't reload the track if it's already playing and we didn't manually request a change
-    if (String(nextTrack.id) === String(currentTrackRef.current?.id) && !manualActionRef.current) {
+    if (String(nextTrack.id) === String(loadedTrackIdRef.current) && !manualActionRef.current && !pendingAutoplayRef.current) {
       return;
     }
 
