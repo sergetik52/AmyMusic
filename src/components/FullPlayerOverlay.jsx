@@ -696,12 +696,40 @@ export function FullPlayerOverlay({ onClose, onOpenArtist, onOpenAlbum }) {
               onWheel={handleLyricsWheel}
               className="relative h-screen w-full overflow-hidden px-12"
             >
-              <div
-                className="absolute left-0 right-0 top-0 flex flex-col items-center gap-6 px-12 text-center transition-transform duration-500 ease-out"
-                style={{ transform: `translateY(${lyricsOffset}px)` }}
-              >
-                {renderLyrics()}
-              </div>
+                          {/* Cover Art Container */}
+            <div className="relative group flex items-center justify-center">
+              {appearance?.fullOpenArtworkStyle === "vinyl" ? (
+                <div className="relative w-64 h-64 sm:w-80 sm:h-80 flex items-center justify-center">
+                  {/* Rotating Vinyl Record behind cover */}
+                  <div className="absolute inset-0 rounded-full bg-[#111] border-4 border-[#222] shadow-2xl flex items-center justify-center animate-vinyl-spin">
+                    <div className="w-24 h-24 rounded-full border-4 border-black/60 bg-[#1d1d21] flex items-center justify-center">
+                      <div className="w-6 h-6 rounded-full bg-white/20" />
+                    </div>
+                  </div>
+                  {/* Track Cover centered */}
+                  <img
+                    src={coverUrl}
+                    alt={currentTrack?.title}
+                    className="relative z-10 w-48 h-48 sm:w-60 sm:h-60 object-cover rounded-full shadow-2xl border-2 border-white/20"
+                  />
+                </div>
+              ) : appearance?.fullOpenArtworkStyle === "glow" ? (
+                <div className="relative">
+                  <div className="absolute -inset-4 rounded-3xl bg-[var(--theme-accent,#8341EF)] opacity-40 blur-2xl animate-pulse" />
+                  <img
+                    src={coverUrl}
+                    alt={currentTrack?.title}
+                    className="relative z-10 w-64 h-64 sm:w-80 sm:h-80 object-cover rounded-3xl shadow-2xl border border-white/10"
+                  />
+                </div>
+              ) : (
+                <img
+                  src={coverUrl}
+                  alt={currentTrack?.title}
+                  className="w-64 h-64 sm:w-80 sm:h-80 object-cover rounded-3xl shadow-2xl border border-white/10"
+                />
+              )}
+            </div>
             </div>
           )
         ) : null}

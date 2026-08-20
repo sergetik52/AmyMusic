@@ -160,7 +160,7 @@ function WaveVolumeControl({ effectiveVolume, setVolume }) {
 
   return (
     <div className="volume-control group relative grid h-11 w-11 shrink-0 place-items-center">
-      <div className="volume-popover pointer-events-none absolute bottom-12 left-1/2 z-30 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-2xl border border-white/10 bg-[#171717]/95 py-3 opacity-0 shadow-2xl backdrop-blur-md transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+      <div className="volume-popover pointer-events-none absolute bottom-12 left-1/2 z-30 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-[var(--cover-radius,16px)] border border-white/10 bg-[#171717]/95 py-3 opacity-0 shadow-2xl backdrop-blur-md transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
         <div
           className="volume-live-fill pointer-events-none absolute left-1/2 w-[9px] -translate-x-1/2 rounded-full bg-[var(--player-accent-muted)]"
           style={{

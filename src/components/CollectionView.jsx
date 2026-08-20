@@ -198,7 +198,7 @@ function FavoriteArtistCard({ artist, index, onOpen }) {
     <button
       type="button"
       onClick={() => onOpen(artist)}
-      className="group flex w-36 shrink-0 flex-col items-center rounded-2xl p-3 text-center transition hover:bg-white/[0.04]"
+      className="group flex w-36 shrink-0 flex-col items-center rounded-[var(--cover-radius,16px)] p-3 text-center transition hover:bg-white/[0.04]"
     >
       <div className="relative mb-3 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] shadow-2xl">
         <img
@@ -230,7 +230,7 @@ function ReleaseCard({ release, onOpen, onUnlike }) {
         onClick={() => onOpen(release)}
         className="w-full text-left disabled:cursor-default disabled:opacity-60"
       >
-        <div className="relative aspect-square overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+        <div className="relative aspect-square overflow-hidden rounded-[var(--cover-radius,16px)] border border-white/10 bg-white/[0.04]">
           <img src={release.cover} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
           <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/25" />
           <div className="absolute bottom-2 right-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-black text-white/70">
@@ -334,7 +334,7 @@ function PlaylistView({
         {isCoverExpanded && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-8">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-3xl" onClick={() => setIsCoverExpanded(false)} />
-            <img src={cover || "/logo.png"} alt="" className="relative z-10 max-h-full max-w-full rounded-2xl object-contain shadow-2xl" />
+            <img src={cover || "/logo.png"} alt="" className="relative z-10 max-h-full max-w-full rounded-[var(--cover-radius,16px)] object-contain shadow-2xl" />
           </div>
         )}
 
@@ -434,7 +434,7 @@ function PlaylistView({
                     {isMenuOpen && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)} />
-                        <div className="absolute left-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#141414] shadow-2xl">
+                        <div className="absolute left-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-[var(--cover-radius,12px)] border border-white/10 bg-[#141414] shadow-2xl">
                           <input
                             type="file"
                             ref={fileInputRef}
@@ -510,7 +510,7 @@ function PlaylistView({
                 setDragOverTrackIndex(null);
               }}
               className={[
-                "group flex items-center gap-3 rounded-xl p-2 transition hover:bg-white/[0.04]",
+                "group flex items-center gap-3 rounded-[var(--cover-radius,12px)] p-2 transition hover:bg-white/[0.04]",
                 isEditable ? "cursor-grab active:cursor-grabbing" : "",
                 isDragging ? "opacity-30 scale-95" : "opacity-100",
                 isDragOver ? "border-2 border-[#8341EF]" : "border border-transparent"
@@ -935,7 +935,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
               onSubmit={(e) => {
                 handleImportPlaylist(e);
               }}
-              className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-2 max-w-2xl"
+              className="flex items-center gap-2 rounded-[var(--cover-radius,16px)] border border-white/10 bg-white/[0.03] p-2 max-w-2xl"
             >
               <input
                 type="text"
@@ -993,7 +993,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
         </div>
 
         {likedTracks.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-10 text-center">
+          <div className="rounded-[var(--cover-radius,16px)] border border-white/10 bg-white/[0.03] px-6 py-10 text-center">
             <p className="text-sm font-semibold text-white/70">Пока нет лайкнутых треков</p>
             <p className="mt-1 text-xs text-white/35">
               Поставь лайк в нижнем плеере, поиске или в Моей волне.
@@ -1018,7 +1018,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
               return (
                 <div
                   key={track.id}
-                  className="group flex items-center justify-between rounded-xl p-2 transition hover:bg-white/5"
+                  className="group flex items-center justify-between rounded-[var(--cover-radius,12px)] p-2 transition hover:bg-white/5"
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-3.5 text-left">
                     <button
@@ -1113,7 +1113,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
               onClick={() => setIsAddPlaylistOpen(true)}
               className="group relative w-40 shrink-0 text-left"
             >
-              <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] transition duration-300 group-hover:bg-white/[0.08]">
+              <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-[var(--cover-radius,16px)] border border-white/10 bg-white/[0.04] transition duration-300 group-hover:bg-white/[0.08]">
                 <span className="text-5xl font-light text-white/30 transition duration-300 group-hover:scale-110 group-hover:text-white/60">+</span>
               </div>
               <p className="mt-2 truncate text-sm font-black text-white transition group-hover:text-white/80">Добавить</p>

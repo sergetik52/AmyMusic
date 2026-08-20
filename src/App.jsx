@@ -178,6 +178,9 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
     setDraft((current) => {
       const nextSettings = { ...current, [field]: value };
       onSave(nextSettings);
+      if (field === "appearance") {
+        applyAppearanceSettings(value);
+      }
       return nextSettings;
     });
   };
@@ -2018,7 +2021,7 @@ function TrackInfo({ onOpenFull, onOpenArtist, onOpenAlbum }) {
       {/* Track cover */}
       <div 
         onClick={onOpenFull}
-        className="group relative shrink-0 cursor-pointer overflow-hidden rounded-[6.66px]"
+        className="group relative shrink-0 cursor-pointer overflow-hidden rounded-[var(--cover-radius,12px)] transition-all duration-300"
       >
         <img
           src={currentTrack.cover}
@@ -2429,7 +2432,7 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum }) {
 
   return (
     <div
-      className="w-full rounded-[13.32px] border border-white/[0.04] px-4 py-3 shadow-2xl"
+      className="w-full rounded-[var(--player-radius,16px)] border border-white/[0.04] px-4 py-3 shadow-2xl transition-all duration-300"
       style={{
         "--player-accent": `color-mix(in srgb, ${trackPalette.line} 58%, #3a3a3a)`,
         "--player-accent-muted": `color-mix(in srgb, ${trackPalette.line} 42%, #8a8a8a)`,
