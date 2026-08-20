@@ -160,7 +160,8 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
 
   const tabs = [
     { id: "profile", label: "Профиль", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-    { id: "audio", label: "Аудио", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg> },
+        { id: "appearance", label: "Внешний вид", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> },
+{ id: "audio", label: "Аудио", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg> },
     { id: "system", label: "Система", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
     { id: "developer", label: "Разработчик", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-.273l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> }
   ];
@@ -404,6 +405,167 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
                   >
                     {passwordLoading ? "Изменение..." : "Сменить пароль"}
                   </button>
+                </div>
+              </div>
+            )}
+
+                        {activeTab === "appearance" && (
+              <div key="appearance" className="animate-[fadeIn_0.3s_ease-out] space-y-8">
+                <h3 className="text-2xl font-black text-white mb-6">Кастомизация интерфейса</h3>
+
+                {/* 1. Theme Presets */}
+                <div className="space-y-3">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-white/50">Тема и Акцентный Цвет</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { id: "amy", name: "Amy Neon", color: "#8341EF" },
+                      { id: "dotify", name: "Dotify Green", color: "#1DB954" },
+                      { id: "cyberpunk", name: "Cyberpunk", color: "#FF007F" },
+                      { id: "midnight", name: "Midnight Blue", color: "#3B82F6" },
+                      { id: "oled", name: "OLED Dark", color: "#FFFFFF" },
+                      { id: "sunset", name: "Sunset Gold", color: "#F97316" }
+                    ].map((t) => {
+                      const isSelected = (draft.appearance?.themePreset || "amy") === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => updateField("appearance", { ...(draft.appearance || {}), themePreset: t.id })}
+                          className={`flex items-center gap-3 p-3 rounded-2xl border transition-all text-left ${isSelected ? "border-white/40 bg-white/10 shadow-lg scale-[1.02]" : "border-white/5 bg-white/[0.02] hover:bg-white/[0.05]"}`}
+                        >
+                          <div className="w-5 h-5 rounded-full shrink-0 shadow-md" style={{ backgroundColor: t.color }} />
+                          <span className="text-xs font-bold text-white truncate">{t.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Player Customization */}
+                <div className="space-y-3 pt-4 border-t border-white/5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-white/50">Кастомизация Плеера</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <span className="block text-xs text-white/70 font-semibold">Стиль Плеера</span>
+                      <select
+                        value={draft.appearance?.playerStyle || "floating"}
+                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), playerStyle: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
+                      >
+                        <option value="floating" className="bg-[#141416]">Floating Island (Плавающий)</option>
+                        <option value="dock" className="bg-[#141416]">Docked Bar (Прикрепить снизу)</option>
+                        <option value="minimal" className="bg-[#141416]">Minimal Pill (Компактный)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="block text-xs text-white/70 font-semibold">Закругление Плеера</span>
+                      <select
+                        value={draft.appearance?.playerRounding || "xl"}
+                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), playerRounding: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
+                      >
+                        <option value="xl" className="bg-[#141416]">Rounded XL (16px)</option>
+                        <option value="pill" className="bg-[#141416]">Full Pill (Капсула)</option>
+                        <option value="sharp" className="bg-[#141416]">Sharp (8px)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. FullOpen Customization */}
+                <div className="space-y-3 pt-4 border-t border-white/5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-white/50">FullOpen (Полноэкранный плеер)</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <span className="block text-xs text-white/70 font-semibold">Стиль Свечения Фона</span>
+                      <select
+                        value={draft.appearance?.fullOpenGlow || "ambient"}
+                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), fullOpenGlow: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
+                      >
+                        <option value="ambient" className="bg-[#141416]">Ambient Glow (Динамическое свечение)</option>
+                        <option value="mesh" className="bg-[#141416]">Mesh Gradient (Сетчатый градиент)</option>
+                        <option value="solid" className="bg-[#141416]">Solid Glass (Матовый темный)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="block text-xs text-white/70 font-semibold">Анимация Обложки</span>
+                      <select
+                        value={draft.appearance?.fullOpenArtworkStyle || "glow"}
+                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), fullOpenArtworkStyle: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
+                      >
+                        <option value="glow" className="bg-[#141416]">Pulsing Glow (Пульсация свечения)</option>
+                        <option value="vinyl" className="bg-[#141416]">Vinyl Disk (Вращающийся винил)</option>
+                        <option value="card" className="bg-[#141416]">Static Card (Классическая карточка)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Lyrics Customization */}
+                <div className="space-y-3 pt-4 border-t border-white/5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-white/50">Текст Песни (Lyrics)</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <span className="block text-xs text-white/70 font-semibold">Размер Шрифта</span>
+                      <select
+                        value={draft.appearance?.lyricsFontSize || "standard"}
+                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), lyricsFontSize: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
+                      >
+                        <option value="standard" className="bg-[#141416]">Standard (Стандартный)</option>
+                        <option value="large" className="bg-[#141416]">Large (Крупный текст)</option>
+                        <option value="giant" className="bg-[#141416]">Giant Karaoke (Гигант)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="block text-xs text-white/70 font-semibold">Эффект Неактивных Строк</span>
+                      <select
+                        value={draft.appearance?.lyricsInactiveEffect || "blur"}
+                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), lyricsInactiveEffect: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
+                      >
+                        <option value="blur" className="bg-[#141416]">Subtle Blur (Мягкое размытие)</option>
+                        <option value="dimmed" className="bg-[#141416]">Dimmed Text (Полупрозрачный)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Covers Customization */}
+                <div className="space-y-3 pt-4 border-t border-white/5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-white/50">Обложки и Карточки</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <span className="block text-xs text-white/70 font-semibold">Закругление Обложек</span>
+                      <select
+                        value={draft.appearance?.coverRounding || "rounded"}
+                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), coverRounding: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
+                      >
+                        <option value="rounded" className="bg-[#141416]">Standard Rounded (16px)</option>
+                        <option value="extra" className="bg-[#141416]">Extra Round (24px)</option>
+                        <option value="circle" className="bg-[#141416]">Circle (Круглые)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="block text-xs text-white/70 font-semibold">Эффект Наведения (Hover)</span>
+                      <select
+                        value={draft.appearance?.cardHoverEffect || "glow"}
+                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), cardHoverEffect: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
+                      >
+                        <option value="glow" className="bg-[#141416]">Elevate & Glow (Подъем и свечение)</option>
+                        <option value="zoom" className="bg-[#141416]">Zoom & Tilt (Увеличение)</option>
+                        <option value="flat" className="bg-[#141416]">Flat Clean (Статичный)</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -2046,6 +2208,10 @@ function PlayerTools({ onOpenFull }) {
   });
 
   const profileSettings = getProfileSettings();
+  useEffect(() => {
+    applyAppearanceSettings(profileSettings?.appearance);
+  }, [profileSettings?.appearance]);
+
 
   return (
     <div className="flex w-auto items-center justify-end gap-2">
@@ -2282,6 +2448,28 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum }) {
   );
 }
 
+export function applyAppearanceSettings(appearance = {}) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const preset = appearance.themePreset || "amy";
+
+  root.classList.remove(
+    "theme-preset-amy",
+    "theme-preset-dotify",
+    "theme-preset-cyberpunk",
+    "theme-preset-midnight",
+    "theme-preset-oled",
+    "theme-preset-sunset"
+  );
+  root.classList.add(`theme-preset-${preset}`);
+
+  const coverRoundingMap = { rounded: "16px", extra: "24px", circle: "9999px" };
+  root.style.setProperty("--cover-radius", coverRoundingMap[appearance.coverRounding] || "16px");
+
+  const playerRoundingMap = { sharp: "8px", xl: "16px", pill: "9999px" };
+  root.style.setProperty("--player-radius", playerRoundingMap[appearance.playerRounding] || "24px");
+}
+
 export default function App() {
   
 
@@ -2499,6 +2687,7 @@ export default function App() {
       </div>
       {isFullOpen && (
         <FullPlayerOverlay
+          appearance={profileSettings?.appearance}
           onClose={() => setIsFullOpen(false)}
           onOpenArtist={openArtist}
           onOpenAlbum={openAlbum}

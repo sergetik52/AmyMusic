@@ -1,6 +1,20 @@
 const PROFILE_SETTINGS_KEY = "amymusic.profileSettings.v1";
 
 export const defaultProfileSettings = {
+  appearance: {
+    themePreset: "amy", // "amy", "dotify", "cyberpunk", "midnight", "oled", "sunset"
+    accentColor: "#8341EF",
+    glassBlur: "medium", // "none", "low", "medium", "high"
+    playerStyle: "floating", // "floating", "dock", "minimal"
+    playerRounding: "xl", // "sharp", "xl", "pill"
+    fullOpenGlow: "ambient", // "ambient", "mesh", "solid"
+    fullOpenArtworkStyle: "glow", // "glow", "vinyl", "card"
+    lyricsFontSize: "standard", // "standard", "large", "giant"
+    lyricsInactiveEffect: "blur", // "blur", "dimmed"
+    lyricsAlignment: "center", // "center", "left"
+    coverRounding: "rounded", // "rounded", "extra", "circle"
+    cardHoverEffect: "glow" // "glow", "zoom", "flat"
+  },
   displayName: "Local profile",
   avatarUrl: "",
   soundCloudClientId: "",
