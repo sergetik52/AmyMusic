@@ -11,17 +11,116 @@ app.use(express.json({ limit: '10mb' }));
 const JWT_SECRET = process.env.JWT_SECRET || 'amymusic-super-secret-key';
 
 // Middleware for authentication
+const DEFAULT_PRIVACY = {
+  showCollection: 'everyone', // 'everyone' | 'friends' | 'nobody'
+  showLikes: 'everyone',      // 'everyone' | 'friends' | 'nobody'
+  showOnline: 'everyone',     // 'everyone' | 'friends' | 'nobody'
+  allowFriends: 'everyone',   // 'everyone' | 'nobody'
+  allowTrackSharing: 'everyone' // 'everyone' | 'friends' | 'nobody'
+};
+
+function parseSqliteDate(dateStr) {
+  if (!dateStr) return 0;
+  const isoStr = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+  const time = new Date(isoStr).getTime();
+  return isNaN(time) ? 0 : time;
+}
+
+function parsePrivacy(jsonStr) {
+  if (!jsonStr) return DEFAULT_PRIVACY;
+  try {
+    return { ...DEFAULT_PRIVACY, ...JSON.parse(jsonStr) };
+  } catch {
+    return DEFAULT_PRIVACY;
+  }
+}
+
+const https = require('https');
+
+function syncRemoteTopUsers() {
+  https.get('https://amymusic.ru/api/rating/top', (res) => {
+    let data = '';
+    res.on('data', chunk => data += chunk);
+    res.on('end', () => {
+      try {
+        const topList = JSON.parse(data);
+        if (Array.isArray(topList)) {
+          topList.forEach(u => {
+            const secs = u.total_listen_seconds || u.totalListenedSeconds || 0;
+            if (u.username) {
+              db.run(
+                `INSERT INTO users (username, password_hash, display_name, total_listen_seconds) 
+                 VALUES (?, 'remote_hash', ?, ?)
+                 ON CONFLICT(username) DO UPDATE SET total_listen_seconds = MAX(total_listen_seconds, excluded.total_listen_seconds)`,
+                [u.username, u.username, secs],
+                () => {}
+              );
+            }
+          });
+        }
+      } catch (e) {}
+    });
+  }).on('error', () => {});
+}
+
+// Sync on startup and every 2 minutes
+syncRemoteTopUsers();
+setInterval(syncRemoteTopUsers, 120000);
+
+function ensureUser(userPayload) {
+  return new Promise((resolve) => {
+    if (!userPayload || !userPayload.username) return resolve(null);
+    db.get(`SELECT * FROM users WHERE username = ?`, [userPayload.username], (err, row) => {
+      if (row) {
+        userPayload.id = row.id;
+        return resolve(row);
+      }
+      db.run(
+        `INSERT INTO users (username, password_hash, display_name) VALUES (?, 'remote_hash', ?)
+         ON CONFLICT(username) DO NOTHING`,
+        [userPayload.username, userPayload.username],
+        function () {
+          db.get(`SELECT * FROM users WHERE username = ?`, [userPayload.username], (_, newRow) => {
+            if (newRow) userPayload.id = newRow.id;
+            resolve(newRow || null);
+          });
+        }
+      );
+    });
+  });
+}
+
+// Middleware for authentication
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) return res.sendStatus(403);
     req.user = user;
+    await ensureUser(req.user);
+    db.run(`UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE id = ?`, [req.user.id], () => {});
     next();
   });
+};
+
+const optionalAuthenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (token) {
+    jwt.verify(token, JWT_SECRET, async (err, user) => {
+      if (!err && user) {
+        req.user = user;
+        await ensureUser(req.user);
+        db.run(`UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE id = ?`, [user.id], () => {});
+      }
+      next();
+    });
+  } else {
+    next();
+  }
 };
 
 // --- AUTH ROUTES ---
@@ -60,26 +159,28 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 app.get('/api/auth/me', authenticateToken, (req, res) => {
-  db.get(`SELECT username, display_name, avatar_url, total_listen_seconds FROM users WHERE id = ?`, [req.user.id], (err, row) => {
+  db.get(`SELECT username, display_name, avatar_url, bio, total_listen_seconds, privacy_settings FROM users WHERE id = ?`, [req.user.id], (err, row) => {
     if (err) return res.status(500).json({ error: 'Database error' });
     if (!row) return res.status(404).json({ error: 'User not found' });
     res.json({ 
       username: row.username, 
       displayName: row.display_name, 
       avatarUrl: row.avatar_url,
-      totalListenedSeconds: row.total_listen_seconds || 0
+      bio: row.bio || '',
+      totalListenedSeconds: row.total_listen_seconds || 0,
+      privacySettings: parsePrivacy(row.privacy_settings)
     });
   });
 });
 
 app.post('/api/auth/profile', authenticateToken, (req, res) => {
-  const { displayName, avatarUrl } = req.body;
+  const { displayName, avatarUrl, bio } = req.body;
   db.run(
-    `UPDATE users SET display_name = ?, avatar_url = ? WHERE id = ?`,
-    [displayName || null, avatarUrl || null, req.user.id],
+    `UPDATE users SET display_name = ?, avatar_url = ?, bio = ? WHERE id = ?`,
+    [displayName || null, avatarUrl || null, bio !== undefined ? bio : null, req.user.id],
     (err) => {
       if (err) return res.status(500).json({ error: 'Database error' });
-      res.json({ success: true, displayName, avatarUrl });
+      res.json({ success: true, displayName, avatarUrl, bio });
     }
   );
 });
@@ -106,6 +207,14 @@ app.post('/api/auth/change-password', authenticateToken, (req, res) => {
       if (err) return res.status(500).json({ error: 'Database error' });
       res.json({ success: true, message: 'Пароль успешно изменён' });
     });
+  });
+});
+
+// --- PRIVACY SETTINGS ---
+app.get('/api/users/privacy', authenticateToken, (req, res) => {
+  db.get(`SELECT privacy_settings FROM users WHERE id = ?`, [req.user.id], (err, row) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    res.json(parsePrivacy(row?.privacy_settings));
   });
 });
 
@@ -154,24 +263,48 @@ app.post('/api/sync/wave', authenticateToken, (req, res) => {
 
 // --- RATING / LISTENING TRACKING ---
 app.post('/api/track/listen', authenticateToken, (req, res) => {
-  const { absoluteSeconds } = req.body;
-  if (absoluteSeconds === undefined || isNaN(absoluteSeconds)) return res.status(400).json({ error: 'Invalid seconds' });
+  const { absoluteSeconds, seconds } = req.body;
+  const secs = absoluteSeconds !== undefined ? absoluteSeconds : seconds;
+  if (secs === undefined || isNaN(secs)) return res.status(400).json({ error: 'Invalid seconds' });
 
   db.run(`UPDATE users SET total_listen_seconds = MAX(total_listen_seconds, ?) WHERE id = ?`, 
-         [absoluteSeconds, req.user.id], (err) => {
+         [secs, req.user.id], (err) => {
     if (err) return res.status(500).json({ error: 'Database error' });
     res.json({ success: true });
   });
 });
 
-app.get('/api/rating/top', (req, res) => {
-  db.all(`SELECT username, total_listen_seconds FROM users ORDER BY total_listen_seconds DESC LIMIT 50`, (err, rows) => {
-    if (err) return res.status(500).json({ error: 'Database error' });
-    res.json(rows);
-  });
+app.get('/api/rating/top', optionalAuthenticateToken, (req, res) => {
+  const currentUserId = req.user?.id;
+  db.all(
+    `SELECT id, username, display_name, avatar_url, total_listen_seconds, last_seen, privacy_settings 
+     FROM users 
+     ORDER BY total_listen_seconds DESC 
+     LIMIT 50`,
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: 'Database error' });
+      
+      const now = Date.now();
+      const results = rows.map((u, index) => {
+        const privacy = parsePrivacy(u.privacy_settings);
+        const lastSeenTime = parseSqliteDate(u.last_seen);
+        const isOnline = (now - lastSeenTime < 3 * 60 * 1000) && privacy.showOnline !== 'nobody';
+
+        return {
+          rank: index + 1,
+          id: u.id,
+          username: u.username,
+          displayName: u.display_name,
+          avatarUrl: u.avatar_url,
+          totalListenedSeconds: u.total_listen_seconds || 0,
+          isOnline: isOnline && (privacy.showOnline === 'everyone' || (privacy.showOnline === 'friends' && currentUserId))
+        };
+      });
+      res.json(results);
+    }
+  );
 });
 
-const https = require('https');
 const path = require('path');
 
 // --- SOUNDCLOUD API PROXY (For Web Browser Deployment) ---

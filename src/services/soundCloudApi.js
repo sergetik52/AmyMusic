@@ -783,6 +783,19 @@ async function hydrateAlbumTracks(album, artist = {}) {
     }
   }
 
+  let artistTrackMap = new Map();
+  if (stubTrackIds.length > 0) {
+    try {
+      const artistTarget = artist.username || artist.name ? artist : { name: album.artist };
+      const artistTracks = await getArtistTracks(artistTarget, 150);
+      (artistTracks || []).forEach((t) => {
+        if (t?.id) artistTrackMap.set(String(t.id), t);
+      });
+    } catch (e) {
+      logWarn("api", "hydrateAlbumTracks artistTracks fetch failed", e);
+    }
+  }
+
   const fallbackUser = {
     id: artist.id,
     username: artist.username || artist.name || album.artist,
@@ -792,20 +805,32 @@ async function hydrateAlbumTracks(album, artist = {}) {
   };
 
   const hydratedTracks = await Promise.all(
-    album.tracks.map(async (track) => {
-      const fromBatch = batchMap.get(String(track.id));
+    album.tracks.map(async (track, index) => {
+      let current = track;
+      const trackIdStr = String(track.id);
+
+      const fromBatch = batchMap.get(trackIdStr);
+      const fromArtist = artistTrackMap.get(trackIdStr);
+
       if (fromBatch) {
-        return {
+        current = {
           ...track,
           ...fromBatch,
           rawTitle: fromBatch.rawTitle || track.rawTitle || track.title,
           cover: fromBatch.cover || track.cover || album.cover,
           artist: fromBatch.artist || track.artist || album.artist,
-          title: fromBatch.title || track.title
+          title: (fromBatch.title && fromBatch.title !== "Без названия") ? fromBatch.title : (track.title || "")
         };
-      }
-
-      if (shouldHydrateTrack(track)) {
+      } else if (fromArtist) {
+        current = {
+          ...track,
+          ...fromArtist,
+          rawTitle: fromArtist.rawTitle || track.rawTitle || track.title,
+          cover: fromArtist.cover || track.cover || album.cover,
+          artist: fromArtist.artist || track.artist || album.artist,
+          title: (fromArtist.title && fromArtist.title !== "Без названия") ? fromArtist.title : (track.title || "")
+        };
+      } else if (shouldHydrateTrack(track)) {
         try {
           const detailedTrack = await getTrackDetails(track, {
             user: fallbackUser,
@@ -813,25 +838,60 @@ async function hydrateAlbumTracks(album, artist = {}) {
             cover: track.cover || album.cover,
             title: track.title
           });
-          return {
+          current = {
             ...track,
             ...detailedTrack,
             rawTitle: detailedTrack.rawTitle || track.rawTitle || track.title,
             cover: detailedTrack.cover || track.cover || album.cover,
             artist: detailedTrack.artist || track.artist || album.artist,
-            title: detailedTrack.title || track.title
+            title: (detailedTrack.title && detailedTrack.title !== "Без названия") ? detailedTrack.title : (track.title || "")
           };
         } catch {
-          return track;
+          current = track;
         }
       }
 
-      return track;
+      // If title is STILL "Без названия" or empty, try permalink slug parsing
+      if ((!current.title || current.title === "Без названия") && current.permalinkUrl) {
+        const parts = current.permalinkUrl.split("/").filter(Boolean);
+        const slug = parts[parts.length - 1];
+        if (slug) {
+          current.title = slug.replace(/-/g, " ");
+        }
+      }
+
+      // If streamUrl is missing but title exists, try search fallback
+      if (!current.streamUrl && current.title && current.title !== "Без названия") {
+        try {
+          const query = `${current.artist || album.artist} ${current.title}`;
+          const searched = await searchTracksLimited(query, 5);
+          const normTitle = normalizeComparable(current.title);
+          const found = searched.find((s) => s.streamUrl && normalizeComparable(s.title || "").includes(normTitle)) || searched.find((s) => s.streamUrl);
+          if (found) {
+            current = {
+              ...current,
+              ...found,
+              id: current.id || found.id,
+              title: current.title || found.title
+            };
+          }
+        } catch (e) {
+          logWarn("api", "hydrateAlbumTracks search fallback failed", e);
+        }
+      }
+
+      // Fallback for display title so "Без названия" is NEVER shown
+      if (!current.title || current.title === "Без названия") {
+        current.title = `Трек ${index + 1}`;
+      }
+
+      return current;
     })
   );
 
   return {
     ...album,
+    trackCount: hydratedTracks.length || album.trackCount || 0,
     tracks: hydratedTracks
   };
 }
@@ -1392,16 +1452,60 @@ export async function getPersonalWaveTracks({
 }
 
 export async function getRecommendedTracks() {
-  assertClientId();
+  const popularRussianQueries = [
+    "Macan",
+    "PHARAOH",
+    "Miyagi",
+    "Big Baby Tape",
+    "KIZARU",
+    "ANNA ASTI",
+    "OG Buda",
+    "Saluki",
+    "INSTASAMKA",
+    "FRIENDLY THUG 52",
+    "Scally Milano",
+    "XOLIDAYBOY",
+    "LSP",
+    "Markul",
+    "Boulevard Depo"
+  ];
 
-  const url = new URL(`${getSoundCloudApiBase()}/charts`, window.location.origin);
-  url.searchParams.set("kind", "trending");
-  url.searchParams.set("genre", "soundcloud:genres:all-music");
-  applyRuntimeSettings(url);
-  url.searchParams.set("limit", "20");
+  // Pick 3 random popular artists from the list to construct a rich, varied selection
+  const selectedQueries = [...popularRussianQueries]
+    .sort(() => 0.5 - Math.random())
+    .slice(0, 3);
 
-  const data = await requestJson(toFetchUrl(url), "getRecommendedTracks");
-  return (data.collection || []).map(normalizeChartItem);
+  try {
+    const resultsLists = await Promise.allSettled(
+      selectedQueries.map((q) => searchTracks(q))
+    );
+
+    const merged = [];
+    const seenIds = new Set();
+
+    resultsLists.forEach((res) => {
+      if (res.status === "fulfilled" && Array.isArray(res.value)) {
+        res.value.forEach((track) => {
+          if (track && track.id && !seenIds.has(String(track.id)) && track.id !== "empty") {
+            seenIds.add(String(track.id));
+            merged.push(track);
+          }
+        });
+      }
+    });
+
+    if (merged.length > 0) {
+      return merged.sort(() => 0.5 - Math.random()).slice(0, 40);
+    }
+  } catch (err) {
+    logWarn("api", "getRecommendedTracks SoundCloud search error", err);
+  }
+
+  try {
+    return await searchTracks("PHARAOH");
+  } catch {
+    return [];
+  }
 }
 
 export async function getWaveTracks(query = "electronic") {

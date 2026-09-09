@@ -29,7 +29,7 @@ function WaveField({ audioEnergy, isPlaying }) {
   const level = isPlaying ? audioEnergy.level : 0;
 
   return (
-    <div className="song-wave-field" aria-hidden="true">
+    <div className="song-wave-field max-md:hidden" aria-hidden="true">
       <svg
         className="song-wave-svg"
         viewBox="0 0 1280 520"
@@ -140,11 +140,40 @@ function WaveSeekBar({ currentTime, duration, progress, seek }) {
 }
 
 function WaveVolumeControl({ effectiveVolume, setVolume }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const timerRef = useRef(null);
   const volumePercent = Math.round(effectiveVolume * 100);
 
+  const handleMouseEnter = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    timerRef.current = setTimeout(() => {
+      setIsOpen(false);
+    }, 350);
+  };
+
   return (
-    <div className="volume-control group relative grid h-11 w-11 shrink-0 place-items-center">
-      <div className="volume-popover pointer-events-none absolute bottom-12 left-1/2 z-30 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-[var(--cover-radius,16px)] border border-white/10 bg-[#171717]/95 py-3 opacity-0 shadow-2xl backdrop-blur-md transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+    <div
+      className="volume-control relative z-30 grid h-11 w-11 shrink-0 place-items-center max-md:hidden"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <div
+        className={`volume-popover absolute bottom-12 left-1/2 z-30 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-[var(--cover-radius,16px)] border border-white/10 bg-[#171717]/95 py-3 shadow-2xl backdrop-blur-md transition-all duration-200 ${
+          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
         <div
           className="volume-live-fill pointer-events-none absolute left-1/2 w-[9px] -translate-x-1/2 rounded-full bg-[var(--player-accent-muted)]"
           style={{
@@ -176,7 +205,10 @@ function WaveVolumeControl({ effectiveVolume, setVolume }) {
       <button
         type="button"
         aria-label="Громкость"
-        className="grid h-11 w-11 place-items-center rounded-full opacity-60 transition hover:bg-white/10 hover:opacity-100 active:scale-95 group-focus-within:bg-white/10 group-focus-within:opacity-100"
+        onClick={() => setVolume(effectiveVolume > 0 ? 0 : 0.7)}
+        className={`grid h-11 w-11 place-items-center rounded-full transition active:scale-95 ${
+          isOpen ? "bg-white/10 opacity-100" : "opacity-60 hover:bg-white/10 hover:opacity-100"
+        }`}
       >
         <img src={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"} alt="" className="h-5 w-5" />
       </button>
@@ -343,7 +375,7 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
   return (
     <section
       className={[
-        "wave-screen relative flex flex-1 flex-col items-center justify-between overflow-hidden rounded-[17.76px] border border-white/[0.04] bg-[#090909] p-8 select-none",
+        "wave-screen relative flex flex-1 w-full h-full min-h-0 flex-col items-center justify-between overflow-hidden rounded-[17.76px] max-md:rounded-none max-md:border-none bg-[#090909] p-8 max-md:p-0 select-none",
         isPlaying ? "is-playing" : "is-paused"
       ].join(" ")}
       style={{
@@ -359,7 +391,52 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
         "--audio-level": audioEnergy.level
       }}
     >
-      <div className="song-wave-backdrop" />
+      {/* 1. Fluid Animated Mesh Gradient & Aurora Orbs Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 bg-[#090909]">
+        {/* Breathing Blurred Cover Image Layer */}
+        {currentTrack?.cover && (
+          <div className="absolute inset-0 opacity-45 blur-[85px] animate-cover-breathe transform-gpu">
+            <img
+              src={currentTrack.cover}
+              alt=""
+              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/logo.png"; }}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        )}
+
+        {/* Dynamic Audio-Reactive Fluid Mesh Orbs */}
+        <div className="absolute inset-0 filter blur-[75px] opacity-80 transform-gpu">
+          <div
+            className="absolute -top-[20%] -left-[20%] h-[80vw] w-[80vw] max-w-[600px] max-h-[600px] rounded-full animate-fluid-blob-1 opacity-80 transition-transform duration-300 ease-out"
+            style={{
+              backgroundColor: palette?.base || "#2a0a4a",
+              transform: `scale(${1 + (audioEnergy?.bass || 0) * 0.28})`
+            }}
+          />
+          <div
+            className="absolute -top-[10%] -right-[20%] h-[85vw] w-[85vw] max-w-[650px] max-h-[650px] rounded-full animate-fluid-blob-2 opacity-75 transition-transform duration-300 ease-out"
+            style={{
+              backgroundColor: palette?.line || "#9b5cff",
+              transform: `scale(${1 + (audioEnergy?.mids || 0) * 0.24})`
+            }}
+          />
+          <div
+            className="absolute top-[30%] left-[10%] h-[90vw] w-[90vw] max-w-[700px] max-h-[700px] rounded-full animate-fluid-blob-3 opacity-65 transition-transform duration-300 ease-out"
+            style={{
+              backgroundColor: palette?.bright || "#d8b4fe",
+              transform: `scale(${1 + (audioEnergy?.level || 0) * 0.3})`
+            }}
+          />
+          <div
+            className="absolute bottom-[-15%] right-[-15%] h-[95vw] w-[95vw] max-w-[750px] max-h-[750px] rounded-full animate-fluid-blob-1 opacity-75 transition-transform duration-300 ease-out"
+            style={{
+              backgroundColor: palette?.shadow || "#4c1d95",
+              transform: `scale(${1 + (audioEnergy?.bass || 0) * 0.32})`
+            }}
+          />
+        </div>
+      </div>
       <WaveField audioEnergy={audioEnergy} isPlaying={isPlaying} />
       <div className="song-wave-vignette" />
       <button
@@ -377,13 +454,13 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
         </p>
       )}
 
-      <div className="pointer-events-none absolute inset-0 z-10 flex -translate-y-10 items-center justify-center">
+      <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-center -translate-y-12">
         {!isPlaying && (
           <button
             type="button"
             onClick={handleStartWave}
             disabled={isLoadingWave}
-            className="wave-title-button pointer-events-auto relative text-7xl font-black tracking-tight text-transparent drop-shadow-[0_16px_34px_rgba(0,0,0,0.95)] transition hover:scale-[1.02] active:scale-[0.99] disabled:cursor-default disabled:opacity-55"
+            className="pointer-events-auto text-5xl max-sm:text-[52px] sm:text-6xl md:text-7xl font-black tracking-tight text-white drop-shadow-[0_16px_34px_rgba(0,0,0,0.95)] transition hover:scale-105 active:scale-95 disabled:cursor-default disabled:opacity-55"
             aria-label="Включить Мою волну"
           >
             Моя волна
@@ -391,22 +468,36 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
         )}
       </div>
 
-      <div className="absolute bottom-12 left-1/2 z-20 flex w-full max-w-lg -translate-x-1/2 flex-col items-center gap-6">
+      <div className="absolute bottom-12 max-md:bottom-[calc(84px+env(safe-area-inset-bottom,0px))] left-1/2 z-30 flex w-full max-w-lg max-md:max-w-none px-4 -translate-x-1/2 flex-col items-center gap-6 max-md:gap-3">
         <div className="grid min-h-[58px] w-full grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-3 rounded-full border border-white/10 bg-black/45 px-3 py-2 text-sm font-semibold text-white shadow-2xl backdrop-blur-md transition hover:border-white/20 hover:bg-black/55">
-          <span className="h-11 w-11" />
+          <button
+            type="button"
+            onClick={onOpenFull}
+            className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-white/10 bg-white/5 active:scale-95 transition-all duration-500"
+            style={{
+              opacity: isPlaying ? 0 : 1,
+              transform: isPlaying ? "scale(0.5)" : "scale(1)",
+              pointerEvents: isPlaying ? "none" : "auto"
+            }}
+            title="Открыть плеер"
+          >
+            <img src={currentTrack.cover || "/user.svg"} alt="" className="h-full w-full object-cover" />
+          </button>
           <button
             type="button"
             onClick={onOpenFull}
             className="min-w-0 flex flex-col items-center justify-center text-center transition hover:opacity-90 px-1 overflow-hidden"
           >
-            <span className="w-full truncate text-sm font-bold text-white leading-tight">
+            <span className="w-full truncate text-center text-sm font-bold text-white leading-tight">
               {currentTrack.title || "Моя волна"}
             </span>
-            <span className="w-full truncate text-[11px] font-semibold text-white/50 leading-tight mt-0.5">
+            <span className="w-full truncate text-center text-[11px] font-semibold text-white/50 leading-tight mt-0.5">
               {currentTrack.artist || "AmyMusic"}
             </span>
           </button>
-          <WaveVolumeControl effectiveVolume={effectiveVolume} setVolume={setVolume} />
+          <div className="flex h-11 w-11 shrink-0 items-center justify-end">
+            <WaveVolumeControl effectiveVolume={effectiveVolume} setVolume={setVolume} />
+          </div>
         </div>
 
         <WaveSeekBar

@@ -401,10 +401,18 @@ function createApiProxyPlugin() {
         }
       };
 
-      server.middlewares.use("/api/auth", (req, res) => handleProxy(req, res, "/api/auth"));
-      server.middlewares.use("/api/sync", (req, res) => handleProxy(req, res, "/api/sync"));
-      server.middlewares.use("/api/track", (req, res) => handleProxy(req, res, "/api/track"));
-      server.middlewares.use("/api/rating", (req, res) => handleProxy(req, res, "/api/rating"));
+      const apiPrefixes = [
+        "/api/auth",
+        "/api/sync",
+        "/api/track",
+        "/api/rating",
+        "/api/app-version",
+        "/api/download-app"
+      ];
+
+      apiPrefixes.forEach((prefix) => {
+        server.middlewares.use(prefix, (req, res) => handleProxy(req, res, prefix));
+      });
     }
   };
 }

@@ -96,6 +96,14 @@ body {
   background: #000;
 }
 
+/* Touch interaction optimization: instant single-tap responsiveness on mobile touchscreens */
+@media (pointer: coarse) {
+  a, button, [role="button"], [onclick], .cursor-pointer, .group {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 button {
   font: inherit;
 }
@@ -630,18 +638,6 @@ button {
   }
 }
 
-.wave-title-button::before {
-  content: "Моя волна";
-  color: #fff;
-  font-size: 4.5rem;
-  line-height: 1;
-}
-
-.wave-title-button {
-  font-size: 0;
-  line-height: 1;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .song-wave-line,
   .song-dna-rungs,
@@ -665,6 +661,15 @@ button {
   to { opacity: 0; transform: translateY(20px) scale(0.98); }
 }
 
+@keyframes bottomSheetSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-bottom-sheet {
+  animation: bottomSheetSlideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 @keyframes slideDownNotify {
   from {
     opacity: 0;
@@ -678,4 +683,87 @@ button {
 
 .animate-slide-down-notify {
   animation: slideDownNotify 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@media (max-width: 768px) {
+  .song-wave-field {
+    display: none !important;
+  }
+  .is-paused .song-cover {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transform: scale(0.5) !important;
+  }
+  .is-playing .song-cover {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    left: 50% !important;
+    top: 36% !important;
+    bottom: auto !important;
+    height: 185px !important;
+    width: 185px !important;
+    border-radius: 28px !important;
+    transform: translate(-50%, -50%) scale(1) !important;
+  }
+}
+
+/* Mobile Player Background Fluid Mesh Animations */
+@keyframes fluidBlob1 {
+  0%, 100% {
+    transform: translate(0%, 0%) rotate(0deg);
+  }
+  33% {
+    transform: translate(14%, -18%) rotate(120deg);
+  }
+  66% {
+    transform: translate(-12%, 14%) rotate(240deg);
+  }
+}
+
+@keyframes fluidBlob2 {
+  0%, 100% {
+    transform: translate(0%, 0%) rotate(0deg);
+  }
+  33% {
+    transform: translate(-18%, 14%) rotate(-120deg);
+  }
+  66% {
+    transform: translate(14%, -12%) rotate(-240deg);
+  }
+}
+
+@keyframes fluidBlob3 {
+  0%, 100% {
+    transform: translate(0%, 0%);
+  }
+  50% {
+    transform: translate(12%, 18%);
+  }
+}
+
+@keyframes coverBreathe {
+  0%, 100% {
+    transform: scale(1.15) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.30) rotate(2deg);
+  }
+}
+
+.animate-fluid-blob-1 {
+  animation: fluidBlob1 18s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-fluid-blob-2 {
+  animation: fluidBlob2 22s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-fluid-blob-3 {
+  animation: fluidBlob3 16s ease-in-out infinite;
+}
+
+.animate-cover-breathe {
+  animation: coverBreathe 24s ease-in-out infinite;
 }

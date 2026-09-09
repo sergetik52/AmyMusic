@@ -59,3 +59,4 @@ export const getWave = () => apiRequest('/sync/wave', 'GET');
 
 export const trackListen = (seconds) => apiRequest('/track/listen', 'POST', { seconds });
 export const getTopUsers = () => apiRequest('/rating/top', 'GET');
+

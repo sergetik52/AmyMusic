@@ -30,7 +30,22 @@ import {
 } from "./services/profileSettings";
 import { getCachedLyricsForTrack, getActiveLyricIndex } from "./services/lyricsApi";
 import { useEscapeKey } from "./utils/useEscapeKey";
+import { MobileLayout } from "./mobile/MobileLayout";
 import "./main.css";
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 768 : false));
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return isMobile;
+}
 
 const initialNavigation = [
   { id: "search", label: "Поиск", icon: "/search.svg" },
@@ -926,106 +941,97 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onLoginCli
     }
   };
 
-  const proxyCount = settings.soundCloudHttpProxies
-    ? settings.soundCloudHttpProxies.split(",").filter(Boolean).length
-    : 0;
-
   const isDesktop = Boolean(typeof window !== "undefined" && window.amyMusicDesktop);
 
   return (
-    <aside className={`flex shrink-0 flex-col justify-between py-1 font-medium transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "w-[72px]" : "w-[240px]"}`}>
-      <div className="w-full">
-        <Logo isCollapsed={isCollapsed} onClick={() => setIsCollapsed(!isCollapsed)} />
-        <nav className="mt-6 flex w-full flex-col gap-1">
-          {initialNavigation.map((item) => (
-            <SidebarItem
-              key={item.id}
-              item={item}
-              isActive={activeTab === item.id}
-              isCollapsed={isCollapsed}
-              onClick={() => setActiveTab(item.id)}
-            />
-          ))}
-        </nav>
-      </div>
-
-      <div className="mb-4 w-full space-y-2">
-        {!isDesktop && (
-          <a
-            href="/api/download-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            download
-            className="group flex w-full items-center gap-3.5 rounded-full py-2 px-[18px] text-left text-xs font-bold text-white transition hover:bg-white/[0.04] overflow-hidden"
-            title={isCollapsed ? "Скачать AmyMusic для ПК" : undefined}
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#8341EF]/20 border border-[#8341EF]/50 text-[#8341EF] group-hover:bg-[#8341EF] group-hover:text-white transition-colors">
-              <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
-                <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
-              </svg>
-            </div>
-            <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
-              <span className="flex flex-col whitespace-nowrap">
-                <span className="block truncate font-bold text-white">Скачать ПК</span>
-                <span className="text-[10px] text-[#8341EF]">Приложение</span>
-              </span>
-            </span>
-          </a>
-        )}
-
-        <div className="flex items-center gap-3.5 px-[20px] py-2 text-white/50 overflow-hidden" title={isCollapsed ? `Время: ${timeString}` : undefined}>
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 opacity-50">
-              <circle cx="12" cy="12" r="10"></circle>
-              <polyline points="12 6 12 16 14"></polyline>
-            </svg>
-          </div>
-          <span className={`truncate text-xs font-bold transition-all duration-300 ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
-            {timeString} прослушано
-          </span>
+    <>
+      <aside className={`hidden md:flex shrink-0 flex-col justify-between py-1 font-medium transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "w-[72px]" : "w-[240px]"}`}>
+        <div className="w-full">
+          <Logo isCollapsed={isCollapsed} onClick={() => setIsCollapsed(!isCollapsed)} />
+          <nav className="mt-6 flex w-full flex-col gap-1">
+            {initialNavigation.map((item) => (
+              <SidebarItem
+                key={item.id}
+                item={item}
+                isActive={activeTab === item.id}
+                isCollapsed={isCollapsed}
+                onClick={() => setActiveTab(item.id)}
+              />
+            ))}
+          </nav>
         </div>
 
-        {currentUser ? (
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent("amymusic:open-profile"))}
-            className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
-            title={isCollapsed ? (profileData?.displayName || currentUser) : undefined}
-          >
-            <div className="relative h-9 w-9 shrink-0">
-              <img src={profileData?.avatarUrl || "/user.svg"} alt="" className="h-full w-full rounded-full bg-[var(--player-accent)] object-cover opacity-85 transition group-hover:opacity-100 p-1" />
-              <div className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#181818]">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-2.5 w-2.5 text-white/50 transition-colors group-hover:text-white">
-                  <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
-                  <circle cx="12" cy="12" r="3"></circle>
+        <div className="mb-4 w-full space-y-2">
+          {!isDesktop && (
+            <a
+              href="/api/download-app"
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className="group flex w-full items-center gap-3.5 rounded-full py-2 px-[18px] text-left text-xs font-bold text-white transition hover:bg-white/[0.04] overflow-hidden"
+              title={isCollapsed ? "Скачать AmyMusic для ПК" : undefined}
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#8341EF]/20 border border-[#8341EF]/50 text-[#8341EF] group-hover:bg-[#8341EF] group-hover:text-white transition-colors">
+                <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                  <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
                 </svg>
               </div>
-            </div>
-            <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
-              <span className="flex flex-col whitespace-nowrap">
-                <span className="block truncate font-bold text-white max-w-[120px]">
-                  {profileData?.displayName || currentUser}
+              <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
+                <span className="flex flex-col whitespace-nowrap">
+                  <span className="block truncate font-bold text-white">Скачать ПК</span>
+                  <span className="text-[10px] text-[#8341EF]">Приложение</span>
                 </span>
-                <span className="text-[10px] uppercase tracking-wider text-[#8341EF]">Облако</span>
               </span>
-            </span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onLoginClick}
-            className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
-            title={isCollapsed ? "Войти в аккаунт" : undefined}
-          >
-            <div className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center bg-white/5 border border-white/10 group-hover:bg-[#8341EF]/20 group-hover:border-[#8341EF]/50 transition-colors">
-              <img src="/user.svg" alt="" className="h-5 w-5 opacity-50 group-hover:opacity-100 group-hover:text-[#8341EF]" style={{ filter: 'brightness(0) invert(1)' }} />
+            </a>
+          )}
+
+          <div className="flex items-center gap-3.5 px-[20px] py-2 text-white/50 overflow-hidden" title={isCollapsed ? `Время: ${timeString}` : undefined}>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 opacity-50">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 16 14"></polyline>
+              </svg>
             </div>
-            <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
-              <span className="font-semibold text-white/70 group-hover:text-white">Войти в аккаунт</span>
+            <span className={`truncate text-xs font-bold transition-all duration-300 ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
+              {timeString} прослушано
             </span>
-          </button>
-        )}
-      </div>
+          </div>
+
+          {currentUser ? (
+            <button
+              type="button"
+              onClick={() => setIsProfileOpen(true)}
+              className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
+              title={isCollapsed ? (profileData?.displayName || currentUser) : undefined}
+            >
+              <div className="relative h-9 w-9 shrink-0">
+                <img src={profileData?.avatarUrl || "/user.svg"} alt="" className="h-full w-full rounded-full bg-[var(--player-accent)] object-cover opacity-85 transition group-hover:opacity-100 p-1" />
+              </div>
+              <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
+                <span className="flex flex-col whitespace-nowrap">
+                  <span className="block truncate font-bold text-white max-w-[120px]">
+                    {profileData?.displayName || currentUser}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-[#8341EF]">Облако</span>
+                </span>
+              </span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onLoginClick}
+              className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
+              title={isCollapsed ? "Войти в аккаунт" : undefined}
+            >
+              <div className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center bg-white/5 border border-white/10 group-hover:bg-[#8341EF]/20 group-hover:border-[#8341EF]/50 transition-colors">
+                <img src="/user.svg" alt="" className="h-5 w-5 opacity-50 group-hover:opacity-100 group-hover:text-[#8341EF]" style={{ filter: 'brightness(0) invert(1)' }} />
+              </div>
+              <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
+                <span className="font-semibold text-white/70 group-hover:text-white">Войти в аккаунт</span>
+              </span>
+            </button>
+          )}
+        </div>
 
       {isProfileOpen && (
         <ProfileSettingsModal
@@ -1045,6 +1051,7 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onLoginCli
         />
       )}
     </aside>
+    </>
   );
 }
 
@@ -1168,7 +1175,7 @@ function ArtistLinks({ track, onOpenArtist, className = "text-xs text-white/40",
   const artists = getTrackArtists(track).filter((artist) => artist.name || artist.username);
 
   return (
-    <div className={`flex min-w-0 flex-wrap items-center gap-x-1.5 overflow-hidden ${className}`}>
+    <div className={`flex min-w-0 flex-nowrap items-center gap-x-1.5 overflow-hidden whitespace-nowrap ${className}`}>
       {artists.map((artist, index) => {
         const avatarUrl = (artist.avatar && !artist.avatar.includes("logo.png"))
           ? artist.avatar
@@ -1266,7 +1273,7 @@ function SearchAlbumView({
 
   return (
     <section className="flex-1 overflow-y-auto rounded-[17.76px] border border-white/[0.04] bg-[#090909] text-white shadow-2xl">
-      <div className="relative min-h-[300px] overflow-hidden border-b border-white/[0.05] px-7 pb-7 pt-5">
+      <div className="relative min-h-[300px] max-md:min-h-0 overflow-hidden border-b border-white/[0.05] px-7 pb-7 pt-5 max-md:px-4 max-md:pb-3 max-md:pt-2">
         <div className="absolute inset-0 opacity-30 blur-3xl">
           <img src={album.cover} alt="" className="h-full w-full object-cover" />
         </div>
@@ -1283,34 +1290,34 @@ function SearchAlbumView({
           <button 
             type="button" 
             onClick={onBack} 
-            className="mb-5 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95" 
+            className="mb-5 max-md:mb-2 flex h-10 w-10 max-md:h-8 max-md:w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95" 
             aria-label="Назад"
           >
             <svg className="h-6 w-6 fill-current rotate-90" viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"></path></svg>
           </button>
 
-          <div className="flex items-end gap-7">
+          <div className="flex items-end gap-7 max-md:flex-col max-md:items-center max-md:text-center max-md:gap-4">
             <img 
               src={album.cover} 
               alt={album.title} 
               onClick={() => setIsCoverExpanded(true)}
-              className="h-52 w-52 shrink-0 rounded-3xl border border-white/10 object-cover shadow-2xl cursor-pointer transition hover:scale-105 active:scale-95" 
+              className="h-52 w-52 max-md:h-56 max-md:w-56 shrink-0 rounded-3xl border border-white/10 object-cover shadow-2xl cursor-pointer transition hover:scale-105 active:scale-95" 
             />
-            <div className="max-w-4xl pb-2">
-              <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-white/35">
+            <div className="max-w-4xl pb-2 max-md:flex max-md:flex-col max-md:items-center max-md:w-full">
+              <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-white/35 max-md:text-center">
                 {album.kind === "playlist" ? "Плейлист" : "Альбом"}
               </p>
-              <h1 className="text-5xl font-black tracking-tight text-white">{album.title}</h1>
-              <p className="mt-2 text-base font-bold text-white/48">{album.artist}</p>
-              <p className="mt-3 text-sm font-bold text-white/38">
+              <h1 className="text-5xl max-md:text-2xl font-black tracking-tight text-white max-md:text-center break-words">{album.title}</h1>
+              <p className="mt-2 text-base max-md:text-sm font-bold text-white/48 max-md:text-center">{album.artist}</p>
+              <p className="mt-3 text-sm max-md:text-xs font-bold text-white/38 max-md:text-center">
                 {tracks.length || album.trackCount || 0} треков
               </p>
-              <div className="mt-6 flex flex-wrap items-center gap-2">
+              <div className="mt-6 flex flex-row items-center justify-center gap-3 max-md:w-full">
                 <button
                   type="button"
                   onClick={onPlayAlbum}
                   disabled={!tracks.length}
-                  className="rounded-full bg-white px-5 py-2.5 text-sm font-black text-black transition hover:bg-white/85 disabled:cursor-default disabled:opacity-40"
+                  className="rounded-full bg-white px-5 py-2.5 max-md:px-4 max-md:py-2 text-sm max-md:text-xs font-black text-black transition hover:bg-white/85 disabled:cursor-default disabled:opacity-40 whitespace-nowrap shrink-0"
                 >
                   ▶ Слушать все
                 </button>
@@ -1318,7 +1325,7 @@ function SearchAlbumView({
                   type="button"
                   onClick={() => onToggleRelease?.(album)}
                   className={[
-                    "grid h-10 w-10 place-items-center rounded-full border border-white/[0.08] bg-white/[0.035] transition hover:bg-white/[0.07] active:scale-95",
+                    "grid h-10 w-10 place-items-center rounded-full border border-white/[0.08] bg-white/[0.035] transition hover:bg-white/[0.07] active:scale-95 shrink-0",
                     isReleaseSaved ? "opacity-100" : "opacity-55 hover:opacity-90"
                   ].join(" ")}
                   aria-label={isReleaseSaved ? "Убрать альбом из коллекции" : "Добавить альбом в коллекцию"}
@@ -1330,7 +1337,7 @@ function SearchAlbumView({
                   type="button"
                   onClick={onShufflePlay}
                   disabled={!tracks.length}
-                  className="grid h-10 w-10 place-items-center rounded-full border border-white/[0.08] bg-white/[0.035] transition hover:bg-white/[0.07] hover:text-white active:scale-95 disabled:cursor-default disabled:opacity-35"
+                  className="grid h-10 w-10 place-items-center rounded-full border border-white/[0.08] bg-white/[0.035] transition hover:bg-white/[0.07] hover:text-white active:scale-95 disabled:cursor-default disabled:opacity-35 shrink-0"
                   aria-label="Перемешать альбом и слушать"
                   title="Перемешать альбом и слушать"
                 >
@@ -1572,255 +1579,261 @@ function SearchPanel({ onOpenArtist }) {
   }
 
   return (
-    <section className="flex-1 overflow-y-auto rounded-[17.76px] border border-white/[0.04] bg-[#121212] p-[26.6px] shadow-2xl">
-      <form
-        onSubmit={handleSearch}
-        className="flex h-[44.4px] w-full items-center gap-3 rounded-full border border-[#4D4D4D] bg-white/[0.002] px-4 text-[#808080] transition focus-within:border-white/40"
-      >
-        <img src="/search-input.svg" alt="" className="h-5 w-5" />
-        <input
-          type="text"
-          value={query}
-          onChange={(event) => {
-            const nextQuery = event.target.value;
-            setQuery(nextQuery);
-            if (!nextQuery.trim()) {
+    <section className="flex-1 flex flex-col h-full min-h-0 overflow-hidden rounded-[17.76px] border border-white/[0.04] bg-[#121212] p-4 md:p-[26.6px] shadow-2xl">
+      {/* Pinned Top Header: Search input & Category Tabs */}
+      <div className="shrink-0 space-y-4 pb-2 border-b border-white/5">
+        <form
+          onSubmit={handleSearch}
+          className="flex h-[44.4px] w-full items-center gap-3 rounded-full border border-[#4D4D4D] bg-white/[0.002] px-4 text-[#808080] transition focus-within:border-white/40"
+        >
+          <img src="/search-input.svg" alt="" className="h-5 w-5" />
+          <input
+            type="text"
+            value={query}
+            onChange={(event) => {
+              const nextQuery = event.target.value;
+              setQuery(nextQuery);
+              if (!nextQuery.trim()) {
+                setActiveSearchTab("popular");
+                loadPopular();
+              }
+            }}
+            placeholder="Что вы чувствуете или ищете?"
+            className="w-full bg-transparent text-[15.5px] text-[#E6E6E6] placeholder:text-[#808080] focus:outline-none"
+          />
+          <button type="submit" className="text-xs font-bold text-white/60 hover:text-white">
+            {isSearching ? "..." : "Enter"}
+          </button>
+        </form>
+
+        <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar py-1">
+          <button
+            type="button"
+            onClick={() => {
               setActiveSearchTab("popular");
-              loadPopular();
-            }
-          }}
-          placeholder="Что вы чувствуете или ищете?"
-          className="w-full bg-transparent text-[15.5px] text-[#E6E6E6] placeholder:text-[#808080] focus:outline-none"
-        />
-        <button type="submit" className="text-xs font-bold text-white/60 hover:text-white">
-          {isSearching ? "..." : "Enter"}
-        </button>
-      </form>
-
-      <div className="mt-4 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setActiveSearchTab("popular");
-            if (!tracks.length) loadPopular();
-          }}
-          className={[
-            "rounded-full px-4 py-2 text-[15.5px] font-bold transition",
-            activeSearchTab === "popular"
-              ? "bg-white/10 text-[#E6E6E6]"
-              : "text-[#E6E6E6] opacity-60 hover:opacity-100"
-          ].join(" ")}
-        >
-          Популярное
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveSearchTab("history")}
-          className={[
-            "rounded-full px-4 py-2 text-[15.5px] font-bold transition",
-            activeSearchTab === "history"
-              ? "bg-white/10 text-[#E6E6E6]"
-              : "text-[#E6E6E6] opacity-60 hover:opacity-100"
-          ].join(" ")}
-        >
-          История
-        </button>
-        <button
-          type="button"
-          onClick={loadArtistsTab}
-          className={[
-            "rounded-full px-4 py-2 text-[15.5px] font-bold transition",
-            activeSearchTab === "artists"
-              ? "bg-white/10 text-[#E6E6E6]"
-              : "text-[#E6E6E6] opacity-60 hover:opacity-100"
-          ].join(" ")}
-        >
-          Артисты
-        </button>
-        <button
-          type="button"
-          onClick={loadAlbumsTab}
-          className={[
-            "rounded-full px-4 py-2 text-[15.5px] font-bold transition",
-            activeSearchTab === "albums"
-              ? "bg-white/10 text-[#E6E6E6]"
-              : "text-[#E6E6E6] opacity-60 hover:opacity-100"
-          ].join(" ")}
-        >
-          Альбомы
-        </button>
-        <button
-          type="button"
-          onClick={loadPlaylistsTab}
-          className={[
-            "rounded-full px-4 py-2 text-[15.5px] font-bold transition",
-            activeSearchTab === "playlists"
-              ? "bg-white/10 text-[#E6E6E6]"
-              : "text-[#E6E6E6] opacity-60 hover:opacity-100"
-          ].join(" ")}
-        >
-          Плейлисты
-        </button>
-      </div>
-
-      {searchError && (
-        <p className="mt-5 text-sm text-red-300">{searchError}</p>
-      )}
-
-      <div className="mt-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h2 className="text-lg font-black text-white">
-            {isSearching
-              ? "Загружаю..."
-              : activeSearchTab === "history"
-                ? "История"
-                : activeSearchTab === "artists"
-                  ? "Артисты"
-                  : activeSearchTab === "albums"
-                    ? "Альбомы"
-                    : activeSearchTab === "playlists"
-                      ? "Плейлисты"
-                      : "Рекомендации"}
-          </h2>
-          {activeSearchTab === "history" && playHistory.length > 0 && (
-            <button
-              type="button"
-              onClick={clearHistory}
-              className="flex items-center gap-2 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-3.5 py-1.5 text-xs font-bold text-red-400 hover:text-red-300 transition shadow-sm active:scale-95"
-              title="Очистить историю прослушиваний"
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              </svg>
-              Очистить историю
-            </button>
-          )}
-        </div>
-        <span className="text-xs font-semibold text-white/30">
-          {activeSearchTab === "artists"
-            ? artists.length ? `${artists.length} артистов` : "нет данных"
-            : activeSearchTab === "albums"
-              ? albums.length ? `${albums.length} релизов` : "нет данных"
-              : activeSearchTab === "playlists"
-                ? playlists.length ? `${playlists.length} плейлистов` : "нет данных"
-                : visibleTracks.length ? `${visibleTracks.length} треков` : "нет данных"}
-        </span>
-      </div>
-
-      {activeSearchTab === "history" && visibleTracks.length === 0 && (
-        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
-          <p className="text-sm font-semibold text-white/70">История пока пустая</p>
-          <p className="mt-1 text-xs text-white/35">Включи трек из поиска или Моей волны.</p>
-        </div>
-      )}
-
-      {activeSearchTab === "artists" && (
-        artists.length > 0 ? (
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7">
-            {artists.map((artist) => (
-              <ArtistCard key={artist.id || artist.username} artist={artist} onClick={openArtist} />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
-            <p className="text-sm font-semibold text-white/70">Артисты не найдены</p>
-          </div>
-        )
-      )}
-
-      {activeSearchTab === "albums" && (
-        albums.length > 0 ? (
-          <div className="mt-5 flex flex-wrap gap-4">
-            {albums.map((album) => (
-              <AlbumSearchCard key={album.id} album={album} onClick={openAlbum} />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
-            <p className="text-sm font-semibold text-white/70">Альбомы не найдены</p>
-          </div>
-        )
-      )}
-
-      {activeSearchTab === "playlists" && (
-        playlists.length > 0 ? (
-          <div className="mt-5 flex flex-wrap gap-4">
-            {playlists.map((playlist) => (
-              <AlbumSearchCard key={playlist.id} album={playlist} onClick={openAlbum} />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
-            <p className="text-sm font-semibold text-white/70">Плейлисты не найдены</p>
-          </div>
-        )
-      )}
-
-      {activeSearchTab !== "artists" && activeSearchTab !== "albums" && activeSearchTab !== "playlists" && (() => {
-        const leftTracks = [];
-        const rightTracks = [];
-        visibleTracks.forEach((track, index) => {
-          const chunkIndex = Math.floor(index / 5);
-          if (chunkIndex % 2 === 0) {
-            leftTracks.push(track);
-          } else {
-            rightTracks.push(track);
-          }
-        });
-
-        const renderTrackItem = (track) => (
-          <div
-            key={track.id}
-            className="group flex items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/5"
+              if (!tracks.length) loadPopular();
+            }}
+            className={[
+              "rounded-full px-4 py-2 text-[15.5px] font-bold transition shrink-0",
+              activeSearchTab === "popular"
+                ? "bg-white/10 text-[#E6E6E6]"
+                : "text-[#E6E6E6] opacity-60 hover:opacity-100"
+            ].join(" ")}
           >
-            <button
-              type="button"
-              onClick={() => playTrack(track, trackSource)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center text-left"
+            Популярное
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSearchTab("history")}
+            className={[
+              "rounded-full px-4 py-2 text-[15.5px] font-bold transition shrink-0",
+              activeSearchTab === "history"
+                ? "bg-white/10 text-[#E6E6E6]"
+                : "text-[#E6E6E6] opacity-60 hover:opacity-100"
+            ].join(" ")}
+          >
+            История
+          </button>
+          <button
+            type="button"
+            onClick={loadArtistsTab}
+            className={[
+              "rounded-full px-4 py-2 text-[15.5px] font-bold transition shrink-0",
+              activeSearchTab === "artists"
+                ? "bg-white/10 text-[#E6E6E6]"
+                : "text-[#E6E6E6] opacity-60 hover:opacity-100"
+            ].join(" ")}
+          >
+            Артисты
+          </button>
+          <button
+            type="button"
+            onClick={loadAlbumsTab}
+            className={[
+              "rounded-full px-4 py-2 text-[15.5px] font-bold transition shrink-0",
+              activeSearchTab === "albums"
+                ? "bg-white/10 text-[#E6E6E6]"
+                : "text-[#E6E6E6] opacity-60 hover:opacity-100"
+            ].join(" ")}
+          >
+            Альбомы
+          </button>
+          <button
+            type="button"
+            onClick={loadPlaylistsTab}
+            className={[
+              "rounded-full px-4 py-2 text-[15.5px] font-bold transition shrink-0",
+              activeSearchTab === "playlists"
+                ? "bg-white/10 text-[#E6E6E6]"
+                : "text-[#E6E6E6] opacity-60 hover:opacity-100"
+            ].join(" ")}
+          >
+            Плейлисты
+          </button>
+        </div>
+
+        {searchError && (
+          <p className="mt-2 text-sm text-red-300">{searchError}</p>
+        )}
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h2 className="text-lg font-black text-white">
+              {isSearching
+                ? "Загружаю..."
+                : activeSearchTab === "history"
+                  ? "История"
+                  : activeSearchTab === "artists"
+                    ? "Артисты"
+                    : activeSearchTab === "albums"
+                      ? "Альбомы"
+                      : activeSearchTab === "playlists"
+                        ? "Плейлисты"
+                        : "Рекомендации"}
+            </h2>
+            {activeSearchTab === "history" && playHistory.length > 0 && (
+              <button
+                type="button"
+                onClick={clearHistory}
+                className="flex items-center gap-2 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-3.5 py-1.5 text-xs font-bold text-red-400 hover:text-red-300 transition shadow-sm active:scale-95"
+                title="Очистить историю прослушиваний"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                Очистить историю
+              </button>
+            )}
+          </div>
+          <span className="text-xs font-semibold text-white/30">
+            {activeSearchTab === "artists"
+              ? artists.length ? `${artists.length} артистов` : "нет данных"
+              : activeSearchTab === "albums"
+                ? albums.length ? `${albums.length} релизов` : "нет данных"
+                : activeSearchTab === "playlists"
+                  ? playlists.length ? `${playlists.length} плейлистов` : "нет данных"
+                  : visibleTracks.length ? `${visibleTracks.length} треков` : "нет данных"}
+          </span>
+        </div>
+      </div>
+
+      {/* Scrollable Search Results Body */}
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pt-3 pb-36">
+        {activeSearchTab === "history" && visibleTracks.length === 0 && (
+          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
+            <p className="text-sm font-semibold text-white/70">История пока пустая</p>
+            <p className="mt-1 text-xs text-white/35">Включи трек из поиска или Моей волны.</p>
+          </div>
+        )}
+
+        {activeSearchTab === "artists" && (
+          artists.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7">
+              {artists.map((artist) => (
+                <ArtistCard key={artist.id || artist.username} artist={artist} onClick={openArtist} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
+              <p className="text-sm font-semibold text-white/70">Артисты не найдены</p>
+            </div>
+          )
+        )}
+
+        {activeSearchTab === "albums" && (
+          albums.length > 0 ? (
+            <div className="flex flex-wrap gap-4">
+              {albums.map((album) => (
+                <AlbumSearchCard key={album.id} album={album} onClick={openAlbum} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
+              <p className="text-sm font-semibold text-white/70">Альбомы не найдены</p>
+            </div>
+          )
+        )}
+
+        {activeSearchTab === "playlists" && (
+          playlists.length > 0 ? (
+            <div className="flex flex-wrap gap-4">
+              {playlists.map((playlist) => (
+                <AlbumSearchCard key={playlist.id} album={playlist} onClick={openAlbum} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
+              <p className="text-sm font-semibold text-white/70">Плейлисты не найдены</p>
+            </div>
+          )
+        )}
+
+        {activeSearchTab !== "artists" && activeSearchTab !== "albums" && activeSearchTab !== "playlists" && (() => {
+          const leftTracks = [];
+          const rightTracks = [];
+          visibleTracks.forEach((track, index) => {
+            const chunkIndex = Math.floor(index / 5);
+            if (chunkIndex % 2 === 0) {
+              leftTracks.push(track);
+            } else {
+              rightTracks.push(track);
+            }
+          });
+
+          const renderTrackItem = (track) => (
+            <div
+              key={track.id}
+              className="group flex items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/5"
             >
-              <img
-                src={track.cover}
-                alt=""
-                className="h-11 w-11 rounded-lg object-cover"
-              />
-            </button>
-            <div className="min-w-0 flex-1">
               <button
                 type="button"
                 onClick={() => playTrack(track, trackSource)}
-                className="block max-w-full truncate text-left text-sm font-semibold text-white transition hover:text-white/80"
+                className="flex h-11 w-11 shrink-0 items-center justify-center text-left"
               >
-                {track.title}
-              </button>
-              <ArtistLinks track={track} onOpenArtist={onOpenArtist} />
-            </div>
-            <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
-              <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
-                {formatDuration(track.duration)}
-              </span>
-              <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                <TrackMenuButton
-                  track={track}
-                  onOpenArtist={onOpenArtist}
-                  onOpenAlbum={openAlbum}
+                <img
+                  src={track.cover}
+                  alt=""
+                  className="h-11 w-11 rounded-lg object-cover"
                 />
+              </button>
+              <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => playTrack(track, trackSource)}
+                  className="block max-w-full truncate text-left text-sm font-semibold text-white transition hover:text-white/80"
+                >
+                  {track.title}
+                </button>
+                <ArtistLinks track={track} onOpenArtist={onOpenArtist} />
+              </div>
+              <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
+                <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
+                  {formatDuration(track.duration)}
+                </span>
+                <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                  <TrackMenuButton
+                    track={track}
+                    onOpenArtist={onOpenArtist}
+                    onOpenAlbum={openAlbum}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        );
+          );
 
-        return (
-          <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              {leftTracks.map(renderTrackItem)}
+          return (
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                {leftTracks.map(renderTrackItem)}
+              </div>
+              <div className="flex flex-col gap-2">
+                {rightTracks.map(renderTrackItem)}
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              {rightTracks.map(renderTrackItem)}
-            </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
+      </div>
     </section>
   );
 }
@@ -1890,8 +1903,17 @@ function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
       const top100 = await getYandexChartTop100();
       setTracks(top100);
     } catch (err) {
-      console.error("Failed to load Yandex Music Chart Top 100", err);
-      setError(err.message || "Не удалось загрузить чарт Яндекс Музыки");
+      console.warn("Yandex Chart unavailable, using SoundCloud recommendations fallback:", err);
+      try {
+        const recs = await getRecommendedTracks();
+        if (recs && recs.length > 0) {
+          setTracks(recs);
+          return;
+        }
+      } catch (e) {
+        console.error("Fallback to SoundCloud recommendations failed:", e);
+      }
+      setError(err.message || "Не удалось загрузить чарт");
     } finally {
       setIsLoading(false);
     }
@@ -2025,7 +2047,7 @@ function TrackInfo({ onOpenFull, onOpenArtist, onOpenAlbum }) {
   }
 
   return (
-    <div key={currentTrack?.id} className={`flex w-[320px] items-center gap-3 ${slideClass.current}`}>
+    <div key={currentTrack?.id} className={`flex w-[320px] max-sm:w-auto max-sm:max-w-[240px] shrink min-w-0 items-center gap-3 ${slideClass.current}`}>
       {/* Track cover */}
       <div 
         onClick={onOpenFull}
@@ -2052,8 +2074,8 @@ function TrackInfo({ onOpenFull, onOpenArtist, onOpenAlbum }) {
           >
             {currentTrack.title}
           </p>
-          <span className="rounded bg-white/10 px-1 text-[10px] text-white/50">67+</span>
-          <div className="relative">
+          <span className="rounded bg-white/10 px-1 text-[10px] text-white/50 max-md:hidden">67+</span>
+          <div className="relative max-md:hidden">
             <TrackMenuButton
               track={currentTrack}
               onOpenArtist={onOpenArtist}
@@ -2120,16 +2142,17 @@ function PlayerControls() {
   const { controls, isPlaying, isLoading, trackPalette } = useAudioPlayer();
 
   return (
-    <div className="flex items-center justify-center gap-4">
-      {controls.map((control) =>
-        control.primary ? (
+    <div className="flex items-center justify-center gap-4 max-sm:gap-2 shrink-0">
+      {controls.map((control) => {
+        const isMobileHidden = control.id !== "like" && !control.primary;
+        return control.primary ? (
           <button
             key={control.id}
             type="button"
             onClick={control.action}
             aria-label={control.label}
             title={isLoading ? "Прогружаю трек..." : control.label}
-            className="grid shrink-0 place-items-center transition hover:scale-105 active:scale-95"
+            className="grid shrink-0 place-items-center transition hover:scale-105 active:scale-95 max-md:order-2"
           >
             {isLoading ? (
               <span
@@ -2154,17 +2177,18 @@ function PlayerControls() {
             )}
           </button>
         ) : (
-          <PlayerIconButton
-            key={control.id}
-            id={control.id}
-            icon={control.icon}
-            label={control.label}
-            onClick={control.action}
-            active={control.active}
-            badge={control.badge}
-          />
-        )
-      )}
+          <div key={control.id} className={isMobileHidden ? "max-md:hidden" : "max-md:order-1"}>
+            <PlayerIconButton
+              id={control.id}
+              icon={control.icon}
+              label={control.label}
+              onClick={control.action}
+              active={control.active}
+              badge={control.badge}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -2207,44 +2231,44 @@ function PlayerSeekBar() {
     </div>
   );
 }
+
 function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
   const { currentTrack, effectiveVolume, playTrack, queue, reorderQueue, setVolume, isEqualizerOpen, setIsEqualizerOpen } = useAudioPlayer();
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isVolumeOpen, setIsVolumeOpen] = useState(false);
-  const volumeRef = useRef(null);
+  const volumeTimerRef = useRef(null);
   const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
   const [dragOverQueueIndex, setDragOverQueueIndex] = useState(null);
   const volumePercent = Math.round(effectiveVolume * 100);
 
+  const handleVolumeMouseEnter = () => {
+    if (volumeTimerRef.current) {
+      clearTimeout(volumeTimerRef.current);
+      volumeTimerRef.current = null;
+    }
+    setIsVolumeOpen(true);
+  };
+
+  const handleVolumeMouseLeave = () => {
+    if (volumeTimerRef.current) {
+      clearTimeout(volumeTimerRef.current);
+    }
+    volumeTimerRef.current = setTimeout(() => {
+      setIsVolumeOpen(false);
+    }, 350);
+  };
+
   useEscapeKey(isQueueOpen, () => {
     setIsQueueOpen(false);
   });
-  useEscapeKey(isVolumeOpen, () => {
-    setIsVolumeOpen(false);
-  });
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (volumeRef.current && !volumeRef.current.contains(event.target)) {
-        setIsVolumeOpen(false);
-      }
-    };
-    if (isVolumeOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isVolumeOpen]);
 
   const profileSettings = getProfileSettings();
   useEffect(() => {
     applyAppearanceSettings(profileSettings?.appearance);
   }, [profileSettings?.appearance]);
 
-
   return (
-    <div className="flex w-auto items-center justify-end gap-2">
+    <div className="flex w-auto items-center justify-end gap-2 max-sm:gap-1 shrink-0 max-md:hidden relative z-50">
       <PlayerIconButton icon="/lyrics.svg" label="Караоке" onClick={onToggleKaraoke} active={isKaraokeOpen} />
       <div className="relative">
         <PlayerIconButton
@@ -2351,44 +2375,56 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
         onClick={() => setIsEqualizerOpen((val) => !val)}
         active={isEqualizerOpen}
       />
-      <div ref={volumeRef} className="relative grid h-9 w-9 place-items-center">
-        {isVolumeOpen && (
-          <div className="absolute bottom-[44px] left-1/2 z-50 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-2xl border border-white/10 bg-[#171717]/95 py-3 shadow-2xl backdrop-blur-md">
-            <div
-              className="volume-live-fill pointer-events-none absolute left-1/2 w-[9px] -translate-x-1/2 rounded-full bg-[var(--player-accent-muted)]"
-              style={{
-                height: `${Math.max(12, effectiveVolume * 221)}px`,
-                bottom: "8px"
-              }}
-            />
-            <div
-              className="volume-live-thumb pointer-events-none absolute left-1/2 h-[19px] w-[19px] -translate-x-1/2 rounded-full bg-[var(--player-accent)]"
-              style={{
-                bottom: `${8 + effectiveVolume * (221 - 19)}px`
-              }}
-            />
-            <img
-              src="/volume-input.svg"
-              alt=""
-              className="pointer-events-none absolute h-[221px] w-[19px] select-none opacity-70"
-            />
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={volumePercent}
-              onChange={(event) => setVolume(Number(event.target.value) / 100)}
-              aria-label="Громкость"
-              className="volume-slider"
-            />
-          </div>
-        )}
-        <PlayerIconButton
-          icon={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"}
-          label="Громкость"
-          onClick={() => setIsVolumeOpen((val) => !val)}
-          active={isVolumeOpen}
-        />
+      <div
+        className="volume-control relative z-[100] grid h-9 w-9 shrink-0 place-items-center"
+        onMouseEnter={handleVolumeMouseEnter}
+        onMouseLeave={handleVolumeMouseLeave}
+      >
+        <div
+          className={`volume-popover absolute bottom-11 left-1/2 z-[100] flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-2xl border border-white/10 bg-[#171717]/95 py-3 shadow-2xl backdrop-blur-md transition-all duration-200 ${
+            isVolumeOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          }`}
+          onMouseEnter={handleVolumeMouseEnter}
+          onMouseLeave={handleVolumeMouseLeave}
+        >
+          <div
+            className="volume-live-fill pointer-events-none absolute left-1/2 w-[9px] -translate-x-1/2 rounded-full bg-[var(--player-accent-muted)]"
+            style={{
+              height: `${Math.max(12, effectiveVolume * 221)}px`,
+              bottom: "8px"
+            }}
+          />
+          <div
+            className="volume-live-thumb pointer-events-none absolute left-1/2 h-[19px] w-[19px] -translate-x-1/2 rounded-full bg-[var(--player-accent)]"
+            style={{
+              bottom: `${8 + effectiveVolume * (221 - 19)}px`
+            }}
+          />
+          <img
+            src="/volume-input.svg"
+            alt=""
+            className="pointer-events-none absolute h-[221px] w-[19px] select-none opacity-70"
+          />
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={volumePercent}
+            onChange={(event) => setVolume(Number(event.target.value) / 100)}
+            aria-label="Громкость"
+            className="volume-slider"
+          />
+        </div>
+        <button
+          type="button"
+          aria-label="Громкость"
+          onClick={() => setVolume(effectiveVolume > 0 ? 0 : 0.7)}
+          className={`grid h-9 w-9 place-items-center rounded-full transition active:scale-95 ${
+            isVolumeOpen ? "bg-white/10 opacity-100" : "opacity-60 hover:bg-white/10 hover:opacity-100"
+          }`}
+        >
+          <img src={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"} alt="" className="h-5 w-5" />
+        </button>
       </div>
     </div>
   );
@@ -2512,6 +2548,7 @@ function MiniKaraoke({ isOpen, onClose, onOpenFull }) {
   }, [isOpen]);
 
   useEffect(() => {
+    let isCancelled = false;
     lyricRefs.current = [];
     setLyricsOffset(0);
 
@@ -2521,9 +2558,15 @@ function MiniKaraoke({ isOpen, onClose, onOpenFull }) {
     }
     setLyricsState({ status: "loading", lines: [] });
     getCachedLyricsForTrack(currentTrack, duration).then((result) => {
-      setLyricsState(result);
+      if (!isCancelled) {
+        setLyricsState(result);
+      }
     });
-  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artist, duration]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artist]);
 
   const isSynced = lyricsState.status === "synced";
   const lines = isSynced ? lyricsState.lines : [];
@@ -2688,10 +2731,47 @@ function MiniKaraoke({ isOpen, onClose, onOpenFull }) {
 }
 
 function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, isKaraokeOpen }) {
-  const { currentTime, duration, progress, seek, trackPalette } = useAudioPlayer();
+  const { currentTime, duration, progress, seek, trackPalette, next, previous } = useAudioPlayer();
   const [hoverState, setHoverState] = useState({ visible: false, percent: 0, time: 0 });
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubPercent, setScrubPercent] = useState(null);
+  const touchStartRef = useRef(null);
+
+  const handleTouchStart = (e) => {
+    if (e.touches && e.touches.length === 1) {
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        time: Date.now()
+      };
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!touchStartRef.current || !e.changedTouches || e.changedTouches.length === 0) return;
+    const touchEnd = e.changedTouches[0];
+    const deltaX = touchEnd.clientX - touchStartRef.current.x;
+    const deltaY = touchEnd.clientY - touchStartRef.current.y;
+    const deltaTime = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+
+    if (deltaTime > 600) return;
+
+    // Swipe UP opens full player
+    if (deltaY < -35 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
+      onOpenFull?.();
+      return;
+    }
+
+    // Horizontal swipe switches tracks
+    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      if (deltaX < 0) {
+        next();
+      } else {
+        previous();
+      }
+    }
+  };
 
   const rawPercent = currentTime > 0 && duration > 0 ? Math.min(100, Math.max(0, Math.round((progress || 0) * 1000) / 10)) : 0;
   const percent = isScrubbing && scrubPercent !== null ? scrubPercent : rawPercent;
@@ -2722,92 +2802,102 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, 
     seek(val);
   };
 
-  const handleInputPointerDown = () => {
+  const handleInputPointerDown = (e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
     setIsScrubbing(true);
   };
 
-  const handleInputPointerUp = () => {
+  const handleInputPointerUp = (e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
     setIsScrubbing(false);
     setScrubPercent(null);
   };
 
   return (
-    <div
-      className="group relative z-30 w-full rounded-[var(--player-radius,16px)] border border-white/[0.06] shadow-2xl transition-all duration-300 select-none"
-      style={{
-        "--player-accent": `color-mix(in srgb, ${trackPalette.line} 70%, #ffffff)`,
-        "--player-accent-muted": `color-mix(in srgb, ${trackPalette.line} 45%, #8a8a8a)`,
-        "--player-accent-soft": `color-mix(in srgb, ${trackPalette.line} 20%, transparent)`,
-        backgroundColor: `color-mix(in srgb, ${trackPalette.shadow} 45%, #121214)`,
-        boxShadow: "0 22px 60px rgba(0,0,0,.55)"
-      }}
-    >
-      {/* Dynamic minimal background fill layer following progress */}
-      {percent > 0 && (
+    <div className="group/player relative z-30 w-full select-none">
+      {/* Floating timing tooltip on hover */}
+      {hoverState.visible && duration > 0 && (
         <div
-          className={`pointer-events-none absolute inset-y-0 left-0 z-0 rounded-l-[var(--player-radius,16px)] rounded-tr-[var(--player-radius,16px)] rounded-br-none ${
-            isScrubbing ? "transition-none" : "transition-[width] duration-200 ease-linear"
-          }`}
+          className="pointer-events-none absolute -top-8 z-50 -translate-x-1/2 rounded-md bg-[#18181b]/95 px-2 py-0.5 text-[10.5px] font-mono font-semibold text-white shadow-xl border border-white/15 backdrop-blur-md whitespace-nowrap"
           style={{
-            width: `${percent}%`,
-            backgroundColor: `color-mix(in srgb, var(--player-accent) 14%, transparent)`
+            left: `${Math.max(4, Math.min(96, hoverState.percent))}%`
           }}
-        />
+        >
+          {formatTime(hoverState.time)} <span className="text-white/40">/</span> {formatTime(duration)}
+        </div>
       )}
 
-      {/* Top integrated progress bar with hover tooltip */}
-      <div 
-        onMouseMove={handleSeekMouseMove}
-        onMouseLeave={handleSeekMouseLeave}
-        className="relative z-20 w-full h-[3px] group-hover:h-[5px] transition-all duration-200 cursor-pointer bg-white/10 overflow-visible rounded-t-[var(--player-radius,16px)]"
+      {/* Main player box */}
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="relative z-10 w-full rounded-[var(--player-radius,20px)] border border-white/[0.06] shadow-2xl transition-all duration-300"
+        style={{
+          "--player-accent": `color-mix(in srgb, ${trackPalette.line} 70%, #ffffff)`,
+          "--player-accent-muted": `color-mix(in srgb, ${trackPalette.line} 45%, #8a8a8a)`,
+          "--player-accent-soft": `color-mix(in srgb, ${trackPalette.line} 20%, transparent)`,
+          backgroundColor: `color-mix(in srgb, ${trackPalette.shadow} 45%, #121214)`,
+          boxShadow: "0 22px 60px rgba(0,0,0,.55)"
+        }}
       >
-        {/* Floating timing tooltip on hover */}
-        {hoverState.visible && duration > 0 && (
-          <div
-            className="pointer-events-none absolute -top-8 z-50 -translate-x-1/2 rounded-md bg-[#18181b]/95 px-2 py-0.5 text-[10.5px] font-mono font-semibold text-white shadow-xl border border-white/15 backdrop-blur-md whitespace-nowrap"
-            style={{
-              left: `${Math.max(4, Math.min(96, hoverState.percent))}%`
-            }}
-          >
-            {formatTime(hoverState.time)} <span className="text-white/40">/</span> {formatTime(duration)}
-          </div>
-        )}
-
-        {/* Outer bar overflow hidden wrapper for progress fill */}
-        <div className="absolute inset-0 overflow-hidden rounded-t-[var(--player-radius,16px)] pointer-events-none">
+        {/* Sub-pixel exact inner clipped container (inset 1px inside border, inner radius = outer radius - 1px) */}
+        <div className="absolute inset-[1px] overflow-hidden rounded-[calc(var(--player-radius,20px)-1px)] pointer-events-none z-0">
+          {/* Dynamic minimal background fill layer */}
           {percent > 0 && (
             <div
-              className={`h-full bg-[var(--player-accent)] ${
+              className={`absolute inset-y-0 left-0 ${
                 isScrubbing ? "transition-none" : "transition-[width] duration-200 ease-linear"
               }`}
-              style={{ width: `${percent}%` }}
+              style={{
+                width: `${percent}%`,
+                backgroundColor: `color-mix(in srgb, var(--player-accent) 14%, transparent)`
+              }}
             />
           )}
+
+          {/* Top integrated progress bar line */}
+          <div className="absolute top-0 left-0 right-0 h-[3px] group-hover/player:h-[5px] transition-all duration-200 bg-white/10">
+            {percent > 0 && (
+              <div
+                className={`h-full bg-[var(--player-accent)] ${
+                  isScrubbing ? "transition-none" : "transition-[width] duration-200 ease-linear"
+                }`}
+                style={{ width: `${percent}%` }}
+              />
+            )}
+          </div>
         </div>
 
-        <input
-          type="range"
-          min="0"
-          max={Math.max(duration || 0, 1)}
-          step="0.1"
-          value={Math.min(currentTime || 0, duration || 0)}
-          onInput={handleInputChange}
-          onChange={handleInputChange}
-          onMouseDown={handleInputPointerDown}
-          onMouseUp={handleInputPointerUp}
-          onTouchStart={handleInputPointerDown}
-          onTouchEnd={handleInputPointerUp}
-          disabled={!duration}
-          aria-label="Перемотка трека"
-          className="player-seek-slider absolute -top-1 bottom-0 left-0 right-0 h-4 z-30 opacity-0 cursor-pointer"
-        />
-      </div>
+        {/* Top interactive hover & seek overlay */}
+        <div 
+          onMouseMove={handleSeekMouseMove}
+          onMouseLeave={handleSeekMouseLeave}
+          className="relative z-20 w-full h-[3px] group-hover/player:h-[5px] transition-all duration-200 cursor-pointer pointer-events-auto"
+        >
+          <input
+            type="range"
+            min="0"
+            max={Math.max(duration || 0, 1)}
+            step="0.1"
+            value={Math.min(currentTime || 0, duration || 0)}
+            onInput={handleInputChange}
+            onChange={handleInputChange}
+            onMouseDown={handleInputPointerDown}
+            onMouseUp={handleInputPointerUp}
+            onTouchStart={handleInputPointerDown}
+            onTouchEnd={handleInputPointerUp}
+            disabled={!duration}
+            aria-label="Перемотка трека"
+            className="player-seek-slider absolute top-0 bottom-0 left-0 right-0 h-4 z-30 opacity-0 cursor-pointer"
+          />
+        </div>
 
-      {/* Main player controls row */}
-      <div className="relative z-10 flex items-center justify-between gap-4 px-4 py-2.5">
-        <TrackInfo onOpenFull={onOpenFull} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
-        <PlayerControls />
-        <PlayerTools onOpenFull={onOpenFull} onToggleKaraoke={onToggleKaraoke} isKaraokeOpen={isKaraokeOpen} />
+        {/* Main player controls row */}
+        <div className="relative z-10 flex items-center justify-between gap-4 px-4 py-2.5">
+          <TrackInfo onOpenFull={onOpenFull} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
+          <PlayerControls />
+          <PlayerTools onOpenFull={onOpenFull} onToggleKaraoke={onToggleKaraoke} isKaraokeOpen={isKaraokeOpen} />
+        </div>
       </div>
     </div>
   );
@@ -2836,9 +2926,7 @@ export function applyAppearanceSettings(appearance = {}) {
 }
 
 export default function App() {
-  
-
-  const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, mergeServerData, likedTracks, userPlaylists, savedReleases, dislikedTrackIds, playHistory } = useAudioPlayer();
+  const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, mergeServerData, likedTracks, userPlaylists, savedReleases, dislikedTrackIds, playHistory, playTrack } = useAudioPlayer();
   const [activeTab, setActiveTab] = useState("wave");
   const [previousTab, setPreviousTab] = useState("wave");
   const [activeArtist, setActiveArtist] = useState(null);
@@ -3025,8 +3113,60 @@ export default function App() {
     }
   };
 
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <>
+        <MobileLayout
+          activeTab={activeTab}
+          setActiveTab={selectTab}
+          currentUser={currentUser}
+          profileData={profileData}
+          onLoginClick={() => setShowAuthModal(true)}
+          onOpenProfile={() => {
+            const event = new CustomEvent("amymusic:open-profile");
+            window.dispatchEvent(event);
+          }}
+          renderContent={renderContent}
+          BottomPlayer={BottomPlayer}
+          onOpenFull={() => setIsFullOpen(true)}
+          openArtist={openArtist}
+          openAlbum={openAlbum}
+          activeArtist={activeArtist}
+          activeAlbum={activeAlbum}
+          onToggleKaraoke={() => setIsMiniKaraokeOpen((v) => !v)}
+          isKaraokeOpen={isMiniKaraokeOpen}
+          isFullOpen={isFullOpen}
+        />
+        <MiniKaraoke
+          isOpen={isMiniKaraokeOpen}
+          onClose={() => setIsMiniKaraokeOpen(false)}
+          onOpenFull={() => { setIsMiniKaraokeOpen(false); setIsFullOpen(true); }}
+        />
+        {isFullOpen && (
+          <FullPlayerOverlay
+            appearance={profileSettings?.appearance}
+            onClose={() => setIsFullOpen(false)}
+            onOpenArtist={openArtist}
+            onOpenAlbum={openAlbum}
+          />
+        )}
+        {isEqualizerOpen && (
+          <EqualizerModal onClose={() => setIsEqualizerOpen(false)} />
+        )}
+        {showAuthModal && (
+          <AuthModal 
+            onClose={() => setShowAuthModal(false)}
+            onLoginSuccess={handleLoginSuccess}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
-    <main className="relative flex h-screen w-screen select-none gap-4 overflow-hidden bg-black p-3 pt-[36px] text-white">
+    <main className="relative flex h-screen w-screen select-none gap-4 max-md:gap-0 overflow-hidden bg-black p-3 max-md:p-0 pt-[36px] max-md:pt-0 text-white max-md:flex-col">
       {/* Draggable Title Bar Overlay */}
       <div 
         className="absolute left-0 right-0 top-0 h-[36px] bg-transparent" 
@@ -3041,12 +3181,12 @@ export default function App() {
         onLogout={handleLogout}
         onProfileSave={handleProfileSave}
       />
-      <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
+      <div className="flex min-w-0 min-h-0 flex-1 flex-col justify-between gap-3 max-md:gap-0 max-md:pb-24 max-md:h-full max-md:overflow-hidden">
         <div key={`${activeTab}-${activeArtist?.id || "none"}-${activeAlbum?.id || "noalbum"}-${apiSettingsVersion}`} className="contents">
           {renderContent()}
         </div>
         {activeTab !== "wave" && (
-          <div className="relative z-40 flex shrink-0 flex-col gap-1">
+          <div className="relative z-40 flex shrink-0 flex-col gap-1 max-md:fixed max-md:bottom-14 max-md:left-2 max-md:right-2">
             <BottomPlayer
               onOpenFull={() => setIsFullOpen(true)}
               onOpenArtist={openArtist}
@@ -3054,7 +3194,7 @@ export default function App() {
               onToggleKaraoke={() => setIsMiniKaraokeOpen((v) => !v)}
               isKaraokeOpen={isMiniKaraokeOpen}
             />
-            <p className="self-end pr-1 text-[10px] text-neutral-600">Copyright © 2026 AmyMusic. Все права НЕ защищены.</p>
+            <p className="self-end pr-1 text-[10px] text-neutral-600 max-md:hidden">Copyright © 2026 AmyMusic. Все права НЕ защищены.</p>
           </div>
         )}
       </div>
@@ -3080,6 +3220,7 @@ export default function App() {
           onLoginSuccess={handleLoginSuccess}
         />
       )}
+
     </main>
   );
 }

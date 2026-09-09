@@ -190,7 +190,7 @@ pkill -9 nginx || true
 sleep 1
 systemctl restart nginx || true
 
-cd /var/www/amymusic/backend && npm install && pm2 restart amymusic-backend || pm2 start server.js --name "amymusic-backend" && pm2 save
+export PATH=$PATH:/usr/local/bin:/usr/bin; cd /var/www/amymusic/backend && npm install && (pm2 restart amymusic-backend || npx pm2 restart amymusic-backend || npx pm2 start server.js --name "amymusic-backend") && (pm2 save || npx pm2 save)
 `;
 
     conn.exec(remoteScript, (err, stream) => {

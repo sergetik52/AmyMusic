@@ -1,6 +1,7 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
 import { getYandexChartTop100 } from "../services/yandexMusicApi";
+import { getRecommendedTracks } from "../services/soundCloudApi";
 import { TrackMenuButton } from "./TrackContextMenu";
 
 export function TopChartsView() {
@@ -21,9 +22,18 @@ export function TopChartsView() {
           setError("Не удалось загрузить чарт");
         }
       })
-      .catch((err) => {
+      .catch(async (err) => {
         if (!isMounted) return;
-        console.error(err);
+        try {
+          const recs = await getRecommendedTracks();
+          if (isMounted && recs && recs.length > 0) {
+            setTracks(recs);
+            setError("");
+            return;
+          }
+        } catch (e) {
+          console.error(e);
+        }
         setError("Ошибка при загрузке чарта");
       })
       .finally(() => {

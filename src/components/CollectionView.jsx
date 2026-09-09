@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
 import { getAlbumDetails, getTrackWaveTracks, hydrateSoundCloudTracks, searchTracks } from "../services/soundCloudApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
@@ -271,7 +271,7 @@ function PlaylistView({
   onDelete,
   onOpenTrackWave
 }) {
-  const { reorderPlaylistTracks } = useAudioPlayer();
+  const { reorderPlaylistTracks, currentTrack, isPlaying, togglePlay } = useAudioPlayer();
   const [title, setTitle] = useState(playlist.title);
   const [cover, setCover] = useState(playlist.cover);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -323,9 +323,9 @@ function PlaylistView({
           container.scrollTop += 14;
         }
       }}
-      className="flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] bg-[#090909] text-white"
+      className="flex flex-1 min-h-0 select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none bg-[#090909] text-white"
     >
-      <div className="relative border-b border-white/[0.06] p-7">
+      <div className="relative border-b border-white/[0.06] p-7 max-md:px-4 max-md:pb-3 max-md:pt-2">
         <div className="absolute inset-0 opacity-30 blur-3xl">
           <img src={cover || "/logo.png"} alt="" className="h-full w-full object-cover" />
         </div>
@@ -348,7 +348,7 @@ function PlaylistView({
                 <button
                   type="button"
                   onClick={() => setIsDeletePromptOpen(false)}
-                  className="flex-1 rounded-full bg-white/10 py-3 text-sm font-bold text-white transition hover:bg-white/20"
+                  className="flex-1 rounded-2xl bg-white/10 py-3 text-sm font-bold text-white transition hover:bg-white/20 active:scale-95"
                 >
                   Отмена
                 </button>
@@ -358,7 +358,7 @@ function PlaylistView({
                     setIsDeletePromptOpen(false);
                     onDelete?.(playlist.id);
                   }}
-                  className="flex-1 rounded-full bg-red-500 py-3 text-sm font-bold text-white transition hover:bg-red-600"
+                  className="flex-1 rounded-2xl bg-red-500 py-3 text-sm font-bold text-white transition hover:bg-red-600 active:scale-95 shadow-lg shadow-red-500/30"
                 >
                   Удалить
                 </button>
@@ -367,74 +367,80 @@ function PlaylistView({
           </div>
         )}
         
-        <div className="relative z-10">
+        <div className="relative z-10 flex flex-col h-full">
           <button 
             type="button" 
             onClick={onBack} 
-            className="mb-5 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95" 
+            className="mb-5 max-md:mb-2 flex h-10 w-10 max-md:h-8 max-md:w-8 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95" 
             aria-label="Назад"
           >
             <svg className="h-6 w-6 fill-current rotate-90" viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"></path></svg>
           </button>
   
-          <div className="flex items-end gap-6">
-            <img 
-              src={cover || "/logo.png"} 
-              alt="" 
+          <div className="flex flex-col sm:flex-row sm:items-end gap-7 max-md:items-center">
+            <div 
+              className="group relative flex h-48 w-48 max-md:h-36 max-md:w-36 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-2xl transition hover:border-white/20"
               onClick={() => setIsCoverExpanded(true)}
-              className="h-48 w-48 rounded-3xl border border-white/10 object-cover shadow-2xl cursor-pointer transition hover:scale-105 active:scale-95" 
-            />
-            <div className="min-w-0 flex-1 pb-1">
-              <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-white/30">
-                {isEditable ? "Мой плейлист" : playlist.kind === "album" ? "Альбом" : "Плейлист"}
+            >
+              <img src={cover || "/logo.png"} alt="Cover" className="h-full w-full object-cover" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="text-xs font-bold text-white">Увеличить</span>
+              </div>
+            </div>
+
+            <div className="flex flex-1 flex-col pb-2 max-md:items-center">
+              <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-white/35 max-md:text-center">
+                {isEditable ? "Ваш плейлист" : playlist.kind === "album" ? "Альбом" : "Плейлист"}
               </p>
+
               {isEditable ? (
-                <div className="max-w-xl space-y-2">
-                  <input
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    onBlur={saveChanges}
-                    className="w-full bg-transparent text-5xl font-black tracking-tight text-white outline-none placeholder:text-white/20 transition hover:bg-white/[0.02] focus:bg-white/[0.04] rounded-lg px-2 -ml-2"
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  onBlur={saveChanges}
+                  className="mb-4 w-full bg-transparent text-4xl max-md:text-2xl font-black tracking-tight text-white outline-none focus:border-b border-white/20 max-md:text-center"
+                />
               ) : (
-                <h1 className="truncate text-5xl font-black tracking-tight text-white">{playlist.title}</h1>
+                <h1 className="mb-4 text-4xl max-md:text-2xl font-black tracking-tight text-white max-md:text-center">{playlist.title}</h1>
               )}
-              <p className="mt-2 text-sm font-bold text-white/38">
-                {playlist.artist} · {tracks.length || playlist.trackCount || 0} треков
-              </p>
-              <div className="mt-6 flex gap-2 items-center">
+
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => tracks[0] && onPlay(tracks[0], tracks)}
-                  disabled={!tracks.length}
-                  className="rounded-full bg-white px-5 py-2.5 text-sm font-black text-black transition hover:bg-white/85 disabled:cursor-default disabled:opacity-40"
+                  onClick={() => tracks.length && onPlay(tracks[0], tracks)}
+                  className="flex items-center gap-2 rounded-full bg-[#8341EF] px-6 py-3 text-sm font-bold text-white shadow-xl transition hover:scale-105 active:scale-95"
                 >
-                  ▶ Слушать все
+                  <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                  Слушать
                 </button>
+                
                 <button
                   type="button"
                   onClick={handleShufflePlay}
-                  disabled={!tracks.length}
-                  className="grid h-10 w-10 place-items-center rounded-full border border-white/[0.08] bg-white/[0.035] transition hover:bg-white/[0.07] hover:text-white active:scale-95 disabled:cursor-default disabled:opacity-35"
-                  aria-label="Перемешать плейлист и слушать"
-                  title="Перемешать плейлист и слушать"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 active:scale-95"
+                  title="Перемешать"
                 >
-                  <img src="/shuffle.svg" alt="" className="h-5 w-5 brightness-200 opacity-70" />
+                  <img src="/shuffle.svg" alt="" className="h-5 w-5 brightness-200" />
                 </button>
+
                 {isEditable && (
                   <div className="relative">
                     <button
                       type="button"
                       onClick={() => setIsMenuOpen(!isMenuOpen)}
-                      className="grid h-10 w-10 place-items-center rounded-full border border-white/[0.08] bg-white/[0.035] transition hover:bg-white/[0.07] active:scale-95"
+                      className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 active:scale-95"
+                      title="Меню"
                     >
-                      <span className="text-white/60">•••</span>
+                      <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                      </svg>
                     </button>
+
                     {isMenuOpen && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)} />
-                        <div className="absolute left-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-[var(--cover-radius,12px)] border border-white/10 bg-[#141414] shadow-2xl">
+                        <div className="absolute left-0 mt-2 z-50 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#181818] shadow-2xl">
                           <input
                             type="file"
                             ref={fileInputRef}
@@ -473,13 +479,14 @@ function PlaylistView({
         </div>
       </div>
 
-      <div className="space-y-1 p-7">
+      <div className="space-y-1 p-7 max-md:px-2 max-md:py-2 max-md:w-full">
         {isLoading && (
           <p className="mb-4 text-sm font-bold text-white/35">Догружаю треки...</p>
         )}
         {tracks.length ? tracks.map((track, index) => {
           const isDragging = draggedTrackIndex === index;
           const isDragOver = dragOverTrackIndex === index;
+          const isCurrent = currentTrack?.id === track.id;
 
           return (
             <div
@@ -509,14 +516,23 @@ function PlaylistView({
                 setDraggedTrackIndex(null);
                 setDragOverTrackIndex(null);
               }}
+              onClick={(e) => {
+                if (e.target.closest("button") || e.target.closest("a")) return;
+                if (isCurrent) {
+                  togglePlay();
+                } else {
+                  onPlay(track, tracks);
+                }
+              }}
               className={[
-                "group flex items-center gap-3 rounded-[var(--cover-radius,12px)] p-2 transition hover:bg-white/[0.04]",
+                "group flex items-center gap-3 rounded-[var(--cover-radius,12px)] p-2 max-md:px-2 max-md:py-2.5 max-md:rounded-none max-md:w-full transition hover:bg-white/[0.04] cursor-pointer",
                 isEditable ? "cursor-grab active:cursor-grabbing" : "",
                 isDragging ? "opacity-30 scale-95" : "opacity-100",
-                isDragOver ? "border-2 border-[#8341EF]" : "border border-transparent"
+                isDragOver ? "border-2 border-[#8341EF]" : "border border-transparent",
+                isCurrent ? "bg-white/[0.08]" : ""
               ].join(" ")}
             >
-              <button type="button" onClick={() => onPlay(track, tracks)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+              <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
                 {isEditable ? (
                   <div className="flex items-center gap-1.5 shrink-0">
                     <svg className="h-4 w-4 fill-white/20 group-hover:fill-white/60 transition" viewBox="0 0 24 24">
@@ -527,12 +543,33 @@ function PlaylistView({
                 ) : (
                   <span className="w-7 text-right text-xs font-black text-white/25">{index + 1}</span>
                 )}
-                <img src={track.cover} alt="" className="h-11 w-11 rounded-lg object-cover" />
+
+                <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-white/5">
+                  <img src={track.cover || "/logo.png"} alt="" className="h-full w-full object-cover" />
+                  <div
+                    className={[
+                      "absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity",
+                      isCurrent ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    ].join(" ")}
+                  >
+                    {isCurrent && isPlaying ? (
+                      <svg className="h-5 w-5 fill-white" viewBox="0 0 24 24">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                      </svg>
+                    ) : (
+                      <svg className="h-5 w-5 fill-white ml-0.5" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-white">{track.title}</p>
+                  <p className={`truncate text-sm font-bold transition ${isCurrent ? "text-[#8341EF]" : "text-white"}`}>{track.title}</p>
                   <TrackArtistLinks track={track} onOpenArtist={onOpenArtist} />
                 </div>
-              </button>
+              </div>
+
               <TrackLikeButton
                 track={track}
                 isLiked={likedTrackIds.has(track.id)}
@@ -554,9 +591,7 @@ function PlaylistView({
             </div>
           );
         }) : (
-          <div className="grid min-h-[220px] place-items-center text-sm font-bold text-white/35">
-            Плейлист пустой
-          </div>
+          <p className="text-sm font-bold text-white/30">В этом плейлисте нет треков</p>
         )}
       </div>
     </div>
@@ -590,6 +625,25 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   const [isAddPlaylistOpen, setIsAddPlaylistOpen] = useState(false);
   const [trackWaveLoading, setTrackWaveLoading] = useState(false);
   const fileInputRef = React.useRef(null);
+  const mobileLikedScrollRef = useRef(null);
+
+  const scrollLikedLeft = () => {
+    if (mobileLikedScrollRef.current) {
+      mobileLikedScrollRef.current.scrollBy({
+        left: -mobileLikedScrollRef.current.clientWidth,
+        behavior: "smooth"
+      });
+    }
+  };
+
+  const scrollLikedRight = () => {
+    if (mobileLikedScrollRef.current) {
+      mobileLikedScrollRef.current.scrollBy({
+        left: mobileLikedScrollRef.current.clientWidth,
+        behavior: "smooth"
+      });
+    }
+  };
 
   const openTrackWave = async (track) => {
     if (trackWaveLoading) return;
@@ -859,7 +913,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
 
   if (isAddPlaylistOpen) {
     return (
-      <div className="flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] bg-[#090909] text-white animate-[slideUpFade_0.2s_ease-out_forwards]">
+      <div className="flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none bg-[#090909] text-white animate-[slideUpFade_0.2s_ease-out_forwards]">
         <div className="relative border-b border-white/[0.06] p-7 min-h-[315px]">
           <div className="absolute inset-0 opacity-30 blur-3xl">
             <img src={playlistCover || "/logo.png"} alt="" className="h-full w-full object-cover" />
@@ -960,7 +1014,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   }
 
   return (
-    <div className="relative flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] bg-[#0d0d0d] p-8 text-white">
+    <div className="relative flex flex-1 min-h-0 w-full select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none bg-[#090909] p-8 max-md:p-4 text-white">
       {isImporting && (
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-white/5 z-50 overflow-hidden rounded-t-[17.76px]">
           <div 
@@ -977,19 +1031,46 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
       </div>
 
       <div className="mb-10">
-        <div className="mb-4 flex items-center gap-3.5">
-          <HeartHeaderIcon />
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <HeartHeaderIcon />
 
-          <div className="flex flex-col justify-center">
-            <button type="button" onClick={openLikedTracks} className="flex items-center gap-1.5 text-2xl font-black hover:opacity-80 transition text-left">
-              <span>Мне нравится</span>
-              <span className="text-xl text-white/40">›</span>
-            </button>
+            <div className="flex flex-col justify-center">
+              <button type="button" onClick={openLikedTracks} className="flex items-center gap-1.5 text-2xl font-black hover:opacity-80 transition text-left">
+                <span>Мне нравится</span>
+                <span className="text-xl text-white/40">›</span>
+              </button>
 
-            <span className="mt-0.5 text-xs font-semibold text-white/40">
-              {likedTracks.length} {likedTracks.length === 1 ? "трек" : "треков"}
-            </span>
+              <span className="mt-0.5 text-xs font-semibold text-white/40">
+                {likedTracks.length} {likedTracks.length === 1 ? "трек" : "треков"}
+              </span>
+            </div>
           </div>
+
+          {likedTracks.length > 5 && (
+            <div className="flex md:hidden items-center gap-1.5">
+              <button
+                type="button"
+                onClick={scrollLikedLeft}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95"
+                aria-label="Назад"
+              >
+                <svg className="h-5 w-5 fill-current rotate-90" viewBox="0 0 24 24">
+                  <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={scrollLikedRight}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95"
+                aria-label="Вперед"
+              >
+                <svg className="h-5 w-5 fill-current -rotate-90" viewBox="0 0 24 24">
+                  <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
 
         {likedTracks.length === 0 ? (
@@ -1014,38 +1095,48 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
             });
 
             const renderTrackItem = (track) => {
-              const isCurrent = currentTrack.id === track.id;
+              const isCurrent = currentTrack?.id === track.id;
               return (
                 <div
                   key={track.id}
-                  className="group flex items-center justify-between rounded-[var(--cover-radius,12px)] p-2 transition hover:bg-white/5"
+                  onClick={(e) => {
+                    if (e.target.closest("button") || e.target.closest("a")) return;
+                    if (isCurrent) {
+                      togglePlay();
+                    } else {
+                      playTrack(track, likedTracks);
+                    }
+                  }}
+                  className={[
+                    "group flex items-center justify-between rounded-[var(--cover-radius,12px)] p-2 transition hover:bg-white/5 cursor-pointer",
+                    isCurrent ? "bg-white/[0.08]" : ""
+                  ].join(" ")}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-3.5 text-left">
-                    <button
-                      type="button"
-                      onClick={() => playTrack(track, likedTracks)}
-                      className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white/10"
-                      aria-label={`Включить ${track.title}`}
-                    >
-                      <img src={track.cover} alt="" className="h-full w-full object-cover" />
+                    <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white/10">
+                      <img src={track.cover || "/logo.png"} alt="" className="h-full w-full object-cover" />
                       <div
                         className={[
                           "absolute inset-0 flex items-center justify-center bg-black/50 transition-opacity",
-                          isCurrent && isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                          isCurrent ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                         ].join(" ")}
                       >
-                        <HoverPlayIcon />
+                        {isCurrent && isPlaying ? (
+                          <svg className="h-5 w-5 fill-white" viewBox="0 0 24 24">
+                            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                          </svg>
+                        ) : (
+                          <svg className="h-5 w-5 fill-white ml-0.5" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        )}
                       </div>
-                    </button>
+                    </div>
 
                     <div className="flex min-w-0 flex-col">
-                      <button
-                        type="button"
-                        onClick={() => playTrack(track, likedTracks)}
-                        className="truncate text-left text-sm font-semibold text-white transition hover:text-white/80"
-                      >
+                      <p className={`truncate text-left text-sm font-semibold transition ${isCurrent ? "text-[#8341EF]" : "text-white"}`}>
                         {track.title}
-                      </button>
+                      </p>
                       <TrackArtistLinks track={track} onOpenArtist={openTrackArtist} />
                     </div>
                   </div>
@@ -1076,15 +1167,36 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
               );
             };
 
+            const mobileChunks = [];
+            for (let i = 0; i < visibleSlice.length; i += 5) {
+              mobileChunks.push(visibleSlice.slice(i, i + 5));
+            }
+
             return (
-              <div className="grid grid-cols-1 gap-x-8 gap-y-2 lg:grid-cols-2">
-                <div className="flex flex-col gap-y-2">
-                  {leftTracks.map(renderTrackItem)}
+              <>
+                {/* Mobile View: horizontal page-by-page columns of 5 tracks */}
+                <div
+                  ref={mobileLikedScrollRef}
+                  className="flex md:hidden overflow-x-auto gap-3 snap-x snap-mandatory scrollbar-hide w-full pb-2"
+                  style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                >
+                  {mobileChunks.map((chunk, chunkIdx) => (
+                    <div key={chunkIdx} className="w-full shrink-0 snap-start flex flex-col gap-1">
+                      {chunk.map(renderTrackItem)}
+                    </div>
+                  ))}
                 </div>
-                <div className="flex flex-col gap-y-2">
-                  {rightTracks.map(renderTrackItem)}
+
+                {/* Desktop View: 2 column grid */}
+                <div className="hidden md:grid md:grid-cols-2 gap-x-8 gap-y-2 lg:grid-cols-2">
+                  <div className="flex flex-col gap-y-2">
+                    {leftTracks.map(renderTrackItem)}
+                  </div>
+                  <div className="flex flex-col gap-y-2">
+                    {rightTracks.map(renderTrackItem)}
+                  </div>
                 </div>
-              </div>
+              </>
             );
           })()
         )}

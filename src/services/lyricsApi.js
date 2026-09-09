@@ -172,13 +172,6 @@ function getLyricsSignature(track) {
   }
   addUnique(queryCandidates, primaryTitle);
 
-  if (track?.album) {
-    addUnique(queryCandidates, `${primaryArtist} ${track.album}`);
-    if (searchArtistToken !== primaryArtist) {
-      addUnique(queryCandidates, `${searchArtistToken} ${track.album}`);
-    }
-  }
-
   return {
     trackName: primaryTitle,
     artistName: primaryArtist,
@@ -202,31 +195,39 @@ function toLyricsUrl(path, params) {
   return url;
 }
 
-async function requestLyrics(url, scope, signal) {
+async function requestLyrics(url, scope, signal, retryCount = 0) {
   logDebug("lyrics", `${scope}: request`, { url: url.toString() });
 
   const timeoutController = new AbortController();
-  const timeoutId = setTimeout(() => timeoutController.abort(), 2500);
+  const timeoutId = setTimeout(() => timeoutController.abort(), 6000);
 
-  let requestSignal = timeoutController.signal;
+  const onAbort = () => timeoutController.abort();
   if (signal) {
-    if (typeof AbortSignal.any === "function") {
-      requestSignal = AbortSignal.any([signal, timeoutController.signal]);
+    if (signal.aborted) {
+      timeoutController.abort();
     } else {
-      signal.addEventListener("abort", () => timeoutController.abort());
-      if (signal.aborted) timeoutController.abort();
+      signal.addEventListener("abort", onAbort);
     }
   }
 
   try {
     const response = await fetch(url, {
-      signal: requestSignal,
+      signal: timeoutController.signal,
       headers: {
         "Accept": "application/json",
         "Lrclib-Client": CLIENT_HEADER,
         "X-User-Agent": CLIENT_HEADER
       }
     });
+
+    if (response.status === 503 || response.status === 429) {
+      if (retryCount < 2 && !signal?.aborted) {
+        const delayMs = (retryCount + 1) * 350;
+        logWarn("lyrics", `${scope}: rate limited (${response.status}), retrying in ${delayMs}ms...`);
+        await new Promise((r) => setTimeout(r, delayMs));
+        return requestLyrics(url, scope, signal, retryCount + 1);
+      }
+    }
 
     if (!response.ok) {
       throw new Error(`LRCLIB request failed: ${response.status}`);
@@ -241,13 +242,16 @@ async function requestLyrics(url, scope, signal) {
     return JSON.parse(body);
   } catch (err) {
     if (err?.name === "AbortError") {
-      logDebug("lyrics", `${scope}: cancelled / aborted`);
+      logDebug("lyrics", `${scope}: request cancelled / aborted`);
     } else {
       logWarn("lyrics", `${scope}: request failed`, err);
     }
     throw err;
   } finally {
     clearTimeout(timeoutId);
+    if (signal) {
+      signal.removeEventListener("abort", onAbort);
+    }
   }
 }
 
@@ -360,38 +364,60 @@ export async function fetchLyricsForTrack(track, signal) {
     duration
   });
 
+  const title = signature.trackName;
+  if (!title) {
+    return { status: "empty", source: "LRCLIB", lines: [] };
+  }
+
+  const mainToken = signature.searchArtistToken || signature.fullArtistName;
+
+  // 0. Try direct lookup via /api/get first
+  if (mainToken && title) {
+    try {
+      const getParams = { track_name: title, artist_name: mainToken };
+      if (duration > 0) getParams.duration = duration;
+      const directRecord = await requestLyrics(toLyricsUrl("/get", getParams), `get:${mainToken}:${title}`, signal);
+      if (directRecord && (directRecord.syncedLyrics || directRecord.plainLyrics || directRecord.instrumental)) {
+        return normalizeLyricsRecord(directRecord, duration);
+      }
+    } catch {
+      // Fall through to search endpoints
+    }
+  }
+
   const promises = [];
 
-  const title = signature.trackName;
-  const fullArtist = signature.fullArtistName;
-  const searchArtistToken = signature.searchArtistToken;
-
-  // Send high-precision search requests concurrently in parallel (ZERO sequential loops!)
-  if (title) {
-    if (fullArtist) {
-      promises.push(
-        requestLyrics(toLyricsUrl("/search", { track_name: title, artist_name: fullArtist }), `search:${fullArtist}:${title}`, signal)
-          .then((res) => (Array.isArray(res) ? res : res ? [res] : []))
-          .catch(() => [])
-      );
-    }
-
-    if (searchArtistToken && searchArtistToken !== fullArtist) {
-      promises.push(
-        requestLyrics(toLyricsUrl("/search", { track_name: title, artist_name: searchArtistToken }), `search:${searchArtistToken}:${title}`, signal)
-          .then((res) => (Array.isArray(res) ? res : res ? [res] : []))
-          .catch(() => [])
-      );
-    }
-
+  // 1. Primary query: searchArtistToken + title
+  if (mainToken) {
     promises.push(
-      requestLyrics(toLyricsUrl("/search", { q: `${searchArtistToken || fullArtist} ${title}` }), `search:q:${title}`, signal)
+      requestLyrics(toLyricsUrl("/search", { q: `${mainToken} ${title}` }), `search:q:${mainToken}:${title}`, signal)
         .then((res) => (Array.isArray(res) ? res : res ? [res] : []))
         .catch(() => [])
     );
   }
 
-  // Execute ALL candidate requests concurrently in parallel
+  // 2. Multi-artist & feature tolerance queries
+  const checkedTokens = new Set([mainToken ? mainToken.toLowerCase() : ""]);
+  signature.fullArtistCandidates.slice(0, 2).forEach((artistCand) => {
+    const token = getSearchArtistToken(artistCand);
+    if (token && !checkedTokens.has(token.toLowerCase())) {
+      checkedTokens.add(token.toLowerCase());
+      promises.push(
+        requestLyrics(toLyricsUrl("/search", { track_name: title, artist_name: token }), `search:param:${token}:${title}`, signal)
+          .then((res) => (Array.isArray(res) ? res : res ? [res] : []))
+          .catch(() => [])
+      );
+    }
+  });
+
+  // 3. Title-only search fallback
+  promises.push(
+    requestLyrics(toLyricsUrl("/search", { q: title }), `search:fallback:${title}`, signal)
+      .then((res) => (Array.isArray(res) ? res : res ? [res] : []))
+      .catch(() => [])
+  );
+
+  // Execute candidate requests concurrently
   const results = await Promise.allSettled(promises);
   const allRecords = [];
 
@@ -405,18 +431,7 @@ export async function fetchLyricsForTrack(track, signal) {
     }
   });
 
-  let validRecords = allRecords.filter((r) => r && (r.syncedLyrics || r.plainLyrics || r.instrumental));
-
-  // Fallback: search by title only if no records found
-  if (!validRecords.length && title && !signal?.aborted) {
-    try {
-      const titleOnlyRes = await requestLyrics(toLyricsUrl("/search", { q: title }), `search:fallback:${title}`, signal);
-      const items = Array.isArray(titleOnlyRes) ? titleOnlyRes : titleOnlyRes ? [titleOnlyRes] : [];
-      validRecords = items.filter((r) => r && (r.syncedLyrics || r.plainLyrics || r.instrumental));
-    } catch (e) {
-      // ignore fallback error
-    }
-  }
+  const validRecords = allRecords.filter((r) => r && (r.syncedLyrics || r.plainLyrics || r.instrumental));
 
   if (!validRecords.length) {
     return { status: "empty", source: "LRCLIB", lines: [] };
@@ -449,23 +464,13 @@ export function getActiveLyricIndex(lines, currentTime) {
 }
 
 const lyricsRequestCache = new Map();
-let activeLyricsAbortController = null;
-let activeLyricsKey = null;
 
-export function cancelPendingLyricsFetch() {
-  if (activeLyricsAbortController) {
-    activeLyricsAbortController.abort();
-    activeLyricsAbortController = null;
-  }
-}
-
-export function getLyricsCacheKey(track, duration) {
-  return [
-    track?.id || "",
-    track?.title || "",
-    track?.artist || "",
-    Math.round(track?.duration || duration || 0)
-  ].join("|");
+export function getLyricsCacheKey(track) {
+  if (!track) return "";
+  const idStr = track.id ? String(track.id) : "";
+  const normTitle = normalizeComparable(track.title || "");
+  const normArtist = normalizeComparable(track.artist || "");
+  return [idStr, normTitle, normArtist].filter(Boolean).join("|");
 }
 
 export function getCachedLyricsForTrack(track, duration, signal) {
@@ -473,32 +478,10 @@ export function getCachedLyricsForTrack(track, duration, signal) {
     return Promise.resolve({ status: "empty", lines: [], error: "" });
   }
 
-  const key = getLyricsCacheKey(track, duration);
+  const key = getLyricsCacheKey(track);
 
-  // If already cached, return cached promise immediately!
   if (lyricsRequestCache.has(key)) {
     return lyricsRequestCache.get(key);
-  }
-
-  // Cancel any in-flight lyrics fetch for a previous track (skip track priority!)
-  if (activeLyricsKey !== key) {
-    cancelPendingLyricsFetch();
-    activeLyricsKey = key;
-    activeLyricsAbortController = new AbortController();
-  }
-
-  const currentController = activeLyricsAbortController;
-
-  let combinedSignal = currentController ? currentController.signal : null;
-  if (signal && currentController) {
-    if (typeof AbortSignal.any === "function") {
-      combinedSignal = AbortSignal.any([signal, currentController.signal]);
-    } else {
-      signal.addEventListener("abort", () => currentController.abort());
-      if (signal.aborted) currentController.abort();
-    }
-  } else if (signal) {
-    combinedSignal = signal;
   }
 
   const request = fetchLyricsForTrack(
@@ -506,19 +489,23 @@ export function getCachedLyricsForTrack(track, duration, signal) {
       ...track,
       duration: track.duration || duration
     },
-    combinedSignal
+    signal
   )
-    .then((lyrics) => ({
-      status: lyrics.status,
-      lines: lyrics.lines || [],
-      error: ""
-    }))
-    .catch((error) => {
-      // If aborted because track was skipped, clear from cache so it can be re-fetched later if user returns
-      if (error?.name === "AbortError" || currentController?.signal?.aborted) {
+    .then((lyrics) => {
+      const result = {
+        status: lyrics.status,
+        lines: lyrics.lines || [],
+        error: ""
+      };
+
+      if (lyrics.status !== "synced" && lyrics.status !== "plain" && lyrics.status !== "instrumental") {
         lyricsRequestCache.delete(key);
-        return { status: "loading", lines: [], error: "" };
       }
+
+      return result;
+    })
+    .catch((error) => {
+      lyricsRequestCache.delete(key);
       return {
         status: "error",
         lines: [],

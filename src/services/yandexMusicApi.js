@@ -194,6 +194,11 @@ function getBaseUrl() {
 }
 
 async function fetchYandexApi(path, options = {}) {
+  const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator?.userAgent || ""));
+  if (isMobile) {
+    throw new Error("[YandexMusic] Yandex API requests are disabled on mobile devices");
+  }
+
   const headers = {
     "Accept": "application/json",
     "X-Yandex-Music-Client": "YandexMusicAndroid/24023241",

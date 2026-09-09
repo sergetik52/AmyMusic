@@ -56,10 +56,13 @@ async function resolveChartTrackViaSoundCloud(track) {
   return null;
 }
 
-async function getTrackAudioUrl(track) {
+async function getTrackAudioUrl(track, forceFresh = false) {
   if (!track) return "";
 
+  const isExpired = forceFresh || !track._fetchedAt || (Date.now() - track._fetchedAt > 90000);
+
   if (
+    !isExpired &&
     track.streamUrl &&
     !track.streamUrl.includes("api-v2.soundcloud.com") &&
     !track.streamUrl.includes("/api/soundcloud") &&
@@ -68,21 +71,30 @@ async function getTrackAudioUrl(track) {
     return track.streamUrl;
   }
 
+  if (isExpired) {
+    track.streamUrl = null;
+  }
+
   if (track.source === "yandex" || String(track.id).startsWith("yandex_") || track.yandexId) {
     const scStreamUrl = await resolveChartTrackViaSoundCloud(track);
     if (scStreamUrl) {
       track.streamUrl = scStreamUrl;
+      track._fetchedAt = Date.now();
       return scStreamUrl;
     }
 
-    try {
-      const resolvedUrl = await resolveYandexTrackStream(track.yandexId || track.id);
-      if (resolvedUrl) {
-        track.streamUrl = resolvedUrl;
-        return resolvedUrl;
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator?.userAgent || ""));
+    if (!isMobile) {
+      try {
+        const resolvedUrl = await resolveYandexTrackStream(track.yandexId || track.id);
+        if (resolvedUrl) {
+          track.streamUrl = resolvedUrl;
+          track._fetchedAt = Date.now();
+          return resolvedUrl;
+        }
+      } catch (yandexErr) {
+        logWarn("audio", "Direct Yandex stream resolution failed", yandexErr);
       }
-    } catch (yandexErr) {
-      logWarn("audio", "Direct Yandex stream resolution failed", yandexErr);
     }
 
     throw new Error("Не удалось загрузить аудиопоток для трека");
@@ -91,6 +103,7 @@ async function getTrackAudioUrl(track) {
   const resolvedUrl = await resolveStreamUrl(track);
   if (resolvedUrl) {
     track.streamUrl = resolvedUrl;
+    track._fetchedAt = Date.now();
   }
   return resolvedUrl;
 }
@@ -702,6 +715,7 @@ export function AudioProvider({ children }) {
 
   const currentTrack = queue[currentIndex] || emptyTrack;
   const queueRef = useRef(queue);
+  const currentIndexRef = useRef(currentIndex);
   const isShuffleRef = useRef(isShuffle);
   const repeatModeRef = useRef(repeatMode);
   const currentTrackRef = useRef(currentTrack);
@@ -721,15 +735,18 @@ export function AudioProvider({ children }) {
   // Track the last resolved CDN stream URL (audio.src may be blob:// when using HLS)
   const loadedStreamUrlRef = useRef("");
   const manualActionRef = useRef(false);
+  const isTransitioningRef = useRef(false);
+  const preloadAudioRef = useRef(null);
 
   useEffect(() => {
     queueRef.current = queue;
+    currentIndexRef.current = currentIndex;
     isShuffleRef.current = isShuffle;
     repeatModeRef.current = repeatMode;
     currentTrackRef.current = currentTrack;
     isPlayingRef.current = isPlaying;
     playerSettingsRef.current = playerSettings;
-  }, [currentTrack, isPlaying, isShuffle, playerSettings, queue, repeatMode]);
+  }, [currentIndex, currentTrack, isPlaying, isShuffle, playerSettings, queue, repeatMode]);
 
   useEffect(() =>
     subscribeProfileSettings(() => {
@@ -819,6 +836,11 @@ export function AudioProvider({ children }) {
   const ensureAudioGraph = useCallback(async () => {
     const audio = audioRef.current;
     if (!audio) return null;
+
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator?.userAgent || ""));
+    if (isMobile) {
+      return null;
+    }
 
     if (!audioContextRef.current) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -970,6 +992,7 @@ export function AudioProvider({ children }) {
     };
     const handleTimeUpdate = () => {
       const now = audio.currentTime || 0;
+      const dur = audio.duration || 0;
       const prev = lastTimeRef.current;
       if (now > 0) {
         setIsLoading(false);
@@ -980,6 +1003,34 @@ export function AudioProvider({ children }) {
       }
       lastTimeRef.current = now;
       setCurrentTime(now);
+
+      // Pre-fetch fresh URL and pre-buffer stream for next track 20s before current track ends
+      if (dur > 20 && now >= dur - 20 && queueRef.current.length > 1) {
+        const nextIdx = (currentIndexRef.current + 1) % queueRef.current.length;
+        const nextTrack = queueRef.current[nextIdx];
+        if (nextTrack && nextTrack.id !== "empty") {
+          const isFresh = nextTrack.streamUrl && nextTrack._fetchedAt && (Date.now() - nextTrack._fetchedAt <= 90000);
+          if (!isFresh) {
+            getTrackAudioUrl(nextTrack, true).then((url) => {
+              if (url) {
+                if (!preloadAudioRef.current) {
+                  preloadAudioRef.current = new Audio();
+                }
+                preloadAudioRef.current.src = url;
+                preloadAudioRef.current.preload = "auto";
+                preloadAudioRef.current.load();
+              }
+            }).catch(() => {});
+          } else if (nextTrack.streamUrl && preloadAudioRef.current?.src !== nextTrack.streamUrl) {
+            if (!preloadAudioRef.current) {
+              preloadAudioRef.current = new Audio();
+            }
+            preloadAudioRef.current.src = nextTrack.streamUrl;
+            preloadAudioRef.current.preload = "auto";
+            preloadAudioRef.current.load();
+          }
+        }
+      }
     };
     const handleDurationChange = () => {
       setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
@@ -998,6 +1049,10 @@ export function AudioProvider({ children }) {
     };
     const handlePause = () => {
       logDebug("audio", "pause event");
+      if (isTransitioningRef.current) {
+        logDebug("audio", "ignored pause event during track transition");
+        return;
+      }
       setIsPlaying(false);
       setIsLoading(false);
       stopAudioAnalysis();
@@ -1013,6 +1068,52 @@ export function AudioProvider({ children }) {
       logDebug("audio", "canplay event");
       setIsLoading(false);
     };
+    const triggerSyncTrackChange = (nextQueue, targetIdx) => {
+      const nextTrack = nextQueue[targetIdx];
+      if (!nextTrack || nextTrack.id === "empty") return;
+
+      isTransitioningRef.current = true;
+      loadedTrackIdRef.current = String(nextTrack.id);
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+
+      const finishTransition = () => {
+        setTimeout(() => {
+          isTransitioningRef.current = false;
+        }, 500);
+      };
+
+      const isFresh = nextTrack.streamUrl && nextTrack._fetchedAt && (Date.now() - nextTrack._fetchedAt <= 90000);
+
+      if (isFresh) {
+        loadedStreamUrlRef.current = nextTrack.streamUrl;
+        audio.src = nextTrack.streamUrl;
+        audio.currentTime = 0;
+        audio.play().then(finishTransition).catch((err) => {
+          logWarn("audio", "synchronous background transition play failed", err);
+          finishTransition();
+        });
+      } else {
+        getTrackAudioUrl(nextTrack, true).then((streamUrl) => {
+          if (streamUrl && audioRef.current && loadedTrackIdRef.current === String(nextTrack.id)) {
+            loadedStreamUrlRef.current = streamUrl;
+            audioRef.current.src = streamUrl;
+            audioRef.current.currentTime = 0;
+            audioRef.current.play().then(finishTransition).catch((err) => {
+              logWarn("audio", "async background play failed", err);
+              finishTransition();
+            });
+          } else {
+            finishTransition();
+          }
+        }).catch(() => {
+          finishTransition();
+        });
+      }
+    };
+
     const handleEnded = () => {
       const nextQueue = queueRef.current;
       const nextRepeatMode = repeatModeRef.current;
@@ -1030,6 +1131,12 @@ export function AudioProvider({ children }) {
           currentTime: safeCurrentTime,
           duration: safeDuration
         });
+        // If stream failed at start (currentTime < 2s or error/unloaded), do NOT loop play() endlessly
+        if (safeCurrentTime < 2 || audio.readyState < 2 || audio.error) {
+          logWarn("audio", "early ended event due to stream load failure, delegating to handleError");
+          handleError();
+          return;
+        }
         // Resume playback seamlessly without restarting from 0
         audio.play().catch(() => {});
         return;
@@ -1048,38 +1155,39 @@ export function AudioProvider({ children }) {
         return;
       }
 
-      setCurrentIndex((index) => {
-        if (nextQueue.length <= 1) return index;
-        if (nextIsShuffle) {
-          pendingAutoplayRef.current = true;
-          if (index < nextQueue.length - 1) {
-            return index + 1;
-          }
-          if (nextRepeatMode === "playlist") {
-            // Re-shuffle when loop finishes
-            setQueue((prev) => shuffleTracks(prev));
-            return 0;
-          }
-          pendingAutoplayRef.current = false;
-          setIsPlaying(false);
-          return index;
-        }
-        if (index < nextQueue.length - 1) {
-          pendingAutoplayRef.current = true;
-          return index + 1;
-        }
-        if (nextRepeatMode === "playlist") {
-          pendingAutoplayRef.current = true;
-          return 0;
-        }
+      let targetIndex = currentIndexRef.current;
+      if (nextQueue.length <= 1) {
         pendingAutoplayRef.current = false;
+        manualActionRef.current = false;
         setIsPlaying(false);
-        return index;
-      });
+        return;
+      }
+
+      if (nextIsShuffle) {
+        if (targetIndex < nextQueue.length - 1) {
+          targetIndex += 1;
+        } else {
+          setQueue((prev) => shuffleTracks(prev));
+          targetIndex = 0;
+        }
+      } else {
+        if (targetIndex < nextQueue.length - 1) {
+          targetIndex += 1;
+        } else {
+          targetIndex = 0;
+        }
+      }
+
+      triggerSyncTrackChange(nextQueue, targetIndex);
+      pendingAutoplayRef.current = false;
+      manualActionRef.current = false;
+      setCurrentIndex(targetIndex);
     };
+
     const handleError = () => {
       setIsLoading(false);
       const curTime = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+      const track = currentTrackRef.current;
       logWarn("audio", "error event", {
         code: audio.error?.code,
         message: audio.error?.message,
@@ -1094,27 +1202,25 @@ export function AudioProvider({ children }) {
         logDebug("audio", "auto-advancing after snippet/stream-cut", { currentTime: curTime });
         const nextQueue = queueRef.current;
         const nextRepeatMode = repeatModeRef.current;
-        setCurrentIndex((index) => {
-          if (nextQueue.length <= 1) {
-            pendingAutoplayRef.current = false;
-            setIsPlaying(false);
-            return index;
+        let targetIndex = currentIndexRef.current;
+
+        if (nextQueue.length > 1) {
+          if (targetIndex < nextQueue.length - 1) {
+            targetIndex += 1;
+          } else if (nextRepeatMode === "playlist") {
+            targetIndex = 0;
           }
-          if (index < nextQueue.length - 1) {
-            pendingAutoplayRef.current = true;
-            return index + 1;
-          }
-          if (nextRepeatMode === "playlist") {
-            pendingAutoplayRef.current = true;
-            return 0;
-          }
+          triggerSyncTrackChange(nextQueue, targetIndex);
           pendingAutoplayRef.current = false;
-          setIsPlaying(false);
-          return index;
-        });
+          manualActionRef.current = false;
+          setCurrentIndex(targetIndex);
+          return;
+        }
+        pendingAutoplayRef.current = false;
+        setIsPlaying(false);
       } else {
-        const track = currentTrackRef.current;
-        if (track && (track.yandexId || String(track.id).startsWith("yandex_"))) {
+        const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator?.userAgent || ""));
+        if (!isMobile && track && (track.yandexId || String(track.id).startsWith("yandex_"))) {
           logWarn("audio", "Audio element error for chart track, attempting direct stream recovery", { id: track.id });
           track.streamUrl = null;
           resolveYandexTrackStream(track.yandexId || track.id)
@@ -1216,6 +1322,173 @@ export function AudioProvider({ children }) {
     }
   }, [volume, isMuted]);
 
+  // Pre-fetch upcoming tracks' audio stream URLs for seamless iOS background playback transition
+  useEffect(() => {
+    if (!queue || queue.length <= 1 || currentIndex < 0) return;
+    for (let offset = 1; offset <= Math.min(5, queue.length - 1); offset += 1) {
+      const idx = (currentIndex + offset) % queue.length;
+      const upcomingTrack = queue[idx];
+      if (upcomingTrack && upcomingTrack.id !== "empty") {
+        const isFresh = upcomingTrack.streamUrl && upcomingTrack._fetchedAt && (Date.now() - upcomingTrack._fetchedAt <= 60000);
+        if (!isFresh) {
+          getTrackAudioUrl(upcomingTrack, true).catch(() => {});
+        }
+      }
+    }
+  }, [currentIndex, queue]);
+
+  // Auto-extend queue with recommended tracks when approaching the end of the queue
+  useEffect(() => {
+    if (!queue || queue.length === 0 || currentIndex < 0) return;
+    if (currentIndex >= queue.length - 2) {
+      const current = queue[currentIndex];
+      if (current && current.id && current.id !== "empty" && !current._waveExtending) {
+        current._waveExtending = true;
+        getTrackWaveTracks(current, { likedTracks, dislikedTrackIds, dislikedTracks })
+          .then((moreTracks) => {
+            if (moreTracks && moreTracks.length) {
+              setQueue((prev) => {
+                const existingIds = new Set(prev.map((t) => String(t.id)));
+                const uniqueNew = moreTracks.filter((t) => !existingIds.has(String(t.id)));
+                if (uniqueNew.length) {
+                  return [...prev, ...uniqueNew];
+                }
+                return prev;
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [currentIndex, queue, likedTracks, dislikedTrackIds, dislikedTracks]);
+
+  // MediaSession API Integration for Lock Screen / Dynamic Island / Bluetooth Controls
+  useEffect(() => {
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+
+    if (!currentTrack || currentTrack.id === "empty") {
+      navigator.mediaSession.metadata = null;
+      return;
+    }
+
+    const artwork = [];
+    if (currentTrack.cover && !currentTrack.cover.includes("logo.png")) {
+      artwork.push(
+        { src: currentTrack.cover, sizes: "96x96", type: "image/png" },
+        { src: currentTrack.cover, sizes: "128x128", type: "image/png" },
+        { src: currentTrack.cover, sizes: "192x192", type: "image/png" },
+        { src: currentTrack.cover, sizes: "256x256", type: "image/png" },
+        { src: currentTrack.cover, sizes: "384x384", type: "image/png" },
+        { src: currentTrack.cover, sizes: "512x512", type: "image/png" }
+      );
+    } else {
+      artwork.push({ src: "/logo.png", sizes: "512x512", type: "image/png" });
+    }
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title || "Без названия",
+        artist: currentTrack.artist || "Unknown artist",
+        album: "AmyMusic",
+        artwork
+      });
+    } catch (err) {
+      logWarn("audio", "MediaMetadata error", err);
+    }
+  }, [currentTrack]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+
+    try {
+      navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+    } catch (e) {}
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+    if (duration > 0 && Number.isFinite(currentTime) && Number.isFinite(duration)) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: Math.max(duration, 1),
+          playbackRate: audioRef.current?.playbackRate || 1,
+          position: Math.min(Math.max(currentTime, 0), duration)
+        });
+      } catch (e) {}
+    }
+  }, [currentTime, duration]);
+
+  const next = useCallback(() => {
+    if (queue.length <= 1) return;
+    manualActionRef.current = true;
+    pendingAutoplayRef.current = true;
+    setCurrentIndex((index) => {
+      if (index < queue.length - 1) {
+        return index + 1;
+      }
+      if (repeatMode === "playlist") {
+        return 0;
+      }
+      return index;
+    });
+  }, [queue.length, repeatMode]);
+
+  const previous = useCallback(() => {
+    if (queue.length <= 1) return;
+    manualActionRef.current = true;
+    pendingAutoplayRef.current = true;
+    setCurrentIndex((index) => (index - 1 + queue.length) % queue.length);
+  }, [queue.length]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+
+    const actionHandlers = [
+      ["play", async () => {
+        if (audioRef.current) {
+          try {
+            await audioRef.current.play();
+            setIsPlaying(true);
+          } catch (e) {
+            logWarn("audio", "mediaSession play failed", e);
+          }
+        }
+      }],
+      ["pause", () => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        }
+      }],
+      ["previoustrack", () => {
+        previous();
+      }],
+      ["nexttrack", () => {
+        next();
+      }],
+      ["seekto", (details) => {
+        if (details.seekTime !== undefined && audioRef.current && Number.isFinite(details.seekTime)) {
+          audioRef.current.currentTime = details.seekTime;
+          setCurrentTime(details.seekTime);
+        }
+      }],
+      ["seekforward", () => {
+        next();
+      }],
+      ["seekbackward", () => {
+        previous();
+      }]
+    ];
+
+    for (const [action, handler] of actionHandlers) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch (e) {
+        // Ignore unsupported action types
+      }
+    }
+  }, [next, previous]);
+
   const loadTrack = useCallback(async (track, shouldPlay = false, isManual = false) => {
     const audio = audioRef.current;
     if (!audio || !track) return false;
@@ -1265,6 +1538,13 @@ export function AudioProvider({ children }) {
       loadedTrackIdRef.current = String(track.id);
       loadedStreamUrlRef.current = streamUrl;
       setCurrentTime(0);
+
+      if (track && track.id && track.id !== "empty") {
+        setPlayHistory((prevHistory) => [
+          track,
+          ...prevHistory.filter((item) => String(item.id) !== String(track.id))
+        ].slice(0, 100));
+      }
 
       // Detect HLS streams — Chromium/Electron don't support m3u8 natively
       const isHlsStream =
@@ -1459,8 +1739,8 @@ export function AudioProvider({ children }) {
 
       setPlayHistory((history) => [
         track,
-        ...history.filter((item) => item.id !== track.id)
-      ].slice(0, 50));
+        ...history.filter((item) => String(item.id) !== String(track.id))
+      ].slice(0, 100));
 
       try {
         const didLoad = await loadTrack(track, true, true);
@@ -1474,29 +1754,6 @@ export function AudioProvider({ children }) {
     },
     [loadTrack, queue]
   );
-
-  const next = useCallback(() => {
-    if (queue.length <= 1) return;
-    manualActionRef.current = true;
-    setCurrentIndex((index) => {
-      if (index < queue.length - 1) {
-        pendingAutoplayRef.current = isPlayingRef.current;
-        return index + 1;
-      }
-      if (repeatMode === "playlist") {
-        pendingAutoplayRef.current = isPlayingRef.current;
-        return 0;
-      }
-      return index;
-    });
-  }, [queue.length, repeatMode]);
-
-  const previous = useCallback(() => {
-    if (queue.length <= 1) return;
-    manualActionRef.current = true;
-    pendingAutoplayRef.current = isPlayingRef.current;
-    setCurrentIndex((index) => (index - 1 + queue.length) % queue.length);
-  }, [queue.length]);
 
   const seek = useCallback((seconds) => {
     const audio = audioRef.current;
@@ -1687,18 +1944,13 @@ export function AudioProvider({ children }) {
 
       if (indexToRemove < 0 || indexToRemove >= prevQueue.length) return prevQueue;
 
-      if (prevQueue.length <= 1) {
-        showNotification("В очереди остался последний трек", "info");
-        return prevQueue;
-      }
-
       const removedTrack = prevQueue[indexToRemove];
       const nextQueue = prevQueue.filter((_, idx) => idx !== indexToRemove);
 
       setCurrentIndex((currIndex) => {
         if (currIndex > indexToRemove) return currIndex - 1;
         if (currIndex === indexToRemove) {
-          return Math.min(currIndex, nextQueue.length - 1);
+          return Math.max(0, Math.min(currIndex, nextQueue.length - 1));
         }
         return currIndex;
       });
@@ -2253,6 +2505,7 @@ export function AudioProvider({ children }) {
       openTrackWave,
       playNext,
       addToQueueEnd,
+      removeFromQueue,
       reorderQueue,
       reorderPlaylistTracks,
       isFullOpen,
