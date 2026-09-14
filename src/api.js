@@ -1,62 +1,84 @@
-const API_URL = import.meta.env?.VITE_API_URL || (
-  typeof window !== 'undefined' && window.location.origin.startsWith('http')
-    ? `${window.location.origin}/api`
-    : 'https://amymusic.ru/api'
-);
+/**
+ * Local-only stubs. Cloud auth/sync is disabled after the server shutdown.
+ * Collection, wave, and profile data live in localStorage via AudioPlayerContext
+ * and localProfile / profileSettings services.
+ */
 
-export const getAuthToken = () => localStorage.getItem('amymusic_token');
-export const setAuthToken = (token) => localStorage.setItem('amymusic_token', token);
-export const removeAuthToken = () => localStorage.removeItem('amymusic_token');
-export const getUsername = () => localStorage.getItem('amymusic_username');
-export const setUsername = (username) => localStorage.setItem('amymusic_username', username);
+import {
+  ensureLocalProfile,
+  getLocalProfile,
+  saveLocalProfile
+} from "./services/localProfile";
 
-async function apiRequest(endpoint, method = 'GET', body = null) {
-  const token = getAuthToken();
-  const headers = {
-    'Content-Type': 'application/json'
+export const getAuthToken = () => null;
+export const setAuthToken = () => {};
+export const removeAuthToken = () => {
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem("amymusic_token");
+  }
+};
+
+export const getUsername = () => {
+  const profile = getLocalProfile();
+  return profile.username || "Local";
+};
+
+export const setUsername = (username) => {
+  saveLocalProfile({ username, displayName: username });
+};
+
+export const register = async (username) => {
+  const profile = saveLocalProfile({
+    username: username || "Local",
+    displayName: username || "Local"
+  });
+  return {
+    token: null,
+    username: profile.username,
+    displayName: profile.displayName,
+    avatarUrl: profile.avatarUrl
   };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+};
 
-  const options = { method, headers };
-  if (body) {
-    options.body = JSON.stringify(body);
-  }
+export const login = register;
 
-  let res;
-  try {
-    res = await fetch(`${API_URL}${endpoint}`, options);
-  } catch (err) {
-    throw new Error('Ошибка сети: не удалось подключиться к серверу авторизации');
-  }
-  
-  if (!res.ok) {
-    let errorMsg = 'Ошибка сервера авторизации';
-    try {
-      const errorData = await res.json();
-      errorMsg = errorData.error || errorMsg;
-    } catch(e) {}
-    throw new Error(errorMsg);
-  }
-  
-  return await res.json();
-}
+export const getProfile = async () => {
+  const profile = ensureLocalProfile();
+  return {
+    username: profile.username,
+    displayName: profile.displayName,
+    avatarUrl: profile.avatarUrl,
+    totalListenedSeconds: 0
+  };
+};
 
-export const register = (username, password) => apiRequest('/auth/register', 'POST', { username, password });
-export const login = (username, password) => apiRequest('/auth/login', 'POST', { username, password });
-export const getProfile = () => apiRequest('/auth/me', 'GET');
-export const updateProfile = (data) => apiRequest('/auth/profile', 'POST', data);
-export const changePassword = (oldPassword, newPassword) => apiRequest('/auth/change-password', 'POST', { oldPassword, newPassword });
-export const syncTime = (absoluteSeconds) => apiRequest('/track/listen', 'POST', { absoluteSeconds });
+export const updateProfile = async (data = {}) => {
+  const profile = saveLocalProfile({
+    displayName: data.displayName,
+    avatarUrl: data.avatarUrl
+  });
+  return {
+    success: true,
+    displayName: profile.displayName,
+    avatarUrl: profile.avatarUrl
+  };
+};
 
-export const syncCollections = (data) => apiRequest('/sync/collections', 'POST', data);
-export const getCollections = () => apiRequest('/sync/collections', 'GET');
+export const changePassword = async () => {
+  throw new Error("Смена пароля недоступна: приложение работает в локальном режиме");
+};
 
-export const syncWave = (data) => apiRequest('/sync/wave', 'POST', data);
-export const getWave = () => apiRequest('/sync/wave', 'GET');
-
-export const trackListen = (seconds) => apiRequest('/track/listen', 'POST', { seconds });
-export const getTopUsers = () => apiRequest('/rating/top', 'GET');
-
+export const syncTime = async () => ({ success: true });
+export const syncCollections = async () => ({ success: true });
+export const getCollections = async () => ({
+  likedTracks: [],
+  userPlaylists: [],
+  savedReleases: []
+});
+export const syncWave = async () => ({ success: true });
+export const getWave = async () => ({
+  dislikedTrackIds: [],
+  playHistory: []
+});
+export const trackListen = async () => ({ success: true });
+export const getTopUsers = async () => [];

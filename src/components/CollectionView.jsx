@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useRef } from "react";
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
 import { getAlbumDetails, getTrackWaveTracks, hydrateSoundCloudTracks, searchTracks } from "../services/soundCloudApi";
+import { parseYandexMusicUrl, getYandexCachedArtistAvatar, fetchYandexArtistAvatar } from "../services/yandexMusicApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { HorizontalScrollSection } from "./HorizontalScrollSection";
 import { TrackMenuButton } from "./TrackContextMenu";
@@ -190,14 +191,33 @@ function TrackArtistLinks({ track, onOpenArtist }) {
 }
 
 function FavoriteArtistCard({ artist, index, onOpen }) {
-  const avatarSrc = (artist.avatar && !artist.avatar.includes("logo.png"))
-    ? artist.avatar
-    : ((artist.cover && !artist.cover.includes("logo.png")) ? artist.cover : "/user.svg");
+  const [avatarSrc, setAvatarSrc] = useState(() => {
+    const cached = getYandexCachedArtistAvatar(artist.name);
+    if (cached) return cached;
+    if (artist.avatar && !artist.avatar.includes("logo.png") && !artist.avatar.includes("user.svg")) return artist.avatar;
+    if (artist.cover && !artist.cover.includes("logo.png") && !artist.cover.includes("user.svg")) return artist.cover;
+    return "/user.svg";
+  });
+
+  React.useEffect(() => {
+    if (!artist.name) return;
+    const cached = getYandexCachedArtistAvatar(artist.name);
+    if (cached) {
+      setAvatarSrc(cached);
+      return;
+    }
+    fetchYandexArtistAvatar(artist.name).then((url) => {
+      if (url) setAvatarSrc(url);
+    });
+  }, [artist.name]);
 
   return (
     <button
       type="button"
-      onClick={() => onOpen(artist)}
+      onClick={() => onOpen({
+        ...artist,
+        avatar: avatarSrc
+      })}
       className="group flex w-36 shrink-0 flex-col items-center rounded-[var(--cover-radius,16px)] p-3 text-center transition hover:bg-white/[0.04]"
     >
       <div className="relative mb-3 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] shadow-2xl">
@@ -323,7 +343,7 @@ function PlaylistView({
           container.scrollTop += 14;
         }
       }}
-      className="flex flex-1 min-h-0 select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none bg-[#090909] text-white"
+      className="flex flex-1 min-h-0 select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none bg-[#090909] text-white pb-[140px] md:pb-16"
     >
       <div className="relative border-b border-white/[0.06] p-7 max-md:px-4 max-md:pb-3 max-md:pt-2">
         <div className="absolute inset-0 opacity-30 blur-3xl">
@@ -709,87 +729,107 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
     if (!importUrl || isImporting) return;
     
     setIsImporting(true);
-    setImportStatus("Парсинг страницы...");
-    setImportProgress(0);
+    setImportStatus("Получение данных из Яндекс Музыки...");
+    setImportProgress(10);
     try {
-      if (!window.amyMusicDesktop?.parsePlaylist) {
-        throw new Error("Функция импорта недоступна");
-      }
-      
-      const parsedResult = await window.amyMusicDesktop.parsePlaylist(importUrl);
-      const parsedTracks = Array.isArray(parsedResult) ? parsedResult : (parsedResult?.tracks || []);
-      const parsedTitle = (!Array.isArray(parsedResult) && parsedResult?.playlistTitle) ? parsedResult.playlistTitle : "";
-      
-      if (!parsedTracks || parsedTracks.length === 0) {
-        throw new Error("Не найдено треков на странице");
-      }
-      
-      setImportStatus(`Поиск треков: 0 / ${parsedTracks.length}`);
-      setImportProgress(0);
-      
-      const foundTracks = [];
-      let i = 0;
-      for (const t of parsedTracks) {
-        i++;
-        setImportStatus(`Поиск треков: ${i} / ${parsedTracks.length}`);
-        setImportProgress(Math.round((i / parsedTracks.length) * 100));
-        
-        const queriesToTry = [];
-        
-        // 1. Full artist + title
-        if (t.artist && t.title) {
-          queriesToTry.push(`${t.artist} ${t.title}`.trim());
-          
-          // 2. Main artist + title (if multiple artists)
-          const mainArtist = splitArtistNames(t.artist)[0] || t.artist;
-          if (mainArtist !== t.artist) {
-            queriesToTry.push(`${mainArtist} ${t.title}`.trim());
-          }
+      const isYandex = /music\.yandex\.[a-z.]+/i.test(importUrl);
+
+      if (isYandex) {
+        setImportStatus("Загрузка плейлиста из Яндекс Музыки...");
+        setImportProgress(30);
+        const yandexResult = await parseYandexMusicUrl(importUrl);
+
+        if (!yandexResult.tracks || yandexResult.tracks.length === 0) {
+          throw new Error("В плейлисте Яндекс Музыки не найдено доступных треков");
         }
-        
-        // 3. Just title
-        if (t.title) {
-          queriesToTry.push(t.title);
-          
-          // 4. Clean title (without brackets)
-          const cleanTitle = t.title.replace(/[\(\[].*?[\)\]]/g, '').trim();
-          if (cleanTitle && cleanTitle !== t.title) {
-            queriesToTry.push(cleanTitle);
-            if (t.artist) queriesToTry.push(`${t.artist} ${cleanTitle}`.trim());
-          }
-        }
-        
-        let found = false;
-        
-        for (const query of queriesToTry) {
-          if (!query || found) continue;
-          try {
-            const results = await searchTracks(query);
-            if (results && results.length > 0) {
-              const bestResult = results[0];
-              if (!foundTracks.some(t => t.id === bestResult.id)) {
-                foundTracks.push(bestResult);
-              }
-              found = true;
-            }
-          } catch (e) {
-            console.warn("Search failed for query", query, e);
-          }
-        }
-      }
-      
-      if (foundTracks.length > 0) {
-        const title = parsedTitle || `Импортированный плейлист (${new Date().toLocaleDateString()})`;
-        const createdPlaylist = createUserPlaylist(title);
+
+        setImportStatus(`Сохранение ${yandexResult.tracks.length} треков...`);
+        setImportProgress(80);
+
+        const title = yandexResult.title || `Плейлист Яндекс Музыки (${new Date().toLocaleDateString()})`;
+        const cover = yandexResult.cover || yandexResult.tracks[0]?.cover || "/logo.png";
+        const createdPlaylist = createUserPlaylist(title, cover);
+
         if (createdPlaylist) {
-          updateUserPlaylist(createdPlaylist.id, { 
-            tracks: foundTracks, 
-            trackCount: foundTracks.length,
-            cover: foundTracks[0]?.cover || "/logo.png"
+          updateUserPlaylist(createdPlaylist.id, {
+            tracks: yandexResult.tracks,
+            trackCount: yandexResult.tracks.length,
+            cover
           });
         }
+        setImportProgress(100);
+        setImportStatus("Плейлист успешно перенесён!");
       } else {
-        throw new Error("Не удалось найти треки в SoundCloud");
+        if (!window.amyMusicDesktop?.parsePlaylist) {
+          throw new Error("Для сторонних сайтов используйте прямую ссылку на Яндекс Музыку");
+        }
+        
+        const parsedResult = await window.amyMusicDesktop.parsePlaylist(importUrl);
+        const parsedTracks = Array.isArray(parsedResult) ? parsedResult : (parsedResult?.tracks || []);
+        const parsedTitle = (!Array.isArray(parsedResult) && parsedResult?.playlistTitle) ? parsedResult.playlistTitle : "";
+        
+        if (!parsedTracks || parsedTracks.length === 0) {
+          throw new Error("Не найдено треков на странице");
+        }
+        
+        setImportStatus(`Поиск треков: 0 / ${parsedTracks.length}`);
+        setImportProgress(0);
+        
+        const foundTracks = [];
+        let i = 0;
+        for (const t of parsedTracks) {
+          i++;
+          setImportStatus(`Поиск треков: ${i} / ${parsedTracks.length}`);
+          setImportProgress(Math.round((i / parsedTracks.length) * 100));
+          
+          const queriesToTry = [];
+          if (t.artist && t.title) {
+            queriesToTry.push(`${t.artist} ${t.title}`.trim());
+            const mainArtist = splitArtistNames(t.artist)[0] || t.artist;
+            if (mainArtist !== t.artist) {
+              queriesToTry.push(`${mainArtist} ${t.title}`.trim());
+            }
+          }
+          if (t.title) {
+            queriesToTry.push(t.title);
+            const cleanTitle = t.title.replace(/[\(\[].*?[\)\]]/g, '').trim();
+            if (cleanTitle && cleanTitle !== t.title) {
+              queriesToTry.push(cleanTitle);
+              if (t.artist) queriesToTry.push(`${t.artist} ${cleanTitle}`.trim());
+            }
+          }
+          
+          let found = false;
+          for (const query of queriesToTry) {
+            if (!query || found) continue;
+            try {
+              const results = await searchTracks(query);
+              if (results && results.length > 0) {
+                const bestResult = results[0];
+                if (!foundTracks.some(trk => trk.id === bestResult.id)) {
+                  foundTracks.push(bestResult);
+                }
+                found = true;
+              }
+            } catch (e) {
+              console.warn("Search failed for query", query, e);
+            }
+          }
+        }
+        
+        if (foundTracks.length > 0) {
+          const title = parsedTitle || `Импортированный плейлист (${new Date().toLocaleDateString()})`;
+          const createdPlaylist = createUserPlaylist(title);
+          if (createdPlaylist) {
+            updateUserPlaylist(createdPlaylist.id, { 
+              tracks: foundTracks, 
+              trackCount: foundTracks.length,
+              cover: foundTracks[0]?.cover || "/logo.png"
+            });
+          }
+        } else {
+          throw new Error("Не удалось найти треки в SoundCloud");
+        }
       }
     } catch (err) {
       alert("Ошибка импорта: " + err.message);
@@ -914,7 +954,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   if (isAddPlaylistOpen) {
     return (
       <div className="flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none bg-[#090909] text-white animate-[slideUpFade_0.2s_ease-out_forwards]">
-        <div className="relative border-b border-white/[0.06] p-7 min-h-[315px]">
+        <div className="relative border-b border-white/[0.06] p-4 md:p-7 min-h-0 md:min-h-[315px]">
           <div className="absolute inset-0 opacity-30 blur-3xl">
             <img src={playlistCover || "/logo.png"} alt="" className="h-full w-full object-cover" />
           </div>
@@ -924,24 +964,24 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
             <button 
               type="button" 
               onClick={() => setIsAddPlaylistOpen(false)}
-              className="mb-5 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95" 
+              className="mb-4 md:mb-5 flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95" 
               aria-label="Назад"
             >
-              <svg className="h-6 w-6 fill-current rotate-90" viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"></path></svg>
+              <svg className="h-5 w-5 md:h-6 md:w-6 fill-current rotate-90" viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"></path></svg>
             </button>
 
-            <div className="flex items-end gap-7">
+            <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5 sm:gap-7">
               <div 
-                className="group relative flex h-56 w-56 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-2xl transition hover:border-white/20"
+                className="group relative flex h-36 w-36 sm:h-56 sm:w-56 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-white/[0.03] shadow-2xl transition hover:border-white/20"
                 onClick={() => fileInputRef.current?.click()}
               >
                 {playlistCover ? (
                   <img src={playlistCover} alt="Cover" className="h-full w-full object-cover" />
                 ) : (
-                  <span className="text-6xl font-light text-white/20 transition group-hover:text-white/40 group-hover:scale-110">+</span>
+                  <span className="text-4xl sm:text-6xl font-light text-white/20 transition group-hover:text-white/40 group-hover:scale-110">+</span>
                 )}
                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-                  <span className="text-sm font-bold text-white">Обложка</span>
+                  <span className="text-xs sm:text-sm font-bold text-white">Обложка</span>
                 </div>
                 <input
                   type="file"
@@ -952,27 +992,27 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
                 />
               </div>
 
-              <div className="flex flex-1 flex-col pb-2 max-w-4xl">
-                <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-white/35">Создать плейлист</p>
+              <div className="flex w-full flex-1 flex-col pb-2 max-w-4xl text-center sm:text-left">
+                <p className="mb-2 text-[10px] sm:text-xs font-black uppercase tracking-[0.22em] text-white/35">Создать плейлист</p>
                 
                 <form
                   onSubmit={(e) => {
                     handleCreatePlaylist(e);
                   }}
-                  className="flex flex-col items-start gap-4"
+                  className="flex flex-col items-center sm:items-start gap-3 sm:gap-4 w-full"
                 >
                   <input
                     type="text"
                     value={playlistTitle}
                     onChange={(event) => setPlaylistTitle(event.target.value)}
-                    placeholder="Название нового плейлиста"
-                    className="w-full bg-transparent text-5xl font-black tracking-tight text-white placeholder:text-white/20 outline-none"
+                    placeholder="Название плейлиста"
+                    className="w-full bg-transparent text-2xl sm:text-5xl font-black tracking-tight text-white placeholder:text-white/20 outline-none text-center sm:text-left"
                     autoFocus
                   />
                   <button
                     type="submit"
                     disabled={!playlistTitle.trim()}
-                    className="mt-3 rounded-full bg-white px-8 py-3 text-sm font-black text-black transition hover:bg-white/85 disabled:opacity-50"
+                    className="mt-2 rounded-full bg-white px-6 sm:px-8 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-black transition hover:bg-white/85 active:scale-95 disabled:opacity-50"
                   >
                     Создать плейлист
                   </button>
@@ -982,27 +1022,27 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
           </div>
         </div>
 
-        <div className="p-7">
+        <div className="p-4 md:p-7">
           <div className="max-w-4xl">
-            <h3 className="mb-3 text-sm font-bold text-white/40">Или импортировать по ссылке</h3>
+            <h3 className="mb-2.5 text-xs sm:text-sm font-bold text-white/50">Или перенести по ссылке из Яндекс Музыки</h3>
             <form
               onSubmit={(e) => {
                 handleImportPlaylist(e);
               }}
-              className="flex items-center gap-2 rounded-[var(--cover-radius,16px)] border border-white/10 bg-white/[0.03] p-2 max-w-2xl"
+              className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-2 max-w-2xl"
             >
               <input
                 type="text"
                 value={isImporting ? importStatus : importUrl}
                 onChange={(event) => setImportUrl(event.target.value)}
                 disabled={isImporting}
-                placeholder={isImporting ? importStatus : "Ссылка на плейлист..."}
-                className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm font-semibold text-white placeholder:text-white/28 outline-none disabled:opacity-50"
+                placeholder={isImporting ? importStatus : "Ссылка на плейлист (music.yandex.ru/...)"}
+                className="min-w-0 flex-1 bg-transparent px-3 py-2 text-xs sm:text-sm font-semibold text-white placeholder:text-white/30 outline-none disabled:opacity-50"
               />
               <button
                 type="submit"
                 disabled={isImporting || !importUrl}
-                className="rounded-full bg-[#8341EF] px-5 py-2 text-xs font-black text-white transition hover:bg-[#9254f6] disabled:opacity-50"
+                className="rounded-full bg-[#8341EF] px-5 py-2.5 text-xs font-black text-white transition hover:bg-[#9254f6] active:scale-95 disabled:opacity-50"
               >
                 Импортировать
               </button>
@@ -1014,7 +1054,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   }
 
   return (
-    <div className="relative flex flex-1 min-h-0 w-full select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none bg-[#090909] p-8 max-md:p-4 text-white">
+    <div className="relative flex flex-1 min-h-0 w-full select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none bg-[#090909] p-4 md:p-8 pb-[140px] md:pb-8 text-white">
       {isImporting && (
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-white/5 z-50 overflow-hidden rounded-t-[17.76px]">
           <div 
@@ -1023,11 +1063,22 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
           />
         </div>
       )}
-      <div className="mb-8 mt-2">
-        <h1 className="text-3xl font-black tracking-tight">Коллекция</h1>
-        <p className="mt-1 text-sm font-medium text-white/40">
-          Реальные лайки из текущего плеера
-        </p>
+      <div className="mb-6 mt-1 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight">Коллекция</h1>
+          <p className="mt-0.5 text-xs md:text-sm font-medium text-white/40">
+            Реальные лайки и сохранённые плейлисты
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("amymusic:open-profile"))}
+          className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 py-1.5 px-3 hover:bg-white/10 active:scale-95 transition"
+          title="Открыть профиль и настройки"
+        >
+          <img src="/user.svg" alt="" className="h-4 w-4 opacity-80" />
+          <span className="text-xs font-bold text-white/80">Профиль</span>
+        </button>
       </div>
 
       <div className="mb-10">

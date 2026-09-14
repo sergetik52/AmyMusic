@@ -329,7 +329,7 @@ export function AlbumView({
   const releaseType = isSingle ? "Сингл" : album.kind === "playlist" ? "Плейлист" : "Альбом";
 
   return (
-    <section className="flex-1 overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#070707] text-white shadow-2xl">
+    <section className="flex-1 overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#070707] text-white shadow-2xl pb-[140px] md:pb-12">
       <div className="relative min-h-[315px] max-md:min-h-0 overflow-hidden border-b border-white/[0.05] px-7 pb-7 pt-5 max-md:px-4 max-md:pb-3 max-md:pt-2">
         <div className="absolute inset-0 opacity-30 blur-3xl">
           <img src={album.cover} alt="" className="h-full w-full object-cover" />
@@ -686,7 +686,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
     : ((profile.cover && !profile.cover.includes("logo.png")) ? profile.cover : "/user.svg");
 
   return (
-    <section className="flex-1 min-h-0 w-full overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#090909] text-white shadow-2xl">
+    <section className="flex-1 min-h-0 w-full overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#090909] text-white shadow-2xl pb-[140px] md:pb-12">
       <div className="relative min-h-[330px] max-md:min-h-0 overflow-hidden border-b border-white/[0.05] px-7 pb-7 pt-5 max-md:px-4 max-md:pb-3 max-md:pt-2">
         <div className="absolute inset-0 opacity-45 blur-3xl">
           <img

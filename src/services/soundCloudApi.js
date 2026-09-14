@@ -51,6 +51,12 @@ function getSoundCloudApiBase() {
   if (typeof window === "undefined") {
     return "https://api-v2.soundcloud.com";
   }
+
+  // On Capacitor (Android/iOS), there's no dev server proxy — go direct
+  if (window.Capacitor?.isNativePlatform?.() || window.location?.protocol === "capacitor:") {
+    return "https://api-v2.soundcloud.com";
+  }
+
   const proxyPort = new URLSearchParams(window.location.search).get("amymusicProxyPort");
 
   return window.amyMusicConfig?.soundCloudApiBase ||
@@ -134,7 +140,7 @@ function getWindowOrigin() {
   if (typeof window !== "undefined" && window.location?.origin && window.location.origin.startsWith("http")) {
     return window.location.origin;
   }
-  return "https://api-v2.soundcloud.com";
+  return getSoundCloudApiBase().startsWith("https://") ? getSoundCloudApiBase() : "https://api-v2.soundcloud.com";
 }
 
 function withClientId(pathOrUrl) {

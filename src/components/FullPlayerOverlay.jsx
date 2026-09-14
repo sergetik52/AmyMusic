@@ -3,6 +3,7 @@ import { useAudioPlayer } from "../audio/AudioPlayerContext";
 import { getCachedLyricsForTrack, getActiveLyricIndex } from "../services/lyricsApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { TrackContextMenu, TrackMenuButton } from "./TrackContextMenu";
+import { getYandexCachedArtistAvatar, fetchYandexArtistAvatar } from "../services/yandexMusicApi";
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
@@ -90,6 +91,71 @@ function getTrackArtists(track) {
     seen.add(key);
     return true;
   });
+}
+
+function OverlayArtistAvatar({ artist, track, size = "h-4 w-4", className = "" }) {
+  const artistName = (artist?.name || artist?.username || "").trim();
+  const [avatarUrl, setAvatarUrl] = useState(() => {
+    const cached = getYandexCachedArtistAvatar(artistName);
+    if (cached) return cached;
+    if (artist?.avatar && !artist.avatar.includes("logo.png") && !artist.avatar.includes("user.svg")) {
+      return artist.avatar;
+    }
+    if (track?.artistAvatar && !track.artistAvatar.includes("logo.png") && !track.artistAvatar.includes("user.svg")) {
+      return track.artistAvatar;
+    }
+    return "";
+  });
+
+  useEffect(() => {
+    if (!artistName) return;
+    let isMounted = true;
+
+    const cached = getYandexCachedArtistAvatar(artistName);
+    if (cached) {
+      setAvatarUrl(cached);
+      return;
+    }
+
+    fetchYandexArtistAvatar(artistName).then((url) => {
+      if (isMounted && url) {
+        setAvatarUrl(url);
+      }
+    });
+
+    const handleUpdate = (e) => {
+      if (e.detail?.name?.toLowerCase().trim() === artistName.toLowerCase().trim() && isMounted && e.detail.avatar) {
+        setAvatarUrl(e.detail.avatar);
+      }
+    };
+
+    window.addEventListener("amymusic:artist-avatar-updated", handleUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener("amymusic:artist-avatar-updated", handleUpdate);
+    };
+  }, [artistName]);
+
+  const fallbackUrl = (artist?.avatar && !artist.avatar.includes("logo.png"))
+    ? artist.avatar
+    : ((track?.artistAvatar && !track.artistAvatar.includes("logo.png"))
+      ? track.artistAvatar
+      : ((track?.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg"));
+
+  const displaySrc = avatarUrl || fallbackUrl;
+
+  return (
+    <img
+      src={displaySrc}
+      alt={artistName}
+      className={`${size} shrink-0 rounded-full object-cover ring-1 ring-white/20 transition group-hover/artist:scale-110 ${className}`}
+      onError={(e) => {
+        if (e.currentTarget.src !== "/user.svg") {
+          e.currentTarget.src = "/user.svg";
+        }
+      }}
+    />
+  );
 }
 
 function useIsMobile() {
@@ -205,7 +271,11 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   const queueModalTouchStartRef = useRef(null);
 
   const handlePlayerTouchStart = (e) => {
-    if (isQueueModalOpen || e.target.closest("input, button, [data-queue-handle], [data-no-swipe], .animate-bottom-sheet")) return;
+    if (
+      isQueueModalOpen ||
+      isTouchDragging.current ||
+      e.target.closest("input, button, [data-queue-handle], [data-no-swipe], [data-lyrics-container], .lyrics-stage, .animate-bottom-sheet")
+    ) return;
     if (e.touches && e.touches.length === 1) {
       playerTouchStartRef.current = {
         x: e.touches[0].clientX,
@@ -344,11 +414,12 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   };
 
   const handleArtistClick = (artist) => {
+    const artistName = artist.name || artist.username || "";
     onOpenArtist?.({
       id: artist.id || "",
-      name: artist.name || artist.username,
+      name: artistName,
       username: artist.username || artist.name,
-      avatar: artist.avatar || currentTrack.artistAvatar || currentTrack.cover || "/logo.png",
+      avatar: getYandexCachedArtistAvatar(artistName) || artist.avatar || currentTrack.artistAvatar || currentTrack.cover || "/logo.png",
       permalinkUrl: artist.permalinkUrl || "",
       followers: 0,
       followings: 0,
@@ -407,6 +478,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   };
 
   const handleTouchStart = (event) => {
+    if (event && event.stopPropagation) event.stopPropagation();
     if (!lyricsState.lines.length || !event.touches[0]) return;
     touchStartY.current = event.touches[0].clientY;
     lastTouchY.current = event.touches[0].clientY;
@@ -415,6 +487,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   };
 
   const handleTouchMove = (event) => {
+    if (event && event.stopPropagation) event.stopPropagation();
     if (!isTouchDragging.current || !event.touches[0]) return;
     const currentY = event.touches[0].clientY;
     lastTouchY.current = currentY;
@@ -422,7 +495,8 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     setLyricsOffset(touchStartOffset.current + deltaY);
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (event) => {
+    if (event && event.stopPropagation) event.stopPropagation();
     if (!isTouchDragging.current) return;
     isTouchDragging.current = false;
 
@@ -651,11 +725,13 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     return (
       <div
         ref={lyricsStageRef}
+        data-lyrics-container="true"
+        data-no-swipe="true"
         onWheel={handleLyricsWheel}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className={isMobileLyrics ? "relative h-full w-full overflow-hidden px-3 touch-none select-none" : "relative h-screen w-full overflow-hidden px-12 touch-none select-none"}
+        className={isMobileLyrics ? "relative h-full w-full overflow-hidden px-3 touch-pan-y select-none" : "relative h-screen w-full overflow-hidden px-12 touch-none select-none"}
       >
         <div
           className={
@@ -902,7 +978,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
               </h2>
               <div className="flex max-w-[88vw] flex-wrap items-center justify-center gap-1.5 overflow-hidden text-xs font-semibold text-white/60 mx-auto mb-1">
                 {getTrackArtists(currentTrack).map((artist, index) => {
-                  const avatarUrl = artist.avatar || currentTrack.artistAvatar || currentTrack.cover || "/logo.png";
                   return (
                     <React.Fragment key={`${artist.id || artist.name}-${index}`}>
                       {index > 0 && <span className="mx-0.5 font-light text-white/35">×</span>}
@@ -911,11 +986,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                         onClick={() => handleArtistClick(artist)}
                         className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-0.5 transition hover:bg-white/15 hover:text-white"
                       >
-                        <img
-                          src={avatarUrl}
-                          alt={artist.name || artist.username}
-                          className="h-4 w-4 shrink-0 rounded-full object-cover ring-1 ring-white/20"
-                        />
+                        <OverlayArtistAvatar artist={artist} track={currentTrack} />
                         <span>{artist.name || artist.username}</span>
                       </button>
                     </React.Fragment>
@@ -1491,7 +1562,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             <h2 className="text-base font-bold text-white">{currentTrack?.title}</h2>
             <div className="mt-2 flex max-w-80 flex-wrap items-center justify-center gap-1.5 overflow-hidden text-xs font-semibold text-white/60">
               {getTrackArtists(currentTrack).map((artist, index) => {
-                const avatarUrl = artist.avatar || currentTrack.artistAvatar || currentTrack.cover || "/logo.png";
                 return (
                   <React.Fragment key={`${artist.id || artist.name}-${index}`}>
                     {index > 0 && <span className="mx-0.5 font-light text-white/35">×</span>}
@@ -1500,11 +1570,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                       onClick={() => handleArtistClick(artist)}
                       className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 transition hover:bg-white/15 hover:text-white group/artist"
                     >
-                      <img
-                        src={avatarUrl}
-                        alt={artist.name || artist.username}
-                        className="h-4 w-4 shrink-0 rounded-full object-cover ring-1 ring-white/20 transition group-hover/artist:scale-110"
-                      />
+                      <OverlayArtistAvatar artist={artist} track={currentTrack} />
                       <span>{artist.name || artist.username}</span>
                     </button>
                   </React.Fragment>

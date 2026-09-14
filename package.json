@@ -10,7 +10,12 @@
     "preview": "vite preview --host 0.0.0.0",
     "electron:dev": "set AMYMUSIC_DEV=1&& electron .",
     "package:windows": "npm run build && electron-builder --win --x64",
-    "release": "node scripts/release.cjs"
+    "release": "node scripts/release.cjs",
+    "cap:sync": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:build": "npm run build && npx cap sync android",
+    "android:apk": "npm run android:build && scripts\\build_android.bat",
+    "android:run": "npm run build && scripts\\run_android.bat"
   },
   "build": {
     "appId": "com.amymusic.desktop",
@@ -49,6 +54,12 @@
     }
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/app": "^7.0.2",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^7.4.4",
+    "@capacitor/splash-screen": "^7.0.2",
+    "@capacitor/status-bar": "^7.0.2",
     "@vitejs/plugin-react": "^4.3.4",
     "discord-rpc": "^4.0.1",
     "framer-motion": "^13.1.0",

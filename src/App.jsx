@@ -7,10 +7,9 @@ import { ArtistView, AlbumView } from "./components/ArtistView";
 import { FullPlayerOverlay } from "./components/FullPlayerOverlay";
 import { AudioProvider, useAudioPlayer } from "./audio/AudioPlayerContext";
 import { TrackMenuButton } from "./components/TrackContextMenu";
-import AuthModal from "./components/AuthModal";
 import { AvatarCropperModal } from "./components/AvatarCropperModal";
 import { EqualizerModal } from "./components/EqualizerModal";
-import { getUsername, removeAuthToken, getCollections, syncCollections, getWave, syncWave, getProfile, updateProfile, changePassword } from "./api";
+import { updateProfile } from "./api";
 import {
   buildArtistsFromTracks,
   getAlbumDetails,
@@ -22,12 +21,22 @@ import {
   searchPlaylists,
   searchTracks
 } from "./services/soundCloudApi";
-import { getYandexChartTop100 } from "./services/yandexMusicApi";
+import {
+  getYandexChartTop100,
+  fetchYandexArtistAvatar,
+  getYandexCachedArtistAvatar
+} from "./services/yandexMusicApi";
 import {
   getProfileSettings,
   saveProfileSettings,
   subscribeProfileSettings
 } from "./services/profileSettings";
+import {
+  ensureLocalProfile,
+  saveLocalProfile,
+  subscribeLocalProfile
+} from "./services/localProfile";
+import { initNativeShell } from "./native/capacitor";
 import { getCachedLyricsForTrack, getActiveLyricIndex } from "./services/lyricsApi";
 import { useEscapeKey } from "./utils/useEscapeKey";
 import { MobileLayout } from "./mobile/MobileLayout";
@@ -107,7 +116,7 @@ function SidebarItem({ item, isActive, isCollapsed, onClick }) {
   );
 }
 
-function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfileSave, onLogout }) {
+function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfileSave }) {
   const { setIsEqualizerOpen, isAudioCacheEnabled, toggleAudioCache, clearAudioCache, audioCacheSize } = useAudioPlayer();
   const isDesktop = Boolean(typeof window !== "undefined" && window.amyMusicDesktop);
   const [draft, setDraft] = useState(settings);
@@ -115,13 +124,6 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
   const [isClosing, setIsClosing] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
   const [croppingImageSrc, setCroppingImageSrc] = useState(null);
-
-  // Password change state
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [passwordStatus, setPasswordStatus] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordLoading, setPasswordLoading] = useState(false);
 
   // App auto-updater state
   const [appVersion, setAppVersion] = useState("0.1.0");
@@ -210,28 +212,6 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
     });
   };
 
-
-  const handlePasswordChangeSubmit = async (e) => {
-    e.preventDefault();
-    if (!oldPassword || !newPassword) {
-      setPasswordError("Заполните оба поля");
-      return;
-    }
-    setPasswordLoading(true);
-    setPasswordError("");
-    setPasswordStatus("");
-    try {
-      await changePassword(oldPassword, newPassword);
-      setPasswordStatus("Пароль успешно изменён!");
-      setOldPassword("");
-      setNewPassword("");
-    } catch (err) {
-      setPasswordError(err.message || "Не удалось изменить пароль");
-    } finally {
-      setPasswordLoading(false);
-    }
-  };
-
   const fileInputRef = React.useRef(null);
 
   const handleAvatarFileSelect = (event) => {
@@ -263,16 +243,16 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
         />
       )}
 
-      <div key="settings-overlay" className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 sm:p-10 backdrop-blur-[10px]">
+      <div key="settings-overlay" className="fixed inset-0 z-[80] flex items-end md:items-center justify-center bg-black/60 p-0 md:p-10 backdrop-blur-[10px]">
         <div
           key="settings-window-box"
-          className={`relative flex w-full max-w-5xl h-[75vh] min-h-[500px] overflow-hidden rounded-[24px] border border-white/10 bg-[#0c0c0c] text-white shadow-2xl ${isClosing ? "animate-[slideDownFade_0.25s_ease-in_forwards]" : "animate-slide-up-fade"}`}
+          className={`relative flex flex-col md:flex-row w-full max-w-full md:max-w-5xl h-[88vh] md:h-[75vh] md:min-h-[500px] overflow-hidden rounded-t-[24px] rounded-b-none md:rounded-[24px] border-t md:border border-white/10 bg-[#0c0c0c] text-white shadow-2xl ${isClosing ? "animate-[slideDownFade_0.25s_ease-in_forwards]" : "animate-slide-up-fade"}`}
         >
         {/* Close Button Top-Right */}
         <button
           type="button"
           onClick={handleClose}
-          className="absolute top-5 right-5 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-white/50 hover:bg-white/10 hover:text-white transition"
+          className="absolute top-5 right-5 z-20 hidden md:flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-white/50 hover:bg-white/10 hover:text-white transition"
           title="Закрыть настройки"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -282,17 +262,20 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
         </button>
 
         {/* Sidebar Navigation */}
-        <div className="w-64 shrink-0 bg-white/[0.02] border-r border-white/5 flex flex-col pt-8 pb-4">
-          <div className="px-6 mb-6">
-            <h2 className="text-xl font-black tracking-tight text-white">Настройки</h2>
+        <div className="w-full md:w-64 shrink-0 bg-white/[0.02] border-b md:border-b-0 md:border-r border-white/5 flex flex-col md:flex-col pt-[env(safe-area-inset-top,0px)] md:pt-8 pb-0 md:pb-4">
+          <div className="px-4 md:px-6 mb-2 md:mb-6 pt-3 md:pt-0 flex items-center gap-3">
+            <button type="button" onClick={handleClose} className="flex md:hidden h-8 w-8 items-center justify-center rounded-full text-white/70 active:scale-95" aria-label="Назад">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
+            </button>
+            <h2 className="text-lg md:text-xl font-black tracking-tight text-white">Настройки</h2>
           </div>
-          <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+          <nav className="flex md:flex-1 px-2 md:px-3 gap-1 md:gap-0 md:space-y-1 overflow-x-auto md:overflow-x-visible md:overflow-y-auto pb-2 md:pb-0 no-scrollbar">
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${activeTab === tab.id ? "bg-[#8341EF] text-white" : "text-white/50 hover:bg-white/[0.04] hover:text-white"}`}
+                className={`flex-shrink-0 md:w-full flex items-center gap-2 md:gap-3 px-3 py-2 md:py-2.5 rounded-full md:rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 ${activeTab === tab.id ? "bg-[#8341EF] text-white" : "text-white/50 hover:bg-white/[0.04] hover:text-white"}`}
               >
                 <div className={`${activeTab === tab.id ? "opacity-100" : "opacity-60"}`}>
                   {tab.icon}
@@ -302,29 +285,14 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
             ))}
           </nav>
           
-          <div className="px-4 mt-auto">
-            {onLogout ? (
-              <button
-                type="button"
-                onClick={() => { handleClose(); onLogout(); }}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 py-2.5 text-xs font-bold text-red-400 hover:text-red-300 transition"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
-                Выйти из аккаунта
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleClose}
-                className="w-full rounded-xl border border-white/10 hover:bg-white/5 py-2.5 text-xs font-bold text-white/50 hover:text-white transition"
-              >
-                Закрыть
-              </button>
-            )}
+          <div className="hidden md:block px-4 mt-auto">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="w-full rounded-xl border border-white/10 hover:bg-white/5 py-2.5 text-xs font-bold text-white/50 hover:text-white transition"
+            >
+              Закрыть
+            </button>
           </div>
         </div>
 
@@ -333,7 +301,7 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
           {/* Subtle top gradient */}
           <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-[#8341EF]/5 to-transparent pointer-events-none" />
           
-          <div className="absolute inset-0 overflow-y-auto px-10 py-12 custom-scrollbar">
+          <div className="absolute inset-0 overflow-y-auto px-4 md:px-10 py-6 md:py-12 custom-scrollbar">
             {activeTab === "profile" && (
               <div key="profile" className="animate-[fadeIn_0.3s_ease-out]">
                 <h3 className="text-2xl font-black mb-8 text-white">Профиль</h3>
@@ -368,62 +336,11 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
                     
                     <div className="p-5 rounded-2xl bg-[#8341EF]/10 border border-[#8341EF]/20 flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-bold text-[#8341EF] mb-1">AmyMusic Cloud</div>
-                        <div className="text-xs font-semibold text-white/50">Коллекция и история прослушиваний синхронизируются</div>
+                        <div className="text-sm font-bold text-[#8341EF] mb-1">Локальный профиль</div>
+                        <div className="text-xs font-semibold text-white/50">Коллекция и история хранятся только на этом устройстве</div>
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Password Change Section */}
-                <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <svg className="w-4 h-4 text-[#8341EF]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    Смена пароля
-                  </h4>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-1.5">Текущий пароль</label>
-                      <input
-                        type="password"
-                        value={oldPassword}
-                        onChange={(e) => setOldPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-white/[0.03] border border-white/10 focus:border-[#8341EF] rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white placeholder-white/20 outline-none transition"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-1.5">Новый пароль</label>
-                      <input
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-white/[0.03] border border-white/10 focus:border-[#8341EF] rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white placeholder-white/20 outline-none transition"
-                      />
-                    </div>
-                  </div>
-
-                  {passwordError && (
-                    <div className="text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl">
-                      {passwordError}
-                    </div>
-                  )}
-                  {passwordStatus && (
-                    <div className="text-xs font-bold text-green-400 bg-green-500/10 border border-green-500/20 p-2.5 rounded-xl">
-                      {passwordStatus}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handlePasswordChangeSubmit}
-                    disabled={passwordLoading}
-                    className="rounded-xl bg-[#8341EF] hover:bg-[#7232d6] px-4 py-2.5 text-xs font-bold text-white transition disabled:opacity-50"
-                  >
-                    {passwordLoading ? "Изменение..." : "Сменить пароль"}
-                  </button>
                 </div>
               </div>
             )}
@@ -896,7 +813,7 @@ function formatDuration(seconds) {
   return `${mins}:${secs}`;
 }
 
-function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onLoginClick, onLogout, onProfileSave }) {
+function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileSave }) {
   const { playHistory, totalListenedSeconds } = useAudioPlayer();
   const [settings, setSettings] = useState(() => getProfileSettings());
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -936,7 +853,7 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onLoginCli
   }, []);
 
   const handleProfileSaveEvent = async (data) => {
-    if (currentUser && onProfileSave) {
+    if (onProfileSave) {
       await onProfileSave(data);
     }
   };
@@ -997,47 +914,30 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onLoginCli
             </span>
           </div>
 
-          {currentUser ? (
-            <button
-              type="button"
-              onClick={() => setIsProfileOpen(true)}
-              className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
-              title={isCollapsed ? (profileData?.displayName || currentUser) : undefined}
-            >
-              <div className="relative h-9 w-9 shrink-0">
-                <img src={profileData?.avatarUrl || "/user.svg"} alt="" className="h-full w-full rounded-full bg-[var(--player-accent)] object-cover opacity-85 transition group-hover:opacity-100 p-1" />
-              </div>
-              <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
-                <span className="flex flex-col whitespace-nowrap">
-                  <span className="block truncate font-bold text-white max-w-[120px]">
-                    {profileData?.displayName || currentUser}
-                  </span>
-                  <span className="text-[10px] uppercase tracking-wider text-[#8341EF]">Облако</span>
+          <button
+            type="button"
+            onClick={() => setIsProfileOpen(true)}
+            className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
+            title={isCollapsed ? (profileData?.displayName || currentUser || "Local") : undefined}
+          >
+            <div className="relative h-9 w-9 shrink-0">
+              <img src={profileData?.avatarUrl || "/user.svg"} alt="" className="h-full w-full rounded-full bg-[var(--player-accent)] object-cover opacity-85 transition group-hover:opacity-100 p-1" />
+            </div>
+            <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
+              <span className="flex flex-col whitespace-nowrap">
+                <span className="block truncate font-bold text-white max-w-[120px]">
+                  {profileData?.displayName || currentUser || "Local"}
                 </span>
+                <span className="text-[10px] uppercase tracking-wider text-[#8341EF]">Локально</span>
               </span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onLoginClick}
-              className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
-              title={isCollapsed ? "Войти в аккаунт" : undefined}
-            >
-              <div className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center bg-white/5 border border-white/10 group-hover:bg-[#8341EF]/20 group-hover:border-[#8341EF]/50 transition-colors">
-                <img src="/user.svg" alt="" className="h-5 w-5 opacity-50 group-hover:opacity-100 group-hover:text-[#8341EF]" style={{ filter: 'brightness(0) invert(1)' }} />
-              </div>
-              <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
-                <span className="font-semibold text-white/70 group-hover:text-white">Войти в аккаунт</span>
-              </span>
-            </button>
-          )}
+            </span>
+          </button>
         </div>
 
       {isProfileOpen && (
         <ProfileSettingsModal
           settings={settings}
           profileData={profileData}
-          onLogout={currentUser ? onLogout : undefined}
           onClose={() => setIsProfileOpen(false)}
           onProfileSave={handleProfileSaveEvent}
           onSave={async (nextSettings) => {
@@ -1171,17 +1071,83 @@ function getTrackArtists(track) {
   });
 }
 
-function ArtistLinks({ track, onOpenArtist, className = "text-xs text-white/40", showAvatar = true }) {
+export function ArtistAvatar({ artist, track, size = "h-4 w-4", className = "" }) {
+  const artistName = (artist?.name || artist?.username || "").trim();
+  const [avatarUrl, setAvatarUrl] = useState(() => {
+    const cached = getYandexCachedArtistAvatar(artistName);
+    if (cached) return cached;
+    if (artist?.avatar && !artist.avatar.includes("logo.png") && !artist.avatar.includes("user.svg")) {
+      return artist.avatar;
+    }
+    if (track?.artistAvatar && !track.artistAvatar.includes("logo.png") && !track.artistAvatar.includes("user.svg")) {
+      return track.artistAvatar;
+    }
+    return "";
+  });
+
+  useEffect(() => {
+    if (!artistName) return;
+    let isMounted = true;
+
+    const cached = getYandexCachedArtistAvatar(artistName);
+    if (cached) {
+      setAvatarUrl(cached);
+      return;
+    }
+
+    // Automatically fetch the first photo from Yandex Music
+    fetchYandexArtistAvatar(artistName).then((url) => {
+      if (isMounted && url) {
+        setAvatarUrl(url);
+      }
+    });
+
+    const handleUpdate = (e) => {
+      if (e.detail?.name?.toLowerCase().trim() === artistName.toLowerCase().trim() && isMounted && e.detail.avatar) {
+        setAvatarUrl(e.detail.avatar);
+      }
+    };
+
+    window.addEventListener("amymusic:artist-avatar-updated", handleUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener("amymusic:artist-avatar-updated", handleUpdate);
+    };
+  }, [artistName]);
+
+  const fallbackUrl = (artist?.avatar && !artist.avatar.includes("logo.png"))
+    ? artist.avatar
+    : ((track?.artistAvatar && !track.artistAvatar.includes("logo.png"))
+      ? track.artistAvatar
+      : ((track?.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg"));
+
+  const displaySrc = avatarUrl || fallbackUrl;
+
+  return (
+    <img
+      src={displaySrc}
+      alt={artistName}
+      className={`${size} shrink-0 rounded-full object-cover ring-1 ring-white/20 transition group-hover/artist:scale-110 group-hover/artist:ring-[var(--player-accent)] ${className}`}
+      onError={(e) => {
+        if (e.currentTarget.src !== "/user.svg") {
+          e.currentTarget.src = "/user.svg";
+        }
+      }}
+    />
+  );
+}
+
+function ArtistLinks({ track, onOpenArtist, className = "text-xs text-white/40", showAvatar = true, avatarSize = "h-4 w-4" }) {
   const artists = getTrackArtists(track).filter((artist) => artist.name || artist.username);
 
   return (
     <div className={`flex min-w-0 flex-nowrap items-center gap-x-1.5 overflow-hidden whitespace-nowrap ${className}`}>
       {artists.map((artist, index) => {
-        const avatarUrl = (artist.avatar && !artist.avatar.includes("logo.png"))
-          ? artist.avatar
-          : ((track.artistAvatar && !track.artistAvatar.includes("logo.png"))
-            ? track.artistAvatar
-            : ((track.cover && !track.cover.includes("logo.png")) ? track.cover : "/user.svg"));
+        const artistName = artist.name || artist.username || "";
+        const avatarUrl = getYandexCachedArtistAvatar(artistName) ||
+          (artist.avatar && !artist.avatar.includes("logo.png") ? artist.avatar : "") ||
+          (track.artistAvatar && !track.artistAvatar.includes("logo.png") ? track.artistAvatar : "") ||
+          (track.cover && !track.cover.includes("logo.png") ? track.cover : "/user.svg");
 
         return (
           <React.Fragment key={`${artist.id || artist.name}-${index}`}>
@@ -1194,7 +1160,7 @@ function ArtistLinks({ track, onOpenArtist, className = "text-xs text-white/40",
                   id: artist.id || "",
                   name: artist.name || artist.username,
                   username: artist.username || artist.name,
-                  avatar: avatarUrl,
+                  avatar: getYandexCachedArtistAvatar(artistName) || avatarUrl,
                   permalinkUrl: artist.permalinkUrl || "",
                   followers: 0,
                   followings: 0,
@@ -1207,11 +1173,7 @@ function ArtistLinks({ track, onOpenArtist, className = "text-xs text-white/40",
               className="inline-flex items-center gap-1.5 max-w-[200px] truncate transition hover:text-white hover:underline group/artist"
             >
               {showAvatar && (
-                <img
-                  src={avatarUrl}
-                  alt={artist.name || artist.username}
-                  className="h-4 w-4 shrink-0 rounded-full object-cover ring-1 ring-white/20 transition group-hover/artist:scale-110 group-hover/artist:ring-[var(--player-accent)]"
-                />
+                <ArtistAvatar artist={artist} track={track} size={avatarSize} />
               )}
               <span className="truncate">{artist.name || artist.username}</span>
             </button>
@@ -1579,12 +1541,12 @@ function SearchPanel({ onOpenArtist }) {
   }
 
   return (
-    <section className="flex-1 flex flex-col h-full min-h-0 overflow-hidden rounded-[17.76px] border border-white/[0.04] bg-[#121212] p-4 md:p-[26.6px] shadow-2xl">
+    <section className="flex-1 flex flex-col h-full min-h-0 overflow-hidden md:rounded-[17.76px] md:border md:border-white/[0.04] bg-[#090909] md:bg-[#121212] p-2 md:p-[26.6px] md:shadow-2xl">
       {/* Pinned Top Header: Search input & Category Tabs */}
-      <div className="shrink-0 space-y-4 pb-2 border-b border-white/5">
+      <div className="shrink-0 space-y-3 pb-2 border-b border-white/5">
         <form
           onSubmit={handleSearch}
-          className="flex h-[44.4px] w-full items-center gap-3 rounded-full border border-[#4D4D4D] bg-white/[0.002] px-4 text-[#808080] transition focus-within:border-white/40"
+          className="flex h-[42px] md:h-[44.4px] w-full items-center gap-2.5 rounded-full border border-white/10 md:border-[#4D4D4D] bg-white/[0.04] px-3.5 text-[#808080] transition focus-within:border-white/40"
         >
           <img src="/search-input.svg" alt="" className="h-5 w-5" />
           <input
@@ -1719,7 +1681,7 @@ function SearchPanel({ onOpenArtist }) {
       </div>
 
       {/* Scrollable Search Results Body */}
-      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pt-3 pb-36">
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pt-3 pb-[140px] md:pb-36">
         {activeSearchTab === "history" && visibleTracks.length === 0 && (
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
             <p className="text-sm font-semibold text-white/70">История пока пустая</p>
@@ -1784,34 +1746,29 @@ function SearchPanel({ onOpenArtist }) {
           const renderTrackItem = (track) => (
             <div
               key={track.id}
-              className="group flex items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/5"
+              onClick={() => playTrack(track, trackSource)}
+              className="group flex items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/5 active:bg-white/10 active:scale-[0.99] cursor-pointer"
             >
-              <button
-                type="button"
-                onClick={() => playTrack(track, trackSource)}
-                className="flex h-11 w-11 shrink-0 items-center justify-center text-left"
-              >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center text-left">
                 <img
                   src={track.cover}
                   alt=""
                   className="h-11 w-11 rounded-lg object-cover"
                 />
-              </button>
+              </div>
               <div className="min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={() => playTrack(track, trackSource)}
-                  className="block max-w-full truncate text-left text-sm font-semibold text-white transition hover:text-white/80"
-                >
+                <span className="block max-w-full truncate text-left text-sm font-semibold text-white transition hover:text-white/80">
                   {track.title}
-                </button>
-                <ArtistLinks track={track} onOpenArtist={onOpenArtist} />
+                </span>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <ArtistLinks track={track} onOpenArtist={onOpenArtist} />
+                </div>
               </div>
               <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
                 <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
                   {formatDuration(track.duration)}
                 </span>
-                <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                <div onClick={(e) => e.stopPropagation()} className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                   <TrackMenuButton
                     track={track}
                     onOpenArtist={onOpenArtist}
@@ -2831,7 +2788,7 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, 
       <div
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        className="relative z-10 w-full rounded-[var(--player-radius,20px)] border border-white/[0.06] shadow-2xl transition-all duration-300"
+        className="relative z-10 w-full rounded-[var(--player-radius,20px)] max-sm:rounded-xl border border-white/[0.06] max-sm:border-0 shadow-2xl max-sm:shadow-none transition-all duration-300"
         style={{
           "--player-accent": `color-mix(in srgb, ${trackPalette.line} 70%, #ffffff)`,
           "--player-accent-muted": `color-mix(in srgb, ${trackPalette.line} 45%, #8a8a8a)`,
@@ -2893,7 +2850,7 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, 
         </div>
 
         {/* Main player controls row */}
-        <div className="relative z-10 flex items-center justify-between gap-4 px-4 py-2.5">
+        <div className="relative z-10 flex items-center justify-between gap-4 max-sm:gap-2 px-4 max-sm:px-2.5 py-2.5 max-sm:py-1.5">
           <TrackInfo onOpenFull={onOpenFull} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
           <PlayerControls />
           <PlayerTools onOpenFull={onOpenFull} onToggleKaraoke={onToggleKaraoke} isKaraokeOpen={isKaraokeOpen} />
@@ -2926,7 +2883,7 @@ export function applyAppearanceSettings(appearance = {}) {
 }
 
 export default function App() {
-  const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, mergeServerData, likedTracks, userPlaylists, savedReleases, dislikedTrackIds, playHistory, playTrack } = useAudioPlayer();
+  const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen } = useAudioPlayer();
   const [activeTab, setActiveTab] = useState("wave");
   const [previousTab, setPreviousTab] = useState("wave");
   const [activeArtist, setActiveArtist] = useState(null);
@@ -2936,94 +2893,37 @@ export default function App() {
   const [isMiniKaraokeOpen, setIsMiniKaraokeOpen] = useState(false);
   const profileSettings = getProfileSettings();
 
-  // --- Auth State ---
-  const [currentUser, setCurrentUser] = useState(getUsername() || null);
-  const [profileData, setProfileData] = useState({ displayName: "", avatarUrl: "" });
-  const [showAuthModal, setShowAuthModal] = useState(false);
-
-  const handleLoginSuccess = async ({ username, displayName, avatarUrl }) => {
-    setCurrentUser(username);
-    if (displayName !== undefined) {
-      setProfileData({ displayName: displayName || "", avatarUrl: avatarUrl || "" });
-    }
-    setShowAuthModal(false);
-    
-    // Migration logic
-    try {
-      let needsSync = false;
-      
-      if (likedTracks?.length > 0 || userPlaylists?.length > 0 || savedReleases?.length > 0 || dislikedTrackIds?.size > 0 || playHistory?.length > 0) {
-        if (likedTracks?.length > 0 || userPlaylists?.length > 0 || savedReleases?.length > 0) {
-          await syncCollections({ likedTracks, userPlaylists, savedReleases });
-          needsSync = true;
-        }
-        
-        let waveData = {};
-        if (dislikedTrackIds?.size > 0) waveData.dislikedTrackIds = Array.from(dislikedTrackIds);
-        if (playHistory?.length > 0) waveData.playHistory = playHistory;
-        
-        if (Object.keys(waveData).length > 0) {
-          await syncWave(waveData);
-          needsSync = true;
-        }
-      }
-      
-      await loadDataFromServer();
-    } catch (err) {
-      console.error("Migration failed:", err);
-    }
-  };
-
-  const handleLogout = () => {
-    removeAuthToken();
-    setCurrentUser(null);
-    setProfileData({ displayName: "", avatarUrl: "" });
+  const [localProfile, setLocalProfile] = useState(() => ensureLocalProfile());
+  const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false);
+  const [mobileProfileSettings, setMobileProfileSettings] = useState(() => getProfileSettings());
+  const currentUser = localProfile.username;
+  const profileData = {
+    displayName: localProfile.displayName,
+    avatarUrl: localProfile.avatarUrl
   };
 
   const handleProfileSave = async (data) => {
     try {
       const res = await updateProfile(data);
       if (res.success) {
-        setProfileData({ displayName: res.displayName, avatarUrl: res.avatarUrl });
+        const next = saveLocalProfile({
+          displayName: res.displayName,
+          avatarUrl: res.avatarUrl
+        });
+        setLocalProfile(next);
       }
     } catch (e) {
       console.error("Failed to update profile", e);
     }
   };
 
-  const loadDataFromServer = async () => {
-    try {
-      if (getUsername()) {
-        const profile = await getProfile().catch(() => null);
-        if (profile) {
-          setProfileData({ displayName: profile.displayName || "", avatarUrl: profile.avatarUrl || "" });
-        }
-
-        const collections = await getCollections();
-        const wave = await getWave();
-
-        if (mergeServerData) {
-          mergeServerData({
-            likedTracks: collections.likedTracks,
-            userPlaylists: collections.userPlaylists,
-            savedReleases: collections.savedReleases,
-            dislikedTrackIds: wave.dislikedTrackIds,
-            playHistory: wave.playHistory,
-            totalListenedSeconds: profile?.totalListenedSeconds
-          });
-        }
-
-        
-        // Force reload by changing app settings version
-        setApiSettingsVersion((version) => version + 1);
-      }
-    } catch(e) {
-      console.error("Failed to load server data", e);
-    }
-  };
+  useEffect(() => subscribeLocalProfile(setLocalProfile), []);
+  useEffect(() => subscribeProfileSettings(setMobileProfileSettings), []);
 
   useEffect(() => {
-    loadDataFromServer();
+    const openProfile = () => setIsMobileProfileOpen(true);
+    window.addEventListener("amymusic:open-profile", openProfile);
+    return () => window.removeEventListener("amymusic:open-profile", openProfile);
   }, []);
 
   useEffect(
@@ -3064,28 +2964,12 @@ export default function App() {
     setActiveTab(previousTab || "wave");
   };
 
-  const renderAuthRequired = (title, message) => (
-    <div className="flex h-full flex-col items-center justify-center rounded-[17.76px] border border-white/[0.04] bg-[#121212] p-10 text-center shadow-2xl">
-      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#8341EF]/20 to-transparent border border-[#8341EF]/30">
-        <img src="/logo.png" alt="" className="h-12 w-12 object-cover opacity-50 grayscale" />
-      </div>
-      <h2 className="text-2xl font-black text-white mb-3">{title}</h2>
-      <p className="text-sm font-semibold text-white/40 max-w-sm mb-8">{message}</p>
-      <button
-        onClick={() => setShowAuthModal(true)}
-        className="rounded-full bg-[#8341EF] px-8 py-3.5 text-sm font-bold text-white transition-transform hover:scale-105"
-      >
-        Войти в аккаунт
-      </button>
-    </div>
-  );
-
   const renderContent = () => {
     switch (activeTab) {
-      case "wave": 
-        return currentUser ? <WaveView requestId={waveRequestId} onOpenFull={() => setIsFullOpen(true)} /> : renderAuthRequired("Моя волна недоступна", "Авторизуйтесь, чтобы слушать вашу персональную музыкальную волну и сохранять историю.");
-      case "collection": 
-        return currentUser ? <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} /> : renderAuthRequired("Коллекция недоступна", "Войдите в свой аккаунт, чтобы сохранять любимые треки в облако и слушать их на любом устройстве.");
+      case "wave":
+        return <WaveView requestId={waveRequestId} onOpenFull={() => setIsFullOpen(true)} />;
+      case "collection":
+        return <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
       case "trends": return <TrendsPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
       case "artist":
         return activeArtist ? (
@@ -3123,10 +3007,11 @@ export default function App() {
           setActiveTab={selectTab}
           currentUser={currentUser}
           profileData={profileData}
-          onLoginClick={() => setShowAuthModal(true)}
+          onLoginClick={() => {
+            window.dispatchEvent(new CustomEvent("amymusic:open-profile"));
+          }}
           onOpenProfile={() => {
-            const event = new CustomEvent("amymusic:open-profile");
-            window.dispatchEvent(event);
+            window.dispatchEvent(new CustomEvent("amymusic:open-profile"));
           }}
           renderContent={renderContent}
           BottomPlayer={BottomPlayer}
@@ -3155,10 +3040,16 @@ export default function App() {
         {isEqualizerOpen && (
           <EqualizerModal onClose={() => setIsEqualizerOpen(false)} />
         )}
-        {showAuthModal && (
-          <AuthModal 
-            onClose={() => setShowAuthModal(false)}
-            onLoginSuccess={handleLoginSuccess}
+        {isMobileProfileOpen && (
+          <ProfileSettingsModal
+            settings={mobileProfileSettings}
+            profileData={profileData}
+            onClose={() => setIsMobileProfileOpen(false)}
+            onProfileSave={handleProfileSave}
+            onSave={async (nextSettings) => {
+              const savedSettings = saveProfileSettings(nextSettings);
+              setMobileProfileSettings(savedSettings);
+            }}
           />
         )}
       </>
@@ -3177,8 +3068,6 @@ export default function App() {
         setActiveTab={selectTab}
         currentUser={currentUser}
         profileData={profileData}
-        onLoginClick={() => setShowAuthModal(true)}
-        onLogout={handleLogout}
         onProfileSave={handleProfileSave}
       />
       <div className="flex min-w-0 min-h-0 flex-1 flex-col justify-between gap-3 max-md:gap-0 max-md:pb-24 max-md:h-full max-md:overflow-hidden">
@@ -3213,12 +3102,6 @@ export default function App() {
       )}
       {isEqualizerOpen && (
         <EqualizerModal onClose={() => setIsEqualizerOpen(false)} />
-      )}
-      {showAuthModal && (
-        <AuthModal 
-          onClose={() => setShowAuthModal(false)}
-          onLoginSuccess={handleLoginSuccess}
-        />
       )}
 
     </main>
@@ -3264,6 +3147,10 @@ window.addEventListener("error", (event) => {
 
 window.addEventListener("unhandledrejection", (event) => {
   console.error("[AmyMusic:unhandled-rejection]", event.reason);
+});
+
+initNativeShell().catch((error) => {
+  console.warn("[AmyMusic:native]", error);
 });
 
 createRoot(document.getElementById("root")).render(

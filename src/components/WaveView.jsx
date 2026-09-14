@@ -258,7 +258,6 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
 
   useEffect(() => {
     return undefined;
-    // (dead code kept for structure, initial load handled by handleStartWave)
   }, [_requestId]);
 
   useEffect(() => {
@@ -284,8 +283,6 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
           tracks = await getWaveTracks("dark underground rap");
         }
 
-        // Only exclude the rolling recent window, NOT the entire queue.
-        // This lets tracks re-appear after ~80 new ones, keeping the wave infinite.
         const recentIds = recentWaveIdsRef.current;
         const nextTracks = shuffleWaveTracks(tracks).filter(
           (track) => !recentIds.has(String(track.id))
@@ -294,10 +291,8 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
         if (isMounted && nextTracks.length) {
           appendTracks(nextTracks);
 
-          // Add newly queued IDs to the rolling window
           nextTracks.forEach((track) => recentIds.add(String(track.id)));
 
-          // Keep the window bounded to ~80 entries: evict oldest when over limit
           if (recentIds.size > 80) {
             const entries = [...recentIds];
             entries.slice(0, entries.length - 80).forEach((id) => recentIds.delete(id));
@@ -335,7 +330,6 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
 
     setIsLoadingWave(true);
     setWaveError("");
-    // Reset rolling window on fresh wave start
     recentWaveIdsRef.current = new Set();
     const prevTrackId = currentTrack?.id && currentTrack.id !== "empty" ? String(currentTrack.id) : null;
     if (prevTrackId) {
@@ -355,13 +349,11 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
         tracks = await getWaveTracks("dark underground rap");
       }
 
-      // Filter out the old previous track from the first position
       const freshTracks = prevTrackId ? tracks.filter((t) => String(t.id) !== prevTrackId) : tracks;
       const waveList = freshTracks.length ? freshTracks : tracks;
 
       if (waveList.length) {
         const waveTracks = shuffleWaveTracks(waveList);
-        // Seed the recent-IDs window so the first append batch doesn't repeat these
         waveTracks.forEach((track) => recentWaveIdsRef.current.add(String(track.id)));
         await playTrack(waveTracks[0], waveTracks);
       }
@@ -439,6 +431,7 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
       </div>
       <WaveField audioEnergy={audioEnergy} isPlaying={isPlaying} />
       <div className="song-wave-vignette" />
+
       <button
         type="button"
         onClick={onOpenFull}
@@ -463,7 +456,7 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
             className="pointer-events-auto text-5xl max-sm:text-[52px] sm:text-6xl md:text-7xl font-black tracking-tight text-white drop-shadow-[0_16px_34px_rgba(0,0,0,0.95)] transition hover:scale-105 active:scale-95 disabled:cursor-default disabled:opacity-55"
             aria-label="Включить Мою волну"
           >
-            Моя волна
+            {isLoadingWave ? "Загрузка..." : "Моя волна"}
           </button>
         )}
       </div>

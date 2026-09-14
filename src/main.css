@@ -7,6 +7,33 @@
   --player-radius: 24px;
 }
 
+/* Hide scrollbar for horizontal tab bars on mobile */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Smooth mobile physics and touch interactions */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+  scroll-behavior: smooth;
+}
+
+main, .overflow-y-auto, .overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Fluid hardware-accelerated transitions */
+.transition-smooth {
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform, opacity;
+}
+
 html.theme-preset-amy {
   --theme-accent: #8341EF;
   --theme-accent-glow: rgba(131, 65, 239, 0.4);

@@ -1,10 +1,44 @@
 
 const yandexArtistAvatarMap = new Map();
 
+// Initialize cache from localStorage
+if (typeof window !== "undefined") {
+  try {
+    const saved = localStorage.getItem("amymusic_yandex_artist_avatars");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.entries(parsed).forEach(([k, v]) => {
+        if (k && v) yandexArtistAvatarMap.set(k, v);
+      });
+    }
+  } catch (e) {}
+}
+
+export function saveYandexArtistAvatarToCache(artistName = "", url = "") {
+  if (!artistName || !url) return;
+  const key = String(artistName).toLowerCase().trim();
+  yandexArtistAvatarMap.set(key, url);
+  if (typeof window !== "undefined") {
+    try {
+      const obj = Object.fromEntries(yandexArtistAvatarMap.entries());
+      localStorage.setItem("amymusic_yandex_artist_avatars", JSON.stringify(obj));
+    } catch (e) {}
+  }
+}
+
 export function getYandexCachedArtistAvatar(artistName = "") {
   if (!artistName) return "";
   const key = String(artistName).toLowerCase().trim();
   return yandexArtistAvatarMap.get(key) || "";
+}
+
+function formatYandexImageUrl(rawUri, size = "400x400") {
+  if (!rawUri) return "";
+  let url = String(rawUri).replace("%%", size);
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    url = `https://${url}`;
+  }
+  return url;
 }
 
 export async function fetchYandexArtistAvatar(artistName = "") {
@@ -13,13 +47,27 @@ export async function fetchYandexArtistAvatar(artistName = "") {
   if (yandexArtistAvatarMap.has(key)) return yandexArtistAvatarMap.get(key);
 
   try {
-    const data = await fetchYandexApi(`/search?text=${encodeURIComponent(artistName)}&type=all&page=0`);
-    const artists = data?.artists?.results || [];
+    const data = await fetchYandexApi(`/search?text=${encodeURIComponent(artistName)}&type=artist&page=0`);
+    const artists = data?.result?.artists?.results || data?.artists?.results || data?.result?.artists || [];
     if (artists.length > 0) {
       const exact = artists.find((a) => (a.name || "").toLowerCase().trim() === key) || artists[0];
-      if (exact?.cover?.uri) {
-        const avatarUrl = `https://${exact.cover.uri.replace("%%", "400x400")}`;
-        yandexArtistAvatarMap.set(key, avatarUrl);
+      
+      let rawUri = exact?.cover?.uri || exact?.ogImage;
+      if (!rawUri && Array.isArray(exact?.photos) && exact.photos.length > 0) {
+        rawUri = typeof exact.photos[0] === "string" ? exact.photos[0] : exact.photos[0]?.uri;
+      }
+
+      if (!rawUri && exact?.id) {
+        try {
+          const info = await fetchYandexApi(`/artists/${exact.id}/brief-info`);
+          const art = info?.result?.artist || info?.artist;
+          rawUri = art?.cover?.uri || art?.ogImage || (Array.isArray(art?.photos) && art.photos.length > 0 ? (typeof art.photos[0] === "string" ? art.photos[0] : art.photos[0]?.uri) : null);
+        } catch (briefErr) {}
+      }
+
+      if (rawUri) {
+        const avatarUrl = formatYandexImageUrl(rawUri, "400x400");
+        saveYandexArtistAvatarToCache(artistName, avatarUrl);
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("amymusic:artist-avatar-updated", { detail: { name: artistName, avatar: avatarUrl } }));
         }
@@ -31,6 +79,7 @@ export async function fetchYandexArtistAvatar(artistName = "") {
   }
   return "";
 }
+
 
 
 // Pure JS MD5 implementation for client-side stream URL hashing
@@ -186,6 +235,16 @@ function md5(string) {
 export const YANDEX_CLIENT_ID = "23cabbbdc6cd418abb4b39c32c41195d";
 const API_BASE = import.meta.env?.VITE_YANDEX_API_BASE || "/api/yandex";
 
+function getYandexApiBase() {
+  if (typeof window !== "undefined") {
+    // On Capacitor (Android/iOS), there's no dev server proxy — go direct
+    if (window.Capacitor?.isNativePlatform?.() || window.location?.protocol === "capacitor:") {
+      return "https://api.music.yandex.net";
+    }
+  }
+  return API_BASE;
+}
+
 function getBaseUrl() {
   if (typeof window !== "undefined" && window.location?.origin && window.location.origin.startsWith("http")) {
     return window.location.origin;
@@ -194,11 +253,6 @@ function getBaseUrl() {
 }
 
 async function fetchYandexApi(path, options = {}) {
-  const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator?.userAgent || ""));
-  if (isMobile) {
-    throw new Error("[YandexMusic] Yandex API requests are disabled on mobile devices");
-  }
-
   const headers = {
     "Accept": "application/json",
     "X-Yandex-Music-Client": "YandexMusicAndroid/24023241",
@@ -206,10 +260,11 @@ async function fetchYandexApi(path, options = {}) {
     ...(options.headers || {})
   };
 
-  const isRelative = API_BASE.startsWith("/");
+  const resolvedBase = getYandexApiBase();
+  const isRelative = resolvedBase.startsWith("/");
   const baseUrl = getBaseUrl();
   const primaryUrl = isRelative && baseUrl !== "https://api.music.yandex.net"
-    ? `${baseUrl}${API_BASE}${path}`
+    ? `${baseUrl}${resolvedBase}${path}`
     : `https://api.music.yandex.net${path}`;
 
   try {
@@ -236,22 +291,34 @@ export function normalizeYandexTrack(item, index = 0) {
   const yandexId = String(trackObj.id || item.id);
 
   const artists = Array.isArray(trackObj.artists)
-    ? trackObj.artists.map((a) => ({
-        id: a.id,
-        name: a.name,
-        cover: a.cover?.uri ? `https://${a.cover.uri.replace("%%", "200x200")}` : null
-      }))
+    ? trackObj.artists.map((a) => {
+        let avatarUrl = null;
+        if (a.cover?.uri) {
+          avatarUrl = formatYandexImageUrl(a.cover.uri, "400x400");
+        } else if (a.ogImage) {
+          avatarUrl = formatYandexImageUrl(a.ogImage, "400x400");
+        }
+        if (avatarUrl && a.name) {
+          saveYandexArtistAvatarToCache(a.name, avatarUrl);
+        }
+        return {
+          id: a.id,
+          name: a.name,
+          avatar: avatarUrl,
+          cover: avatarUrl
+        };
+      })
     : [];
 
   const artistName = artists.map((a) => a.name).join(", ") || "Яндекс Музыка";
 
   let coverUrl = "/logo.png";
   if (trackObj.coverUri) {
-    coverUrl = `https://${trackObj.coverUri.replace("%%", "400x400")}`;
+    coverUrl = formatYandexImageUrl(trackObj.coverUri, "400x400");
   } else if (trackObj.albums && trackObj.albums[0]?.coverUri) {
-    coverUrl = `https://${trackObj.albums[0].coverUri.replace("%%", "400x400")}`;
+    coverUrl = formatYandexImageUrl(trackObj.albums[0].coverUri, "400x400");
   } else if (trackObj.ogImage) {
-    coverUrl = `https://${trackObj.ogImage.replace("%%", "400x400")}`;
+    coverUrl = formatYandexImageUrl(trackObj.ogImage, "400x400");
   }
 
   const derivedColors = trackObj.derivedColors || {};
@@ -264,6 +331,7 @@ export function normalizeYandexTrack(item, index = 0) {
     rawTitle: trackObj.title || "Без названия",
     artist: artistName,
     artists,
+    artistAvatar: artists[0]?.avatar || null,
     album: trackObj.albums?.[0]?.title || null,
     cover: coverUrl,
     duration: Math.round((trackObj.durationMs || 0) / 1000),
@@ -303,7 +371,10 @@ export async function resolveYandexTrackStream(yandexTrackId) {
   let downloadInfoUrl = info.downloadInfoUrl;
 
   if (typeof window !== "undefined" && downloadInfoUrl.startsWith("https://api.music.yandex.net")) {
-    downloadInfoUrl = downloadInfoUrl.replace("https://api.music.yandex.net", API_BASE);
+    const resolvedBase = getYandexApiBase();
+    if (resolvedBase !== "https://api.music.yandex.net") {
+      downloadInfoUrl = downloadInfoUrl.replace("https://api.music.yandex.net", resolvedBase);
+    }
   }
 
   let linkRes;
@@ -340,3 +411,206 @@ export async function resolveYandexTrackStream(yandexTrackId) {
 
   return `https://${host}/get-mp3/${hash}/${ts}/${pathClean}`;
 }
+
+/**
+ * Parses Yandex Music playlist, album, or artist links and returns normalized track items.
+ */
+export async function parseYandexMusicUrl(inputUrl = "") {
+  const raw = String(inputUrl || "").trim();
+  if (!raw) throw new Error("Введите ссылку на плейлист или альбом Яндекс Музыки");
+
+  // Format 1A: /playlists/{uuid} (e.g. /playlists/lk.d7462a77-a956-4959-9a2d-00569b2bb1de or /playlists/uuid)
+  const playlistUuidMatch = raw.match(/music\.yandex\.[a-z.]+\/playlists\/([a-zA-Z0-9._-]+)/i);
+  if (playlistUuidMatch) {
+    const uuid = playlistUuidMatch[1];
+    let pl = null;
+
+    const endpoints = [
+      `/playlist/${encodeURIComponent(uuid)}`,
+      `/playlists/${encodeURIComponent(uuid)}`,
+      `/landing3/playlist?uuid=${encodeURIComponent(uuid)}`,
+      `/users/none/playlists/${encodeURIComponent(uuid)}`
+    ];
+
+    for (const ep of endpoints) {
+      try {
+        const res = await fetchYandexApi(ep);
+        const candidate = res?.result?.playlist || res?.result || res?.playlist || res;
+        if (candidate && (candidate.tracks || candidate.trackCount || candidate.title)) {
+          pl = candidate;
+          break;
+        }
+      } catch (err) {}
+    }
+
+    if (!pl) {
+      // Direct web fetch fallback if API endpoints returned 404
+      try {
+        const cleanUrl = raw.split("?")[0];
+        const res = await fetch(`${cleanUrl}`, {
+          headers: {
+            "Accept": "application/json, text/html",
+            "X-Yandex-Music-Client": "YandexMusicAndroid/24023241"
+          }
+        });
+        if (res.ok) {
+          const json = await res.json().catch(() => null);
+          if (json?.playlist) pl = json.playlist;
+          else if (json?.result) pl = json.result;
+        }
+      } catch {}
+    }
+
+    if (!pl) throw new Error("Плейлист по ссылке не найден или закрыт настройками приватности");
+
+    const coverUri = pl.cover?.uri || pl.ogImage;
+    const cover = coverUri ? `https://${coverUri.replace("%%", "400x400")}` : "/logo.png";
+    const title = pl.title || "Плейлист Яндекс Музыки";
+    const rawTracks = pl.tracks || [];
+    const tracks = rawTracks.map((item, idx) => normalizeYandexTrack(item, idx));
+
+    return {
+      title,
+      cover,
+      tracks,
+      trackCount: tracks.length,
+      source: "yandex"
+    };
+  }
+
+  // Format 1B: /users/{user}/playlists/{kind}
+  const playlistMatch = raw.match(/music\.yandex\.[a-z.]+\/users\/([^/]+)\/playlists\/([a-zA-Z0-9._-]+)/i);
+  if (playlistMatch) {
+    const user = playlistMatch[1];
+    const kind = playlistMatch[2];
+    const res = await fetchYandexApi(`/users/${encodeURIComponent(user)}/playlists/${kind}`);
+    const pl = res?.result || res;
+    if (!pl) throw new Error("Плейлист не найден или закрыт настройками приватности");
+
+    const coverUri = pl.cover?.uri || pl.ogImage;
+    const cover = coverUri ? `https://${coverUri.replace("%%", "400x400")}` : "/logo.png";
+    const title = pl.title || "Плейлист Яндекс Музыки";
+    const rawTracks = pl.tracks || [];
+    const tracks = rawTracks.map((item, idx) => normalizeYandexTrack(item, idx));
+
+    return {
+      title,
+      cover,
+      tracks,
+      trackCount: tracks.length,
+      source: "yandex"
+    };
+  }
+
+  // Format 2: /album/{albumId}
+  const albumMatch = raw.match(/music\.yandex\.[a-z.]+\/album\/(\d+)/i);
+  if (albumMatch) {
+    const albumId = albumMatch[1];
+    const res = await fetchYandexApi(`/albums/${albumId}/with-tracks`);
+    const album = res?.result || res;
+    if (!album) throw new Error("Альбом не найден");
+
+    const coverUri = album.coverUri || album.ogImage;
+    const cover = coverUri ? `https://${coverUri.replace("%%", "400x400")}` : "/logo.png";
+    const title = album.title || "Альбом Яндекс Музыки";
+    const artists = (album.artists || []).map((a) => a.name).join(", ");
+    const fullTitle = artists ? `${artists} — ${title}` : title;
+
+    const rawTracks = (album.volumes || []).flat().filter(Boolean);
+    const tracks = rawTracks.map((item, idx) => normalizeYandexTrack(item, idx));
+
+    return {
+      title: fullTitle,
+      cover,
+      tracks,
+      trackCount: tracks.length,
+      source: "yandex"
+    };
+  }
+
+  // Format 3: /artist/{artistId}
+  const artistMatch = raw.match(/music\.yandex\.[a-z.]+\/artist\/(\d+)/i);
+  if (artistMatch) {
+    const artistId = artistMatch[1];
+    const res = await fetchYandexApi(`/artists/${artistId}/tracks?page=0&pageSize=50`);
+    const data = res?.result || res;
+    const artistRes = await fetchYandexApi(`/artists/${artistId}/brief-info`);
+    const artistInfo = artistRes?.result?.artist || {};
+
+    const coverUri = artistInfo.cover?.uri || artistInfo.ogImage;
+    const cover = coverUri ? `https://${coverUri.replace("%%", "400x400")}` : "/logo.png";
+    const title = artistInfo.name ? `Популярное: ${artistInfo.name}` : "Треки артиста";
+
+    const rawTracks = data?.tracks || [];
+    const tracks = rawTracks.map((item, idx) => normalizeYandexTrack(item, idx));
+
+    return {
+      title,
+      cover,
+      tracks,
+      trackCount: tracks.length,
+      source: "yandex"
+    };
+  }
+
+  throw new Error("Не удалось распознать ссылку Яндекс Музыки. Поддерживаются ссылки на плейлисты (music.yandex.ru/users/.../playlists/...), альбомы (music.yandex.ru/album/...) и артистов (music.yandex.ru/artist/...)");
+}
+
+/**
+ * Fetch wave tracks from Yandex Music Rotor stations and charts based on mood/character/language settings.
+ */
+export async function getYandexRotorWaveTracks({
+  mood = "all", // "all" | "energy" | "calm" | "happy" | "sad"
+  flow = "my",  // "my" (любимое) | "discover" (открытия) | "popular" (популярное) | "rare" (редкое)
+  language = "any", // "any" | "russian" | "foreign"
+  dislikedTrackIds = new Set()
+} = {}) {
+  const tracks = [];
+  const dislikedSet = new Set([...dislikedTrackIds].map(String));
+
+  // 1. Try station endpoints by mood
+  const moodStationMap = {
+    energy: "mood:energy",
+    calm: "mood:calm",
+    happy: "mood:happy",
+    sad: "mood:sad"
+  };
+
+  const stationName = moodStationMap[mood] || "activity:user:onyourwave";
+
+  try {
+    const rotorData = await fetchYandexApi(`/rotor/station/${stationName}/tracks`);
+    const rawList = rotorData?.result?.sequence || rotorData?.result?.tracks || rotorData?.sequence || [];
+    rawList.forEach((item, idx) => {
+      const t = normalizeYandexTrack(item.track || item, idx);
+      if (t && t.id && !dislikedSet.has(String(t.id))) {
+        tracks.push(t);
+      }
+    });
+  } catch (err) {
+    // Rotor station unauth fallback -> fetch chart / genres
+  }
+
+  // 2. If rotor returned few tracks or fallback is needed, fetch chart tracks
+  if (tracks.length < 20) {
+    try {
+      const chartTracks = await getYandexChartTop100();
+      chartTracks.forEach((t) => {
+        if (t && t.id && !dislikedSet.has(String(t.id)) && !tracks.some((exist) => exist.id === t.id)) {
+          tracks.push(t);
+        }
+      });
+    } catch {}
+  }
+
+  // 3. Language filter
+  let filtered = tracks;
+  if (language === "russian") {
+    filtered = filtered.filter((t) => /[\u0400-\u04FF]/i.test(`${t.title} ${t.artist}`));
+  } else if (language === "foreign") {
+    filtered = filtered.filter((t) => !/[\u0400-\u04FF]/i.test(`${t.title} ${t.artist}`));
+  }
+
+  return filtered.length > 0 ? filtered : tracks;
+}
+

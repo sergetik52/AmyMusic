@@ -18,7 +18,6 @@ import {
 } from "../services/soundCloudApi";
 import { resolveYandexTrackStream } from "../services/yandexMusicApi";
 import { getPlayerRuntimeSettings, subscribeProfileSettings } from "../services/profileSettings";
-import { syncCollections, syncWave, getUsername } from "../api";
 import { logDebug, logWarn } from "../utils/logger";
 import Hls from "hls.js";
 
@@ -76,25 +75,22 @@ async function getTrackAudioUrl(track, forceFresh = false) {
   }
 
   if (track.source === "yandex" || String(track.id).startsWith("yandex_") || track.yandexId) {
+    try {
+      const resolvedUrl = await resolveYandexTrackStream(track.yandexId || track.id);
+      if (resolvedUrl) {
+        track.streamUrl = resolvedUrl;
+        track._fetchedAt = Date.now();
+        return resolvedUrl;
+      }
+    } catch (yandexErr) {
+      logWarn("audio", "Direct Yandex stream resolution failed, attempting SoundCloud fallback...", yandexErr);
+    }
+
     const scStreamUrl = await resolveChartTrackViaSoundCloud(track);
     if (scStreamUrl) {
       track.streamUrl = scStreamUrl;
       track._fetchedAt = Date.now();
       return scStreamUrl;
-    }
-
-    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator?.userAgent || ""));
-    if (!isMobile) {
-      try {
-        const resolvedUrl = await resolveYandexTrackStream(track.yandexId || track.id);
-        if (resolvedUrl) {
-          track.streamUrl = resolvedUrl;
-          track._fetchedAt = Date.now();
-          return resolvedUrl;
-        }
-      } catch (yandexErr) {
-        logWarn("audio", "Direct Yandex stream resolution failed", yandexErr);
-      }
     }
 
     throw new Error("Не удалось загрузить аудиопоток для трека");
@@ -853,13 +849,13 @@ export function AudioProvider({ children }) {
 
       const source = context.createMediaElementSource(audio);
 
-      // High-fidelity Audio DSP Chain (Bass punch + Treble clarity + Compressor limiter)
+      // Studio Master transparent limiter (preserves full dynamic range, crisp treble and clear punch, avoids muddy compression)
       const compressor = context.createDynamicsCompressor();
-      compressor.threshold.value = -20;
-      compressor.knee.value = 12;
-      compressor.ratio.value = 3;
-      compressor.attack.value = 0.003;
-      compressor.release.value = 0.25;
+      compressor.threshold.value = -0.5;
+      compressor.knee.value = 40;
+      compressor.ratio.value = 12;
+      compressor.attack.value = 0.001;
+      compressor.release.value = 0.05;
 
       // 10-Band Real Equalizer BiquadFilterNodes
       const eqFilters = EQUALIZER_FREQUENCIES.map((band, idx) => {
@@ -1371,18 +1367,29 @@ export function AudioProvider({ children }) {
       return;
     }
 
+    const resolveArtworkUrl = (src) => {
+      if (!src) return "";
+      if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) return src;
+      if (typeof window !== "undefined") {
+        return new URL(src, window.location.href).href;
+      }
+      return src;
+    };
+
     const artwork = [];
     if (currentTrack.cover && !currentTrack.cover.includes("logo.png")) {
+      const absCover = resolveArtworkUrl(currentTrack.cover);
       artwork.push(
-        { src: currentTrack.cover, sizes: "96x96", type: "image/png" },
-        { src: currentTrack.cover, sizes: "128x128", type: "image/png" },
-        { src: currentTrack.cover, sizes: "192x192", type: "image/png" },
-        { src: currentTrack.cover, sizes: "256x256", type: "image/png" },
-        { src: currentTrack.cover, sizes: "384x384", type: "image/png" },
-        { src: currentTrack.cover, sizes: "512x512", type: "image/png" }
+        { src: absCover, sizes: "96x96", type: "image/png" },
+        { src: absCover, sizes: "128x128", type: "image/png" },
+        { src: absCover, sizes: "192x192", type: "image/png" },
+        { src: absCover, sizes: "256x256", type: "image/png" },
+        { src: absCover, sizes: "384x384", type: "image/png" },
+        { src: absCover, sizes: "512x512", type: "image/png" }
       );
     } else {
-      artwork.push({ src: "/logo.png", sizes: "512x512", type: "image/png" });
+      const absLogo = resolveArtworkUrl("/logo.png");
+      artwork.push({ src: absLogo, sizes: "512x512", type: "image/png" });
     }
 
     try {
@@ -2301,55 +2308,6 @@ export function AudioProvider({ children }) {
       setTotalListenedSeconds(prev => Math.max(prev, serverData.totalListenedSeconds));
     }
   }, []);
-
-  const cloudSyncTimeoutRef = useRef(null);
-  const timeSyncTimeoutRef = useRef(null);
-  const isFirstRender = useRef(true);
-
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    
-    if (!getUsername()) return;
-
-    if (cloudSyncTimeoutRef.current) {
-      clearTimeout(cloudSyncTimeoutRef.current);
-    }
-    
-    cloudSyncTimeoutRef.current = setTimeout(async () => {
-      try {
-        await Promise.all([
-          syncCollections({ likedTracks, userPlaylists, savedReleases }),
-          syncWave({
-            dislikedTrackIds: Array.from(dislikedTrackIds),
-            playHistory
-          })
-        ]);
-        logDebug("audio", "synced collections and wave to cloud");
-      } catch (e) {
-        logWarn("audio", "failed to sync to cloud", e);
-      }
-    }, 2000);
-  }, [likedTracks, userPlaylists, savedReleases, dislikedTrackIds, playHistory]);
-
-  useEffect(() => {
-    if (!getUsername()) return;
-
-    if (timeSyncTimeoutRef.current) {
-      clearTimeout(timeSyncTimeoutRef.current);
-    }
-    
-    timeSyncTimeoutRef.current = setTimeout(async () => {
-      try {
-        await import("../api").then(api => api.syncTime(totalListenedSeconds));
-        logDebug("audio", "synced listening time to cloud");
-      } catch (e) {
-        logWarn("audio", "failed to sync listening time", e);
-      }
-    }, 5000);
-  }, [totalListenedSeconds]);
 
   const [profileSettings, setProfileSettings] = useState(() => getPlayerRuntimeSettings());
 

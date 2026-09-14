@@ -45,23 +45,23 @@ export function TopChartsView() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto overflow-x-hidden custom-scrollbar pb-32">
-      <div className="relative shrink-0 pt-20 px-10 pb-8 bg-gradient-to-b from-[#8341EF]/20 to-transparent">
+    <div className="flex h-full w-full flex-col overflow-y-auto overflow-x-hidden custom-scrollbar pb-[140px] md:pb-32">
+      <div className="relative shrink-0 pt-4 md:pt-20 px-3 md:px-10 pb-4 md:pb-8 bg-gradient-to-b from-[#8341EF]/20 to-transparent">
         <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 rounded-full bg-[#8341EF]/20 px-3 py-1 mb-4 text-sm font-bold text-[#8341EF]">
-            <img src="/trends.svg" alt="" className="h-4 w-4" />
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-[#8341EF]/20 px-2.5 py-0.5 mb-2 text-xs md:text-sm font-bold text-[#8341EF]">
+            <img src="/trends.svg" alt="" className="h-3.5 w-3.5" />
             ТОП 100
           </div>
-          <h1 className="text-[56px] font-black leading-tight text-white drop-shadow-xl tracking-tight">
+          <h1 className="text-2xl md:text-[56px] font-black leading-tight text-white drop-shadow-xl tracking-tight">
             Чарты
           </h1>
-          <p className="mt-2 text-lg text-white/60 font-medium max-w-xl leading-relaxed">
-            Самые прослушиваемые треки по версии Яндекс Музыки. Обновляется каждый день.
+          <p className="mt-1 text-xs md:text-lg text-white/60 font-medium max-w-xl leading-relaxed">
+            Самые прослушиваемые треки по версии Яндекс Музыки.
           </p>
         </div>
       </div>
 
-      <div className="flex-1 px-10 py-6">
+      <div className="flex-1 px-0 md:px-10 py-1 md:py-6">
         {isLoading ? (
           <div className="flex justify-center p-20">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white" />
@@ -71,8 +71,8 @@ export function TopChartsView() {
             <p className="text-xl font-bold text-red-400">{error}</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-4 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white/40">
+          <div className="flex flex-col gap-0.5 md:gap-2">
+            <div className="flex items-center gap-4 px-3 md:px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-white/40">
               <div className="w-8 text-center">#</div>
               <div className="flex-1">Трек</div>
             </div>
@@ -83,8 +83,8 @@ export function TopChartsView() {
               return (
                 <div
                   key={track.id}
-                  className={`group relative flex items-center gap-4 rounded-xl p-3 transition hover:bg-white/5 ${
-                    isCurrent ? "bg-white/10 border border-white/10" : ""
+                  className={`group relative flex items-center gap-3 md:gap-4 rounded-none md:rounded-xl px-3 py-2.5 md:p-3 transition cursor-pointer hover:bg-white/5 active:bg-white/10 active:scale-[0.99] ${
+                    isCurrent ? "bg-white/10 border-y md:border border-white/10" : "border-b border-white/[0.02] md:border-transparent"
                   }`}
                   onClick={() => playTrack(track, tracks)}
                 >

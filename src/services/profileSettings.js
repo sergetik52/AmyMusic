@@ -15,7 +15,7 @@ export const defaultProfileSettings = {
     coverRounding: "rounded", // "rounded", "extra", "circle"
     cardHoverEffect: "glow" // "glow", "zoom", "flat"
   },
-  displayName: "Local profile",
+  displayName: "Local",
   avatarUrl: "",
   soundCloudClientId: "",
   soundCloudClientSecret: "",

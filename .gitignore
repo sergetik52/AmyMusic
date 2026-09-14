@@ -2,6 +2,7 @@ node_modules/
 dist/
 release/
 out/
+build/
 *.log
 *.err.log
 .env
@@ -10,3 +11,16 @@ out/
 postman/.dependencies/
 downloads/*.exe
 scratch/
+
+# Bundled portable Node distribution (dev tooling, not project source)
+node-v20.18.0-win-x64/
+
+# Editor / IDE state
+.idea/
+.vscode/
+
+# Build artifacts
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
