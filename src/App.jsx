@@ -3091,7 +3091,7 @@ export default function App() {
       case "wave":
         return <HomeView onStartWave={() => {
           setIsFullOpen(true);
-        }} onOpenCollection={() => setActiveTab("collection")} />;
+        }} onOpenCollection={() => setActiveTab("collection")} onOpenArtist={openArtist} />;
       case "collection":
         return <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
       case "trends": return <TrendsPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
@@ -3198,7 +3198,7 @@ export default function App() {
         <div key={`${activeTab}-${activeArtist?.id || "none"}-${activeAlbum?.id || "noalbum"}-${apiSettingsVersion}`} className="contents">
           {renderContent()}
         </div>
-        {activeTab !== "wave" && (
+        {true && (
           <div className="relative z-40 flex shrink-0 flex-col gap-1 max-md:fixed max-md:bottom-14 max-md:left-2 max-md:right-2">
             <BottomPlayer
               onOpenFull={() => setIsFullOpen(true)}

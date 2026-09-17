@@ -1304,9 +1304,16 @@ function buildWaveQueries(seeds, context) {
   });
 
   if (!queries.size) {
-    queries.add("dark underground rap");
-    queries.add("phonk underground");
-    queries.add("alternative hip hop");
+    // Better fallback: use a mix of popular Russian/CIS artists and genres
+    const fallbacks = [
+      "Kai Angel", "9mice", "PHARAOH", "Big Baby Tape",
+      "Boulevard Depo", "Bladee", "Yung Lean",
+      "phonk", "dark rap", "underground rap",
+      "hyperpop", "emo rap", "cloud rap"
+    ];
+    // Pick 5 random fallbacks for variety
+    const shuffled = [...fallbacks].sort(() => 0.5 - Math.random());
+    shuffled.slice(0, 5).forEach(q => queries.add(q));
   }
 
   return [...queries].slice(0, 18);
@@ -1435,10 +1442,10 @@ export async function getPersonalWaveTracks({
 
   const context = buildWaveContext({ likedTracks, playHistory, dislikedTracks: combinedDislikedTracks, dislikedIds });
   const queries = buildWaveQueries(seeds, context).slice(0, 10);
-  const relatedSeeds = seeds.slice(0, 5);
+  const relatedSeeds = seeds.slice(0, 8);
   const results = await Promise.allSettled([
-    ...relatedSeeds.map((track) => getRelatedTracks(track, 8)),
-    ...queries.map((query) => searchTracksLimited(query, 8))
+    ...relatedSeeds.map((track) => getRelatedTracks(track, 15)),
+    ...queries.map((query) => searchTracksLimited(query, 12))
   ]);
 
   const candidates = new Map();
