@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createRoot } from "react-dom/client";
 import { Component } from "react";
 import { WaveView } from "./components/WaveView";
+import HomeView from "./components/HomeView";
 import { CollectionView } from "./components/CollectionView";
 import { ArtistView, AlbumView } from "./components/ArtistView";
 import { FullPlayerOverlay } from "./components/FullPlayerOverlay";
@@ -3088,7 +3089,9 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case "wave":
-        return <WaveView requestId={waveRequestId} onOpenFull={() => setIsFullOpen(true)} />;
+        return <HomeView onStartWave={() => {
+          setIsFullOpen(true);
+        }} onOpenCollection={() => setActiveTab("collection")} />;
       case "collection":
         return <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
       case "trends": return <TrendsPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
