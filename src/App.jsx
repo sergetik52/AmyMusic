@@ -1342,10 +1342,71 @@ function SearchAlbumView({
   );
 }
 
+
+
+const TypewriterHeading = () => {
+  const phrases = [
+    "Что будем слушать?",
+    "Открывай новых артистов",
+    "Ищи любимые треки",
+    "Включай свой вайб"
+  ];
+  const [text, setText] = useState("");
+  const [phraseIndex, setPhraseIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const currentPhrase = phrases[phraseIndex];
+    let timeoutId;
+
+    if (isDeleting) {
+      if (text.length > 0) {
+        timeoutId = setTimeout(() => setText(currentPhrase.substring(0, text.length - 1)), 30);
+      } else {
+        setIsDeleting(false);
+        setPhraseIndex((prev) => (prev + 1) % phrases.length);
+      }
+    } else {
+      if (text.length < currentPhrase.length) {
+        timeoutId = setTimeout(() => setText(currentPhrase.substring(0, text.length + 1)), 80);
+      } else {
+        timeoutId = setTimeout(() => setIsDeleting(true), 2500);
+      }
+    }
+
+    return () => clearTimeout(timeoutId);
+  }, [text, isDeleting, phraseIndex]);
+
+  return (
+    <div className="mb-10 transition-opacity duration-500 flex items-center justify-center h-[48px] md:h-[60px]">
+      <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight">
+        {text}
+        <span className="animate-pulse ml-1 text-white/40">|</span>
+      </h1>
+    </div>
+  );
+};
+
+const TabButton = ({ active, onClick, icon, label }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={
+      "dotify-tab-btn flex items-center gap-2 rounded-full px-5 py-2 text-[14px] font-bold shrink-0 cursor-pointer transition-colors duration-300 " +
+      (active
+        ? "bg-white text-black shadow-lg"
+        : "bg-transparent text-white/60 hover:text-white hover:bg-white/10")
+    }
+  >
+    {icon}
+    {label}
+  </button>
+);
+
 function SearchPanel({ onOpenArtist }) {
   const { playHistory, clearHistory, likedTracks, dislikedTrackIds, dislikedTracks, playTrack, savedReleaseIds, toggleSavedRelease } = useAudioPlayer();
   const [query, setQuery] = useState("");
-  const [activeSearchTab, setActiveSearchTab] = useState("popular");
+  const [activeSearchTab, setActiveSearchTab] = useState("all");
   const [tracks, setSearchTracks] = useState([]);
   const [artists, setArtists] = useState([]);
   const [albums, setAlbums] = useState([]);
@@ -1354,18 +1415,60 @@ function SearchPanel({ onOpenArtist }) {
   const [isAlbumLoading, setIsAlbumLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
+  
+  // New States for dynamic UI
+  const [isFocused, setIsFocused] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  useEffect(() => {
+    let timer;
+    if (isFocused) {
+      setShowDropdown(true);
+    } else {
+      timer = setTimeout(() => setShowDropdown(false), 200);
+    }
+    return () => clearTimeout(timer);
+  }, [isFocused]);
+  const [searchHistory, setSearchHistory] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('amy_search_history')) || [];
+    } catch {
+      return [];
+    }
+  });
+
+  const saveHistory = (item) => {
+    const updated = [item, ...searchHistory.filter(h => h.id !== item.id || h.type !== item.type)].slice(0, 10);
+    setSearchHistory(updated);
+    localStorage.setItem('amy_search_history', JSON.stringify(updated));
+  };
+
+  const removeHistoryItem = (e, item) => {
+    e.stopPropagation();
+    const updated = searchHistory.filter(h => h.id !== item.id || h.type !== item.type);
+    setSearchHistory(updated);
+    localStorage.setItem('amy_search_history', JSON.stringify(updated));
+  };
+
+  const clearFullHistory = () => {
+    setSearchHistory([]);
+    localStorage.removeItem('amy_search_history');
+  };
 
   const runSearch = async (nextQuery = query) => {
     const normalizedQuery = nextQuery.trim();
-    if (!normalizedQuery) {
-      setActiveSearchTab("popular");
-      loadPopular();
-      return;
-    }
+    if (!normalizedQuery) return;
 
-    setActiveSearchTab("popular");
+    setHasSearched(true);
+    setIsFocused(false);
+    // Preserving the active tab!
     setIsSearching(true);
     setSearchError("");
+    
+    // Save text query to history
+    saveHistory({ id: normalizedQuery, type: 'text', title: normalizedQuery });
+
     try {
       const [results, artistResults, albumResults, playlistResults] = await Promise.all([
         searchTracks(normalizedQuery),
@@ -1384,33 +1487,12 @@ function SearchPanel({ onOpenArtist }) {
     }
   };
 
-  const loadPopular = async () => {
-    setIsSearching(true);
-    setSearchError("");
-    try {
-      const results = await getRecommendedTracks();
-      setSearchTracks(results);
-      setArtists(buildArtistsFromTracks(results));
-      setAlbums([]);
-      setPlaylists([]);
-    } catch (error) {
-      setSearchError(error.message || "Не удалось загрузить рекомендации");
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  useEffect(() => {
-    loadPopular();
-  }, []);
-
   useEffect(() => {
     const normalizedQuery = query.trim();
-    if (!normalizedQuery) return undefined;
+    if (!normalizedQuery || hasSearched) return undefined;
 
     let isCurrent = true;
     const timer = setTimeout(async () => {
-      setActiveSearchTab("popular");
       setIsSearching(true);
       setSearchError("");
       try {
@@ -1426,94 +1508,92 @@ function SearchPanel({ onOpenArtist }) {
         setAlbums(albumResults);
         setPlaylists(playlistResults);
       } catch (error) {
-        if (isCurrent) {
-          setSearchError(error.message || "Не удалось загрузить треки");
-        }
+        if (isCurrent) setSearchError(error.message || "Ошибка поиска");
       } finally {
-        if (isCurrent) {
-          setIsSearching(false);
-        }
+        if (isCurrent) setIsSearching(false);
       }
-    }, 420);
+    }, 300); // Fast debounce for suggestions
 
     return () => {
       isCurrent = false;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, hasSearched]);
 
   const handleSearch = async (event) => {
     event.preventDefault();
-    runSearch();
+    if (query.trim()) {
+      runSearch();
+    }
   };
 
   const openArtist = async (artist) => {
-    onOpenArtist?.(artist);
+    const title = artist.title || artist.name || artist.username;
+    const cover = artist.cover || artist.avatar;
+    const id = artist.id || artist.username;
+    
+    // Validate we actually have a title, otherwise don't save broken history
+    if (title) {
+        saveHistory({ id, type: 'artist', title, cover });
+    }
+    
+    // Ensure the raw artist object passed down has the correct properties if it came from a suggestion
+    const rawArtist = artist.title ? { ...artist, name: artist.title, avatar: artist.cover } : artist;
+    onOpenArtist?.(rawArtist);
   };
 
   const openAlbum = async (album) => {
+    saveHistory({ id: album.id, type: 'album', title: album.title, cover: album.cover });
     setActiveAlbum(album);
     setIsAlbumLoading(true);
     try {
-      const fullAlbum = await getAlbumDetails(album, {
-        username: album.artist,
-        name: album.artist,
-        avatar: album.cover
-      });
+      const fullAlbum = await getAlbumDetails(album, { username: album.artist, name: album.artist, avatar: album.cover });
       setActiveAlbum(fullAlbum);
     } finally {
       setIsAlbumLoading(false);
     }
   };
 
+  const handleSuggestionClick = (item) => {
+    if (item.type === 'text') {
+      setQuery(item.title);
+      runSearch(item.title);
+    } else if (item.type === 'artist') {
+      openArtist(item);
+    } else if (item.type === 'album') {
+      openAlbum(item);
+    } else {
+      setQuery(item.title);
+      runSearch(item.title);
+    }
+  };
+
   const loadArtistsTab = async () => {
     setActiveSearchTab("artists");
-    const normalizedQuery = query.trim();
-    if (!normalizedQuery) return;
-    setIsSearching(true);
-    setSearchError("");
-    try {
-      const artistResults = await searchArtists(normalizedQuery);
-      setArtists(artistResults.length ? artistResults : buildArtistsFromTracks(tracks));
-    } catch (error) {
-      setSearchError(error.message || "Не удалось загрузить артистов");
-    } finally {
-      setIsSearching(false);
+    if (!artists.length && query) {
+      setIsSearching(true);
+      try { setArtists(await searchArtists(query.trim())); } 
+      catch {} finally { setIsSearching(false); }
     }
   };
 
   const loadAlbumsTab = async () => {
     setActiveSearchTab("albums");
-    const normalizedQuery = query.trim();
-    if (!normalizedQuery) return;
-    setIsSearching(true);
-    setSearchError("");
-    try {
-      setAlbums(await searchAlbums(normalizedQuery));
-    } catch (error) {
-      setSearchError(error.message || "Не удалось загрузить альбомы");
-    } finally {
-      setIsSearching(false);
+    if (!albums.length && query) {
+      setIsSearching(true);
+      try { setAlbums(await searchAlbums(query.trim())); } 
+      catch {} finally { setIsSearching(false); }
     }
   };
 
   const loadPlaylistsTab = async () => {
     setActiveSearchTab("playlists");
-    const normalizedQuery = query.trim();
-    if (!normalizedQuery) return;
-    setIsSearching(true);
-    setSearchError("");
-    try {
-      setPlaylists(await searchPlaylists(normalizedQuery));
-    } catch (error) {
-      setSearchError(error.message || "Не удалось загрузить плейлисты");
-    } finally {
-      setIsSearching(false);
+    if (!playlists.length && query) {
+      setIsSearching(true);
+      try { setPlaylists(await searchPlaylists(query.trim())); } 
+      catch {} finally { setIsSearching(false); }
     }
   };
-
-  const visibleTracks = activeSearchTab === "history" ? playHistory : tracks;
-  const trackSource = activeSearchTab === "history" ? playHistory : tracks;
 
   if (activeAlbum) {
     return (
@@ -1540,261 +1620,302 @@ function SearchPanel({ onOpenArtist }) {
     );
   }
 
+  // Combined history & smart suggestions logic
+  const buildSuggestions = () => {
+    const q = query.trim();
+    if (!q) return searchHistory;
+
+    const suggestions = [];
+    
+    // 1. Text Query (Exact match)
+    suggestions.push({ id: `query-${q}`, type: 'text', title: q });
+
+    // 2. Artists Suggestions
+    if ((activeSearchTab === "all" || activeSearchTab === "artists") && artists.length > 0) {
+      if (activeSearchTab === "artists") {
+        const topArtists = artists.slice(0, 5).map(a => ({
+          id: a.id || a.username,
+          type: 'artist',
+          title: a.name || a.username,
+          cover: a.avatar
+        }));
+        suggestions.push(...topArtists);
+      } else {
+        const topArtist = artists[0];
+        suggestions.push({ 
+          id: topArtist.id || topArtist.username, 
+          type: 'artist', 
+          title: topArtist.name || topArtist.username, 
+          cover: topArtist.avatar 
+        });
+      }
+    }
+
+    // 3. Top Tracks
+    if (activeSearchTab === "all" || activeSearchTab === "tracks") {
+      const topTracks = tracks.slice(0, 3).map(t => ({ 
+        id: t.id, 
+        type: 'track', 
+        title: t.title, 
+        cover: t.cover 
+      }));
+      suggestions.push(...topTracks);
+    }
+
+    // 4. Albums if we need more slots
+    if (suggestions.length < 6 && (activeSearchTab === "all" || activeSearchTab === "albums") && albums.length > 0) {
+      const topAlbum = albums[0];
+      suggestions.push({
+        id: topAlbum.id,
+        type: 'album',
+        title: topAlbum.title,
+        cover: topAlbum.cover
+      });
+    }
+    
+    // 5. Playlists if we need more slots
+    if (suggestions.length < 6 && (activeSearchTab === "playlists") && playlists.length > 0) {
+      const topPlaylist = playlists[0];
+      suggestions.push({
+        id: topPlaylist.id,
+        type: 'album', // OpenAlbum handles playlists in this app
+        title: topPlaylist.title,
+        cover: topPlaylist.cover
+      });
+    }
+
+    return suggestions.slice(0, 6);
+  };
+
+  const dropdownItems = buildSuggestions();
+
   return (
-    <section className="flex-1 flex flex-col h-full min-h-0 overflow-hidden md:rounded-[17.76px] md:border md:border-white/[0.04] bg-[#090909] md:bg-[#121212] p-2 md:p-[26.6px] md:shadow-2xl">
-      {/* Pinned Top Header: Search input & Category Tabs */}
-      <div className="shrink-0 space-y-3 pb-2 border-b border-white/5">
-        <form
-          onSubmit={handleSearch}
-          className="flex h-[42px] md:h-[44.4px] w-full items-center gap-2.5 rounded-full border border-white/10 md:border-[#4D4D4D] bg-white/[0.04] px-3.5 text-[#808080] transition focus-within:border-white/40"
-        >
-          <img src="/search-input.svg" alt="" className="h-5 w-5" />
-          <input
-            type="text"
-            value={query}
-            onChange={(event) => {
-              const nextQuery = event.target.value;
-              setQuery(nextQuery);
-              if (!nextQuery.trim()) {
-                setActiveSearchTab("popular");
-                loadPopular();
-              }
-            }}
-            placeholder="Что вы чувствуете или ищете?"
-            className="w-full bg-transparent text-[15.5px] text-[#E6E6E6] placeholder:text-[#808080] focus:outline-none"
-          />
-          <button type="submit" className="text-xs font-bold text-white/60 hover:text-white">
-            {isSearching ? "..." : "Enter"}
-          </button>
-        </form>
+    <section className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-[#000000] relative">
+      
+      {/* Search Header Area */}
+      <div className={`transition-all duration-700 ease-in-out shrink-0 w-full flex flex-col justify-center items-center ${hasSearched ? 'pt-4 md:pt-8 h-[auto]' : 'h-full pt-[8vh]'}`}>
+        
+        {/* Typewriter Search Heading (Only when Idle) */}
+        {!hasSearched && <TypewriterHeading />}
 
-        <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar py-1">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveSearchTab("popular");
-              if (!tracks.length) loadPopular();
-            }}
-            className={[
-              "rounded-full px-4 py-2 text-[15.5px] font-bold transition shrink-0",
-              activeSearchTab === "popular"
-                ? "bg-white/10 text-[#E6E6E6]"
-                : "text-[#E6E6E6] opacity-60 hover:opacity-100"
-            ].join(" ")}
+        {/* Search Bar Container */}
+        <div className="relative w-full max-w-[600px] px-4 z-50">
+          <form
+            onSubmit={handleSearch}
+            className={`flex h-[52px] w-full items-center gap-3 rounded-full border border-white/5 bg-[#121212] px-5 text-[#808080] transition-colors ${isFocused ? 'border-white/20 bg-[#1a1a1a] shadow-2xl' : 'hover:border-white/10 hover:bg-[#181818]'}`}
           >
-            Популярное
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSearchTab("history")}
-            className={[
-              "rounded-full px-4 py-2 text-[15.5px] font-bold transition shrink-0",
-              activeSearchTab === "history"
-                ? "bg-white/10 text-[#E6E6E6]"
-                : "text-[#E6E6E6] opacity-60 hover:opacity-100"
-            ].join(" ")}
-          >
-            История
-          </button>
-          <button
-            type="button"
-            onClick={loadArtistsTab}
-            className={[
-              "rounded-full px-4 py-2 text-[15.5px] font-bold transition shrink-0",
-              activeSearchTab === "artists"
-                ? "bg-white/10 text-[#E6E6E6]"
-                : "text-[#E6E6E6] opacity-60 hover:opacity-100"
-            ].join(" ")}
-          >
-            Артисты
-          </button>
-          <button
-            type="button"
-            onClick={loadAlbumsTab}
-            className={[
-              "rounded-full px-4 py-2 text-[15.5px] font-bold transition shrink-0",
-              activeSearchTab === "albums"
-                ? "bg-white/10 text-[#E6E6E6]"
-                : "text-[#E6E6E6] opacity-60 hover:opacity-100"
-            ].join(" ")}
-          >
-            Альбомы
-          </button>
-          <button
-            type="button"
-            onClick={loadPlaylistsTab}
-            className={[
-              "rounded-full px-4 py-2 text-[15.5px] font-bold transition shrink-0",
-              activeSearchTab === "playlists"
-                ? "bg-white/10 text-[#E6E6E6]"
-                : "text-[#E6E6E6] opacity-60 hover:opacity-100"
-            ].join(" ")}
-          >
-            Плейлисты
-          </button>
-        </div>
-
-        {searchError && (
-          <p className="mt-2 text-sm text-red-300">{searchError}</p>
-        )}
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-black text-white">
-              {isSearching
-                ? "Загружаю..."
-                : activeSearchTab === "history"
-                  ? "История"
-                  : activeSearchTab === "artists"
-                    ? "Артисты"
-                    : activeSearchTab === "albums"
-                      ? "Альбомы"
-                      : activeSearchTab === "playlists"
-                        ? "Плейлисты"
-                        : "Рекомендации"}
-            </h2>
-            {activeSearchTab === "history" && playHistory.length > 0 && (
-              <button
-                type="button"
-                onClick={clearHistory}
-                className="flex items-center gap-2 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-3.5 py-1.5 text-xs font-bold text-red-400 hover:text-red-300 transition shadow-sm active:scale-95"
-                title="Очистить историю прослушиваний"
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-                Очистить историю
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-white/40">
+              <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <input
+              type="text"
+              value={query}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (hasSearched) setHasSearched(false);
+              }}
+              placeholder="Что вы хотите послушать?"
+              className="w-full bg-transparent text-[16px] text-white placeholder:text-white/40 focus:outline-none font-medium"
+            />
+            {query && (
+              <button type="button" onClick={() => { setQuery(""); setHasSearched(false); }} className="text-white/40 hover:text-white transition">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             )}
-          </div>
-          <span className="text-xs font-semibold text-white/30">
-            {activeSearchTab === "artists"
-              ? artists.length ? `${artists.length} артистов` : "нет данных"
-              : activeSearchTab === "albums"
-                ? albums.length ? `${albums.length} релизов` : "нет данных"
-                : activeSearchTab === "playlists"
-                  ? playlists.length ? `${playlists.length} плейлистов` : "нет данных"
-                  : visibleTracks.length ? `${visibleTracks.length} треков` : "нет данных"}
-          </span>
+            
+          </form>
+
+          {/* Dropdown / History */}
+          {showDropdown && (
+            <div className={`absolute top-[60px] left-4 right-4 bg-[#121212] rounded-[16px] border border-white/5 shadow-2xl overflow-y-auto max-h-[calc(50vh-120px)] custom-scrollbar z-50 py-2 transition-all duration-200 ease-out origin-top ${isFocused ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-2 scale-95'}`}>
+              {dropdownItems.length > 0 ? dropdownItems.map((item, i) => (
+                <div key={`${item.id}-${i}`} onClick={() => handleSuggestionClick(item)} style={{ animationDelay: `${i * 30}ms` }} className="flex items-center justify-between px-5 py-3 hover:bg-white/5 cursor-pointer transition opacity-0 animate-dropdown-item">
+                  <div className="flex items-center gap-4">
+                    {item.type === 'text' ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-white/40"><path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    ) : item.type === 'artist' ? (
+                      item.cover ? (
+                        <img src={item.cover} className="w-8 h-8 rounded-full object-cover" onError={(e) => e.target.style.display='none'} />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        </div>
+                      )
+                    ) : (
+                      <img src={item.cover} className="w-8 h-8 rounded-md object-cover" />
+                    )}
+                    <span className="text-[15px] font-semibold text-white truncate max-w-[400px]">{item.title}</span>
+                  </div>
+
+
+
+
+
+        
+                  {!query.trim() && (
+                    <button onClick={(e) => removeHistoryItem(e, item)} className="text-white/20 hover:text-white/60 transition p-1">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                  )}
+                </div>
+              )) : (
+                <div className="px-5 py-4 text-center text-white/40 text-sm font-medium">Нет недавних запросов</div>
+              )}
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* Scrollable Search Results Body */}
-      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pt-3 pb-[140px] md:pb-36">
-        {activeSearchTab === "history" && visibleTracks.length === 0 && (
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
-            <p className="text-sm font-semibold text-white/70">История пока пустая</p>
-            <p className="mt-1 text-xs text-white/35">Включи трек из поиска или Моей волны.</p>
+        {/* Tabs - Always visible */}
+        <div className="mt-6 w-full px-4 transition-all duration-500 opacity-100 max-h-[100px]">
+          <div className="flex items-center justify-center gap-2 overflow-x-auto custom-scrollbar pb-2">
+            <TabButton active={activeSearchTab === "all"} onClick={() => setActiveSearchTab("all")} label="Все" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>} />
+            <TabButton active={activeSearchTab === "tracks"} onClick={() => setActiveSearchTab("tracks")} label="Треки" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>} />
+            <TabButton active={activeSearchTab === "playlists"} onClick={loadPlaylistsTab} label="Плейлисты" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>} />
+            <TabButton active={activeSearchTab === "albums"} onClick={loadAlbumsTab} label="Альбомы" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>} />
+            <TabButton active={activeSearchTab === "artists"} onClick={loadArtistsTab} label="Артисты" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>} />
           </div>
-        )}
+        </div>
 
-        {activeSearchTab === "artists" && (
-          artists.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7">
-              {artists.map((artist) => (
-                <ArtistCard key={artist.id || artist.username} artist={artist} onClick={openArtist} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
-              <p className="text-sm font-semibold text-white/70">Артисты не найдены</p>
-            </div>
-          )
-        )}
-
-        {activeSearchTab === "albums" && (
-          albums.length > 0 ? (
-            <div className="flex flex-wrap gap-4">
-              {albums.map((album) => (
-                <AlbumSearchCard key={album.id} album={album} onClick={openAlbum} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
-              <p className="text-sm font-semibold text-white/70">Альбомы не найдены</p>
-            </div>
-          )
-        )}
-
-        {activeSearchTab === "playlists" && (
-          playlists.length > 0 ? (
-            <div className="flex flex-wrap gap-4">
-              {playlists.map((playlist) => (
-                <AlbumSearchCard key={playlist.id} album={playlist} onClick={openAlbum} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 text-center">
-              <p className="text-sm font-semibold text-white/70">Плейлисты не найдены</p>
-            </div>
-          )
-        )}
-
-        {activeSearchTab !== "artists" && activeSearchTab !== "albums" && activeSearchTab !== "playlists" && (() => {
-          const leftTracks = [];
-          const rightTracks = [];
-          visibleTracks.forEach((track, index) => {
-            const chunkIndex = Math.floor(index / 5);
-            if (chunkIndex % 2 === 0) {
-              leftTracks.push(track);
-            } else {
-              rightTracks.push(track);
-            }
-          });
-
-          const renderTrackItem = (track) => (
-            <div
-              key={track.id}
-              onClick={() => playTrack(track, trackSource)}
-              className="group flex items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/5 active:bg-white/10 active:scale-[0.99] cursor-pointer"
-            >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center text-left">
-                <img
-                  src={track.cover}
-                  alt=""
-                  className="h-11 w-11 rounded-lg object-cover"
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <span className="block max-w-full truncate text-left text-sm font-semibold text-white transition hover:text-white/80">
-                  {track.title}
-                </span>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <ArtistLinks track={track} onOpenArtist={onOpenArtist} />
-                </div>
-              </div>
-              <div className="relative w-10 h-10 flex items-center justify-end shrink-0 select-none">
-                <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
-                  {formatDuration(track.duration)}
-                </span>
-                <div onClick={(e) => e.stopPropagation()} className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                  <TrackMenuButton
-                    track={track}
-                    onOpenArtist={onOpenArtist}
-                    onOpenAlbum={openAlbum}
-                  />
-                </div>
+          {/* Recent Tracks Carousel (Only when Idle) */}
+          {!hasSearched && playHistory && playHistory.length > 0 && (
+            <div className="mt-8 w-full px-4 md:px-8 animate-slide-up-fade">
+              <div 
+                className="flex gap-4 overflow-x-auto no-scrollbar pb-6 snap-x"
+                onWheel={(e) => {
+                  if (e.deltaY !== 0) {
+                    e.currentTarget.scrollBy({
+                      left: e.deltaY > 0 ? 300 : -300,
+                      behavior: 'smooth'
+                    });
+                  }
+                }}
+              >
+                {playHistory.slice(0, 15).map((track, i) => (
+                  <button
+                    key={`${track.id}-${i}`}
+                    type="button"
+                    onClick={() => playTrack(track, playHistory)}
+                    className="group w-[140px] shrink-0 text-left snap-start transition-transform duration-300 hover:scale-[1.02]"
+                  >
+                    <div className="relative aspect-square overflow-hidden rounded-[16px] bg-white/[0.04] shadow-md group-hover:shadow-xl transition-shadow duration-300">
+                      <img src={track.cover} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
+                      <div className="absolute inset-0 bg-black/0 transition duration-300 group-hover:bg-black/30 pointer-events-none" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="black" className="ml-1"><path d="M8 5v14l11-7z" /></svg>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="mt-3 truncate text-[15px] font-bold text-white transition-colors group-hover:text-white">{track.title}</p>
+                    <p className="truncate text-[13px] font-medium text-white/50">{track.artist}</p>
+                  </button>
+                ))}
               </div>
             </div>
-          );
-
-          return (
-            <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                {leftTracks.map(renderTrackItem)}
-              </div>
-              <div className="flex flex-col gap-2">
-                {rightTracks.map(renderTrackItem)}
-              </div>
-            </div>
-          );
-        })()}
+          )}
       </div>
+
+      
+        {/* Results Body */}
+      {hasSearched && (
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 md:px-8 pb-32 animate-fade-in">
+          
+          {/* ALL TAB LAYOUT */}
+          {activeSearchTab === "all" && (
+            <div className="space-y-12">
+              {/* Tracks Horizontal */}
+              {tracks.length > 0 && (
+                <section>
+                  <h2 className="text-2xl font-black text-white mb-6">Треки</h2>
+                  <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4 snap-x">
+                    {tracks.slice(0, 10).map(track => (
+                      <div key={track.id} onClick={() => playTrack(track, tracks)} className="group snap-start shrink-0 w-[160px] flex flex-col gap-3 cursor-pointer">
+                        <div className="w-[160px] h-[160px] relative rounded-2xl overflow-hidden shadow-lg">
+                          <img src={track.cover} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 hover:scale-105 active:scale-95">
+                               <svg width="24" height="24" viewBox="0 0 24 24" fill="black" className="ml-1"><path d="M8 5v14l11-7z" /></svg>
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[15px] font-bold text-white truncate group-hover:text-white/90">{track.title}</p>
+                          <p className="text-[13px] text-white/50 truncate mt-0.5">{track.artist}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Artists Horizontal */}
+              {artists.length > 0 && (
+                <section>
+                  <h2 className="text-2xl font-black text-white mb-6">Артисты</h2>
+                  <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4 snap-x">
+                    {artists.slice(0, 8).map(artist => (
+                      <div key={artist.id || artist.username} onClick={() => openArtist(artist)} className="group snap-start shrink-0 w-[140px] flex flex-col items-center gap-3 cursor-pointer text-center">
+                        <div className="w-[140px] h-[140px] relative rounded-full overflow-hidden shadow-lg">
+                          <img src={artist.avatar} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                        </div>
+                        <div>
+                          <p className="text-[15px] font-bold text-white truncate">{artist.name || artist.username}</p>
+                          <p className="text-[12px] text-white/40 mt-1">Артист</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          )}
+
+          {/* OTHER TABS LAYOUT */}
+          {activeSearchTab === "artists" && (
+             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7">
+               {artists.map((artist) => (
+                 <ArtistCard key={artist.id || artist.username} artist={artist} onClick={openArtist} />
+               ))}
+             </div>
+          )}
+          {activeSearchTab === "albums" && (
+             <div className="flex flex-wrap gap-5">
+               {albums.map((album) => (
+                 <AlbumSearchCard key={album.id} album={album} onClick={openAlbum} />
+               ))}
+             </div>
+          )}
+          {activeSearchTab === "playlists" && (
+             <div className="flex flex-wrap gap-5">
+               {playlists.map((playlist) => (
+                 <AlbumSearchCard key={playlist.id} album={playlist} onClick={openAlbum} />
+               ))}
+             </div>
+          )}
+          {activeSearchTab === "tracks" && (
+             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 mt-4">
+               {tracks.map((track) => (
+                 <div key={track.id} onClick={() => playTrack(track, tracks)} className="group flex items-center gap-4 rounded-xl p-3 text-left transition hover:bg-white/5 active:bg-white/10 active:scale-[0.99] cursor-pointer">
+                    <div className="flex h-12 w-12 shrink-0 relative">
+                      <img src={track.cover} className="h-12 w-12 rounded-md object-cover shadow-md" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="block max-w-full truncate text-[15px] font-bold text-white">{track.title}</span>
+                      <span className="block text-[13px] text-white/50">{track.artist}</span>
+                    </div>
+                 </div>
+               ))}
+             </div>
+          )}
+
+        </div>
+      )}
     </section>
   );
 }
-
 function formatListeners(count) {
   if (!count || count <= 0) return null;
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)} млн`;

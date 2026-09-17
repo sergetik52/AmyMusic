@@ -124,12 +124,7 @@ body {
 }
 
 /* Touch interaction optimization: instant single-tap responsiveness on mobile touchscreens */
-@media (pointer: coarse) {
-  a, button, [role="button"], [onclick], .cursor-pointer, .group {
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-  }
-}
+
 
 button {
   font: inherit;
@@ -793,4 +788,54 @@ button {
 
 .animate-cover-breathe {
   animation: coverBreathe 24s ease-in-out infinite;
+}
+
+/* === DOTIFY TACTILE TABS === */
+.dotify-tab-btn {
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+.dotify-tab-btn:active {
+  transform: scale(0.95) !important;
+  opacity: 0.8;
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+/* === DROPDOWN ANIMATION === */
+@keyframes slideDownFade {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-dropdown {
+  animation: slideDownFade 0.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+/* === DROPDOWN ITEMS STAGGERED ANIMATION === */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-dropdown-item {
+  animation: slideInRight 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+/* Fix for scroll block and image dragging across the UI */
+img {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }

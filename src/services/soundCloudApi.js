@@ -171,7 +171,7 @@ function normalizeTags(value = "") {
 function normalizeSoundCloudArtist(user = {}) {
   return {
     id: String(user.id || ""),
-    name: user.full_name || user.username || "Unknown artist",
+    name: user.username || user.full_name || "Unknown artist",
     username: user.username || user.full_name || "Unknown artist",
     description: user.description || "",
     avatar: getLargeImage(user.avatar_url) || "/logo.png",
