@@ -122,7 +122,7 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
   const isDesktop = Boolean(typeof window !== "undefined" && window.amyMusicDesktop);
   const [draft, setDraft] = useState(settings);
   const [draftProfile, setDraftProfile] = useState(profileData || { displayName: "", avatarUrl: "" });
-  const [isClosing, setIsClosing] = useState(false);
+  const [phase, setPhase] = useState("enter");
   const [activeTab, setActiveTab] = useState("profile");
   const [croppingImageSrc, setCroppingImageSrc] = useState(null);
 
@@ -139,6 +139,9 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
         if (v) setAppVersion(v);
       }).catch(() => {});
     }
+    // Trigger open animation
+    const raf = requestAnimationFrame(() => setPhase("open"));
+    return () => cancelAnimationFrame(raf);
   }, [isDesktop]);
 
   const handleCheckOrStartUpdate = async () => {
@@ -179,15 +182,14 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
 
   const tabs = [
     { id: "profile", label: "Профиль", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-        { id: "appearance", label: "Внешний вид", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> },
 { id: "audio", label: "Аудио", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg> },
     { id: "system", label: "Система", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
     { id: "developer", label: "Разработчик", icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-.273l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> }
   ];
 
   const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(onClose, 250);
+    setPhase("exit");
+    setTimeout(onClose, 280);
   };
 
   useEscapeKey(true, handleClose);
@@ -230,6 +232,13 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
     event.target.value = "";
   };
 
+  const backdropClass = phase === "open" ? "opacity-100" : "opacity-0";
+  const panelClass = phase === "open"
+    ? "opacity-100 translate-y-0 scale-100"
+    : phase === "exit"
+      ? "opacity-0 translate-y-8 scale-95"
+      : "opacity-0 translate-y-8 scale-95";
+
   return (
     <React.Fragment>
       {croppingImageSrc && (
@@ -244,567 +253,213 @@ function ProfileSettingsModal({ settings, profileData, onClose, onSave, onProfil
         />
       )}
 
-      <div key="settings-overlay" className="fixed inset-0 z-[80] flex items-end md:items-center justify-center bg-black/60 p-0 md:p-10 backdrop-blur-[10px]">
+      <div key="settings-overlay" className="fixed inset-0 z-[80] flex items-end md:items-center justify-center p-0 md:p-4">
+        <div
+          className={`absolute inset-0 bg-black/70 backdrop-blur-xl transition-opacity duration-300 ease-out ${backdropClass}`}
+          onClick={handleClose}
+        />
         <div
           key="settings-window-box"
-          className={`relative flex flex-col md:flex-row w-full max-w-full md:max-w-5xl h-[88vh] md:h-[75vh] md:min-h-[500px] overflow-hidden rounded-t-[24px] rounded-b-none md:rounded-[24px] border-t md:border border-white/10 bg-[#0c0c0c] text-white shadow-2xl ${isClosing ? "animate-[slideDownFade_0.25s_ease-in_forwards]" : "animate-slide-up-fade"}`}
+          className={`flex flex-col relative w-full max-w-full md:max-w-2xl max-h-[92vh] md:max-h-[85vh] overflow-hidden rounded-t-3xl md:rounded-3xl bg-[#0a0a0c] text-white shadow-2xl transition-all duration-300 ease-[cubic-bezier(.2,.9,.3,1)] ${panelClass}`}
         >
-        {/* Close Button Top-Right */}
-        <button
-          type="button"
-          onClick={handleClose}
-          className="absolute top-5 right-5 z-20 hidden md:flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-white/50 hover:bg-white/10 hover:text-white transition"
-          title="Закрыть настройки"
-        >
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-
-        {/* Sidebar Navigation */}
-        <div className="w-full md:w-64 shrink-0 bg-white/[0.02] border-b md:border-b-0 md:border-r border-white/5 flex flex-col md:flex-col pt-[env(safe-area-inset-top,0px)] md:pt-8 pb-0 md:pb-4">
-          <div className="px-4 md:px-6 mb-2 md:mb-6 pt-3 md:pt-0 flex items-center gap-3">
-            <button type="button" onClick={handleClose} className="flex md:hidden h-8 w-8 items-center justify-center rounded-full text-white/70 active:scale-95" aria-label="Назад">
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
-            </button>
-            <h2 className="text-lg md:text-xl font-black tracking-tight text-white">Настройки</h2>
-          </div>
-          <nav className="flex md:flex-1 px-2 md:px-3 gap-1 md:gap-0 md:space-y-1 overflow-x-auto md:overflow-x-visible md:overflow-y-auto pb-2 md:pb-0 no-scrollbar">
-            {tabs.map(tab => (
+          {/* Header */}
+          <div className="shrink-0 z-20 bg-[#0a0a0c]/95 backdrop-blur-xl px-5 pt-5 pb-3 border-b border-white/5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-black tracking-tight">Настройки</h2>
               <button
-                key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-shrink-0 md:w-full flex items-center gap-2 md:gap-3 px-3 py-2 md:py-2.5 rounded-full md:rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 ${activeTab === tab.id ? "bg-[#8341EF] text-white" : "text-white/50 hover:bg-white/[0.04] hover:text-white"}`}
+                onClick={handleClose}
+                className="grid h-8 w-8 place-items-center rounded-full text-white/40 hover:bg-white/10 hover:text-white transition active:scale-95"
+                aria-label="Закрыть"
               >
-                <div className={`${activeTab === tab.id ? "opacity-100" : "opacity-60"}`}>
-                  {tab.icon}
-                </div>
-                {tab.label}
+                <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                  <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
               </button>
-            ))}
-          </nav>
-          
-          <div className="hidden md:block px-4 mt-auto">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="w-full rounded-xl border border-white/10 hover:bg-white/5 py-2.5 text-xs font-bold text-white/50 hover:text-white transition"
-            >
-              Закрыть
-            </button>
-          </div>
-        </div>
+            </div>
 
-        {/* Content Area */}
-        <div className="flex-1 relative overflow-hidden bg-[#0a0a0a]">
-          {/* Subtle top gradient */}
-          <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-[#8341EF]/5 to-transparent pointer-events-none" />
-          
-          <div className="absolute inset-0 overflow-y-auto px-4 md:px-10 py-6 md:py-12 custom-scrollbar">
+            {/* Tabs */}
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1">
+              {tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[11px] font-bold whitespace-nowrap transition active:scale-95 ${
+                    activeTab === tab.id
+                      ? "bg-white text-black"
+                      : "bg-white/[0.05] text-white/50 hover:bg-white/[0.1] hover:text-white"
+                  }`}
+                >
+                  <div className={`${activeTab === tab.id ? "opacity-80" : "opacity-50"}`}>
+                    {tab.icon}
+                  </div>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto px-5 pt-4 pb-8 custom-scrollbar">
             {activeTab === "profile" && (
-              <div key="profile" className="animate-[fadeIn_0.3s_ease-out]">
-                <h3 className="text-2xl font-black mb-8 text-white">Профиль</h3>
-                
-                <div className="flex flex-col md:flex-row gap-8 items-start mb-8">
-                  <div className="group relative flex h-40 w-40 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white/10 bg-[#121212] object-cover shadow-xl transition-all hover:border-[#8341EF]" onClick={() => fileInputRef.current?.click()}>
+              <div key="profile" className="animate-[fadeIn_0.3s_ease-out] pt-4">
+                <div className="flex flex-col items-center gap-5 mb-8">
+                  <div
+                    className="group relative h-28 w-28 cursor-pointer overflow-hidden rounded-full bg-white/[0.04] shadow-xl transition hover:ring-2 hover:ring-white/20"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
                     {draftProfile.avatarUrl ? (
                       <img src={draftProfile.avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
                     ) : (
-                      <svg className="h-16 w-16 opacity-20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                    )}
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity duration-300 group-hover:opacity-100 backdrop-blur-sm">
-                      <div className="flex flex-col items-center gap-2">
-                        <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        <span className="text-[10px] font-bold text-white uppercase tracking-wider">Изменить</span>
+                      <div className="flex h-full w-full items-center justify-center">
+                        <svg className="h-12 w-12 text-white/15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
                       </div>
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition group-hover:opacity-100">
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Изменить</span>
                     </div>
                     <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleAvatarFileSelect} />
                   </div>
-                  
-                  <div className="flex-1 w-full space-y-6">
-                    <div>
-                      <label className="block text-[11px] font-black uppercase tracking-widest text-white/40 mb-2">Никнейм</label>
-                      <input
-                        type="text"
-                        value={draftProfile.displayName}
-                        onChange={(e) => updateProfileField("displayName", e.target.value)}
-                        placeholder="Как вас зовут?"
-                        className="w-full bg-white/[0.03] border border-white/10 focus:border-[#8341EF] focus:bg-white/[0.05] rounded-xl px-4 py-3 text-lg font-bold text-white placeholder-white/20 outline-none transition-all shadow-inner"
-                      />
-                    </div>
-                    
-                    <div className="p-5 rounded-2xl bg-[#8341EF]/10 border border-[#8341EF]/20 flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-bold text-[#8341EF] mb-1">Локальный профиль</div>
-                        <div className="text-xs font-semibold text-white/50">Коллекция и история хранятся только на этом устройстве</div>
-                      </div>
-                    </div>
+
+                  <div className="w-full max-w-xs">
+                    <input
+                      type="text"
+                      value={draftProfile.displayName}
+                      onChange={(e) => updateProfileField("displayName", e.target.value)}
+                      placeholder="Никнейм"
+                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-center text-base font-bold text-white placeholder-white/20 outline-none border border-transparent focus:border-white/15 transition"
+                    />
                   </div>
                 </div>
+
+ 
               </div>
             )}
 
-                        {activeTab === "appearance" && (
-              <div key="appearance" className="animate-[fadeIn_0.3s_ease-out] space-y-8">
-                <h3 className="text-2xl font-black text-white mb-6">Кастомизация интерфейса</h3>
-
-                {/* 1. Theme Presets */}
-                <div className="space-y-3">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-white/50">Тема и Акцентный Цвет</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { id: "amy", name: "Amy Neon", color: "#8341EF" },
-                      { id: "dotify", name: "Dotify Green", color: "#1DB954" },
-                      { id: "cyberpunk", name: "Cyberpunk", color: "#FF007F" },
-                      { id: "midnight", name: "Midnight Blue", color: "#3B82F6" },
-                      { id: "oled", name: "OLED Dark", color: "#FFFFFF" },
-                      { id: "sunset", name: "Sunset Gold", color: "#F97316" }
-                    ].map((t) => {
-                      const isSelected = (draft.appearance?.themePreset || "amy") === t.id;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => updateField("appearance", { ...(draft.appearance || {}), themePreset: t.id })}
-                          className={`flex items-center gap-3 p-3 rounded-2xl border transition-all text-left ${isSelected ? "border-white/40 bg-white/10 shadow-lg scale-[1.02]" : "border-white/5 bg-white/[0.02] hover:bg-white/[0.05]"}`}
-                        >
-                          <div className="w-5 h-5 rounded-full shrink-0 shadow-md" style={{ backgroundColor: t.color }} />
-                          <span className="text-xs font-bold text-white truncate">{t.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 2. Player Customization */}
-                <div className="space-y-3 pt-4 border-t border-white/5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-white/50">Кастомизация Плеера</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <span className="block text-xs text-white/70 font-semibold">Стиль Плеера</span>
-                      <select
-                        value={draft.appearance?.playerStyle || "floating"}
-                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), playerStyle: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
-                      >
-                        <option value="floating" className="bg-[#141416]">Floating Island (Плавающий)</option>
-                        <option value="dock" className="bg-[#141416]">Docked Bar (Прикрепить снизу)</option>
-                        <option value="minimal" className="bg-[#141416]">Minimal Pill (Компактный)</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <span className="block text-xs text-white/70 font-semibold">Закругление Плеера</span>
-                      <select
-                        value={draft.appearance?.playerRounding || "xl"}
-                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), playerRounding: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
-                      >
-                        <option value="xl" className="bg-[#141416]">Rounded XL (16px)</option>
-                        <option value="pill" className="bg-[#141416]">Full Pill (Капсула)</option>
-                        <option value="sharp" className="bg-[#141416]">Sharp (8px)</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. FullOpen Customization */}
-                <div className="space-y-3 pt-4 border-t border-white/5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-white/50">FullOpen (Полноэкранный плеер)</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <span className="block text-xs text-white/70 font-semibold">Стиль Свечения Фона</span>
-                      <select
-                        value={draft.appearance?.fullOpenGlow || "ambient"}
-                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), fullOpenGlow: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
-                      >
-                        <option value="ambient" className="bg-[#141416]">Ambient Glow (Динамическое свечение)</option>
-                        <option value="mesh" className="bg-[#141416]">Mesh Gradient (Сетчатый градиент)</option>
-                        <option value="solid" className="bg-[#141416]">Solid Glass (Матовый темный)</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <span className="block text-xs text-white/70 font-semibold">Анимация Обложки</span>
-                      <select
-                        value={draft.appearance?.fullOpenArtworkStyle || "glow"}
-                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), fullOpenArtworkStyle: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
-                      >
-                        <option value="glow" className="bg-[#141416]">Pulsing Glow (Пульсация свечения)</option>
-                        <option value="vinyl" className="bg-[#141416]">Vinyl Disk (Вращающийся винил)</option>
-                        <option value="card" className="bg-[#141416]">Static Card (Классическая карточка)</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. Lyrics Customization */}
-                <div className="space-y-3 pt-4 border-t border-white/5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-white/50">Текст Песни (Lyrics)</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <span className="block text-xs text-white/70 font-semibold">Размер Шрифта</span>
-                      <select
-                        value={draft.appearance?.lyricsFontSize || "standard"}
-                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), lyricsFontSize: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
-                      >
-                        <option value="standard" className="bg-[#141416]">Standard (Стандартный)</option>
-                        <option value="large" className="bg-[#141416]">Large (Крупный текст)</option>
-                        <option value="giant" className="bg-[#141416]">Giant Karaoke (Гигант)</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <span className="block text-xs text-white/70 font-semibold">Эффект Неактивных Строк</span>
-                      <select
-                        value={draft.appearance?.lyricsInactiveEffect || "blur"}
-                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), lyricsInactiveEffect: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
-                      >
-                        <option value="blur" className="bg-[#141416]">Subtle Blur (Мягкое размытие)</option>
-                        <option value="dimmed" className="bg-[#141416]">Dimmed Text (Полупрозрачный)</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 5. Covers Customization */}
-                <div className="space-y-3 pt-4 border-t border-white/5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-white/50">Обложки и Карточки</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <span className="block text-xs text-white/70 font-semibold">Закругление Обложек</span>
-                      <select
-                        value={draft.appearance?.coverRounding || "rounded"}
-                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), coverRounding: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
-                      >
-                        <option value="rounded" className="bg-[#141416]">Standard Rounded (16px)</option>
-                        <option value="extra" className="bg-[#141416]">Extra Round (24px)</option>
-                        <option value="circle" className="bg-[#141416]">Circle (Круглые)</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <span className="block text-xs text-white/70 font-semibold">Эффект Наведения (Hover)</span>
-                      <select
-                        value={draft.appearance?.cardHoverEffect || "glow"}
-                        onChange={(e) => updateField("appearance", { ...(draft.appearance || {}), cardHoverEffect: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-white/30"
-                      >
-                        <option value="glow" className="bg-[#141416]">Elevate & Glow (Подъем и свечение)</option>
-                        <option value="zoom" className="bg-[#141416]">Zoom & Tilt (Увеличение)</option>
-                        <option value="flat" className="bg-[#141416]">Flat Clean (Статичный)</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+ 
 
             {activeTab === "audio" && (
-              <div key="audio" className="animate-[fadeIn_0.3s_ease-out]">
-                <h3 className="text-2xl font-black mb-8 text-white">Аудио</h3>
-                
-                <div className="space-y-4">
-                  {/* Audio Cache Card */}
-                  <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors hover:bg-white/[0.04]">
-                    <label className="flex cursor-pointer items-center justify-between gap-6">
-                      <div>
-                        <span className="block text-base font-bold text-white mb-1">
-                          Кэширование треков
-                        </span>
-                        <span className="block text-xs font-semibold text-white/40">
-                          Сохранять прослушанные треки для мгновенного повторного воспроизведения
-                        </span>
-                      </div>
-                      <div className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 ${draft.audioCacheEnabled !== false ? "bg-[#8341EF]" : "bg-white/10"}`}>
-                        <div className={`absolute bottom-1 left-1 top-1 w-5 rounded-full bg-white transition-transform duration-300 shadow-md ${draft.audioCacheEnabled !== false ? "translate-x-5" : "translate-x-0"}`} />
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={draft.audioCacheEnabled !== false}
-                        onChange={(event) => updateField("audioCacheEnabled", event.target.checked)}
-                        className="hidden"
-                      />
-                    </label>
-
-                    {draft.audioCacheEnabled !== false && (
-                      <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-4">
-                        <span className="text-xs font-semibold text-white/60">
-                          Занято памяти: <strong className="text-white font-bold">{audioCacheSize || "0 MB"}</strong>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            clearAudioCache();
-                          }}
-                          className="rounded-full bg-red-500/20 px-4 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/30 transition active:scale-95"
-                        >
-                          Очистить кэш
-                        </button>
-                      </div>
-                    )}
+              <div key="audio" className="animate-[fadeIn_0.3s_ease-out] pt-4 space-y-3">
+                <SettingsToggleInline title="Кэширование треков" description="Мгновенное повторное воспроизведение" checked={draft.audioCacheEnabled !== false} onChange={(val) => updateField("audioCacheEnabled", val)} />
+                {draft.audioCacheEnabled !== false && (
+                  <div className="flex items-center justify-between rounded-xl bg-white/[0.03] px-4 py-3">
+                    <span className="text-xs font-semibold text-white/50">Занято: <strong className="text-white">{audioCacheSize || "0 MB"}</strong></span>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); clearAudioCache(); }} className="rounded-full bg-red-500/15 px-3.5 py-1.5 text-[10px] font-bold text-red-400 hover:bg-red-500/25 transition active:scale-95">Очистить</button>
                   </div>
+                )}
 
-                  {/* Equalizer Card */}
-                  <div className="flex items-center justify-between gap-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors hover:bg-white/[0.04]">
-                    <div>
-                      <span className="block text-base font-bold text-white mb-1">
-                        Эквалайзер
-                      </span>
-                      <span className="block text-xs font-semibold text-white/40">
-                        Точная настройка частот и пресеты звучания
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsEqualizerOpen(true)}
-                      className="rounded-full bg-[#8341EF] hover:bg-[#7231dd] px-5 py-2 text-xs font-bold text-white transition active:scale-95 shrink-0"
-                    >
-                      Настроить
-                    </button>
+                <div className="flex items-center justify-between rounded-2xl bg-white/[0.03] p-4">
+                  <div>
+                    <p className="text-sm font-bold text-white">Эквалайзер</p>
+                    <p className="text-[11px] font-medium text-white/35 mt-0.5">Настройка частот</p>
                   </div>
-
-                  <label className="flex cursor-pointer items-center justify-between gap-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors hover:bg-white/[0.04]">
-                    <div>
-                      <span className="block text-base font-bold text-white mb-1">Кроссфейд</span>
-                      <span className="block text-xs font-semibold text-white/40">Плавное затухание в конце и начале треков</span>
-                    </div>
-                    <div className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 ${draft.crossfadeEnabled ? "bg-[#8341EF]" : "bg-white/10"}`}>
-                      <div className={`absolute bottom-1 left-1 top-1 w-5 rounded-full bg-white transition-transform duration-300 shadow-md ${draft.crossfadeEnabled ? "translate-x-5" : "translate-x-0"}`} />
-                    </div>
-                    <input type="checkbox" checked={Boolean(draft.crossfadeEnabled)} onChange={(event) => updateField("crossfadeEnabled", event.target.checked)} className="hidden" />
-                  </label>
-
-                  <div className={`transition-all duration-500 overflow-hidden ${draft.crossfadeEnabled ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}>
-                    <label className="block rounded-2xl border border-[#8341EF]/30 bg-[#8341EF]/5 p-6">
-                      <div className="mb-4 flex items-center justify-between">
-                        <span className="text-sm font-bold text-white/70">Длительность перехода</span>
-                        <span className="text-sm font-black text-[#8341EF]">{draft.crossfadeSeconds || 4} сек</span>
-                      </div>
-                      <div className="player-seek-wrap relative h-5 w-full cursor-pointer">
-                        <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full bg-black/50">
-                          <div className="h-full rounded-full bg-gradient-to-r from-[#8341EF] to-[#b388ff]" style={{ width: `${((draft.crossfadeSeconds || 4) / 12) * 100}%` }} />
-                        </div>
-                        <input
-                          type="range"
-                          min="1"
-                          max="12"
-                          value={Number(draft.crossfadeSeconds) || 4}
-                          onChange={(event) => updateField("crossfadeSeconds", Number(event.target.value))}
-                          className="player-seek-slider"
-                        />
-                      </div>
-                    </label>
-                  </div>
+                  <button type="button" onClick={() => setIsEqualizerOpen(true)} className="rounded-full bg-white/10 hover:bg-white/20 px-4 py-2 text-[11px] font-bold text-white transition active:scale-95">Открыть</button>
                 </div>
+
+                <SettingsToggleInline title="Кроссфейд" description="Плавное затухание между треками" checked={Boolean(draft.crossfadeEnabled)} onChange={(val) => updateField("crossfadeEnabled", val)} />
+                {draft.crossfadeEnabled && (
+                  <div className="rounded-xl bg-white/[0.03] px-4 py-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-semibold text-white/50">Длительность</span>
+                      <span className="text-xs font-black text-white">{draft.crossfadeSeconds || 4} сек</span>
+                    </div>
+                    <div className="player-seek-wrap relative h-5">
+                      <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full rounded-full bg-white/40" style={{ width: `${((draft.crossfadeSeconds || 4) / 12) * 100}%` }} />
+                      </div>
+                      <input type="range" min="1" max="12" value={Number(draft.crossfadeSeconds) || 4} onChange={(event) => updateField("crossfadeSeconds", Number(event.target.value))} className="player-seek-slider" />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             {activeTab === "system" && (
-              <div key="system" className="animate-[fadeIn_0.3s_ease-out]">
-                <h3 className="text-2xl font-black mb-8 text-white">Система</h3>
-
+              <div key="system" className="animate-[fadeIn_0.3s_ease-out] pt-4 space-y-3">
                 {!isDesktop && (
-                  <div className="mb-6 rounded-2xl border border-[#8341EF]/30 bg-[#8341EF]/10 p-5 backdrop-blur-md">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#8341EF]/20 text-[#8341EF]">
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                            <line x1="8" y1="21" x2="16" y2="21"/>
-                            <line x1="12" y1="17" x2="12" y2="21"/>
-                          </svg>
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-white">Доступно в ПК приложении</h4>
-                          <p className="text-xs font-semibold text-white/50">Автозапуск, сворачивание в трей и Discord RPC работают в десктопной версии AmyMusic</p>
-                        </div>
-                      </div>
-                    </div>
+                  <div className="rounded-xl bg-white/[0.03] p-3.5 mb-2 text-center">
+                    <p className="text-[11px] font-semibold text-white/35">Некоторые функции доступны только в ПК-приложении</p>
                   </div>
                 )}
-                
-                <div className="space-y-4">
-                  <div className="relative overflow-hidden rounded-2xl">
-                    {!isDesktop && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-[1.5px] border border-white/10 rounded-2xl">
-                        <span className="flex items-center gap-2 text-xs font-bold text-white/70 bg-black/80 px-4 py-2 rounded-full border border-white/10 shadow-xl">
-                          🔒 Доступно только в ПК приложении
-                        </span>
-                      </div>
-                    )}
-                    <label className={`flex cursor-pointer items-center justify-between gap-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors ${!isDesktop ? "opacity-30 filter blur-[1px] pointer-events-none select-none" : "hover:bg-white/[0.04]"}`}>
-                      <div>
-                        <span className="block text-base font-bold text-white mb-1">Автозапуск</span>
-                        <span className="block text-xs font-semibold text-white/40">Запускать плеер при входе в систему</span>
-                      </div>
-                      <div className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 ${draft.appLaunchOnStartup ? "bg-[#8341EF]" : "bg-white/10"}`}>
-                        <div className={`absolute bottom-1 left-1 top-1 w-5 rounded-full bg-white transition-transform duration-300 shadow-md ${draft.appLaunchOnStartup ? "translate-x-5" : "translate-x-0"}`} />
-                      </div>
-                      <input type="checkbox" disabled={!isDesktop} checked={Boolean(draft.appLaunchOnStartup)} onChange={(event) => updateField("appLaunchOnStartup", event.target.checked)} className="hidden" />
-                    </label>
-                  </div>
+                <SettingsToggleInline title="Автозапуск" description="При входе в систему" checked={Boolean(draft.appLaunchOnStartup)} onChange={(val) => updateField("appLaunchOnStartup", val)} disabled={!isDesktop} />
+                <SettingsToggleInline title="Свернуть в трей" description="Прятать вместо закрытия" checked={Boolean(draft.appMinimizeToTray)} onChange={(val) => updateField("appMinimizeToTray", val)} disabled={!isDesktop} />
+                <SettingsToggleInline title="Discord RPC" description="Трек в статусе Discord" checked={draft.discordRpcEnabled !== false} onChange={(val) => updateField("discordRpcEnabled", val)} disabled={!isDesktop} />
 
-                  <div className="relative overflow-hidden rounded-2xl">
-                    {!isDesktop && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-[1.5px] border border-white/10 rounded-2xl">
-                        <span className="flex items-center gap-2 text-xs font-bold text-white/70 bg-black/80 px-4 py-2 rounded-full border border-white/10 shadow-xl">
-                          🔒 Доступно только в ПК приложении
-                        </span>
-                      </div>
-                    )}
-                    <label className={`flex cursor-pointer items-center justify-between gap-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors ${!isDesktop ? "opacity-30 filter blur-[1px] pointer-events-none select-none" : "hover:bg-white/[0.04]"}`}>
-                      <div>
-                        <span className="block text-base font-bold text-white mb-1">Сворачивать в трей</span>
-                        <span className="block text-xs font-semibold text-white/40">Прятать окно вместо полного закрытия</span>
-                      </div>
-                      <div className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 ${draft.appMinimizeToTray ? "bg-[#8341EF]" : "bg-white/10"}`}>
-                        <div className={`absolute bottom-1 left-1 top-1 w-5 rounded-full bg-white transition-transform duration-300 shadow-md ${draft.appMinimizeToTray ? "translate-x-5" : "translate-x-0"}`} />
-                      </div>
-                      <input type="checkbox" disabled={!isDesktop} checked={Boolean(draft.appMinimizeToTray)} onChange={(event) => updateField("appMinimizeToTray", event.target.checked)} className="hidden" />
-                    </label>
-                  </div>
-
-                  <div className="relative overflow-hidden rounded-2xl">
-                    {!isDesktop && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-[1.5px] border border-white/10 rounded-2xl">
-                        <span className="flex items-center gap-2 text-xs font-bold text-white/70 bg-black/80 px-4 py-2 rounded-full border border-white/10 shadow-xl">
-                          🔒 Доступно только в ПК приложении
-                        </span>
-                      </div>
-                    )}
-                    <label className={`flex cursor-pointer items-center justify-between gap-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-colors ${!isDesktop ? "opacity-30 filter blur-[1px] pointer-events-none select-none" : "hover:bg-white/[0.04]"}`}>
-                      <div>
-                        <span className="block text-base font-bold text-white mb-1">Discord RPC</span>
-                        <span className="block text-xs font-semibold text-white/40">Отображать прослушиваемый трек в статусе Discord</span>
-                      </div>
-                      <div className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 ${draft.discordRpcEnabled !== false ? "bg-[#8341EF]" : "bg-white/10"}`}>
-                        <div className={`absolute bottom-1 left-1 top-1 w-5 rounded-full bg-white transition-transform duration-300 shadow-md ${draft.discordRpcEnabled !== false ? "translate-x-5" : "translate-x-0"}`} />
-                      </div>
-                      <input type="checkbox" disabled={!isDesktop} checked={draft.discordRpcEnabled !== false} onChange={(event) => updateField("discordRpcEnabled", event.target.checked)} className="hidden" />
-                    </label>
-                  </div>
-
-                  {/* 1-Click App Auto-Updater Card */}
-                  <div className="rounded-2xl border border-[#8341EF]/30 bg-[#8341EF]/10 p-5 transition-colors hover:bg-[#8341EF]/15">
-                    <div className="flex items-center justify-between gap-6">
-                      <div>
-                        <span className="block text-base font-bold text-white mb-1">
-                          Обновление приложения
-                        </span>
-                        <span className="block text-xs font-semibold text-white/50">
-                          {isDesktop
-                            ? `Установленная версия: v${appVersion}`
-                            : "Веб-версия AmyMusic (обновляется автоматически)"}
-                        </span>
-                      </div>
-                      {isDesktop ? (
-                        <button
-                          type="button"
-                          disabled={updateStatus === "checking" || updateStatus === "downloading"}
-                          onClick={handleCheckOrStartUpdate}
-                          className="rounded-full bg-[#8341EF] hover:bg-[#7231dd] px-5 py-2.5 text-xs font-bold text-white transition active:scale-95 shrink-0 disabled:opacity-50"
-                        >
-                          {updateStatus === "checking" && "Проверка..."}
-                          {updateStatus === "idle" && "Проверить обновления"}
-                          {updateStatus === "up-to-date" && "Версия актуальна ✓"}
-                          {updateStatus === "has-update" && "Обновить в 1 клик 🚀"}
-                          {updateStatus === "downloading" && `Загрузка ${updateProgress}%...`}
-                        </button>
-                      ) : (
-                        <a
-                          href="/api/download-app"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download
-                          className="rounded-full bg-[#8341EF] hover:bg-[#7231dd] px-5 py-2.5 text-xs font-bold text-white transition active:scale-95 shrink-0"
-                        >
-                          Скачать .exe
-                        </a>
-                      )}
+                <div className="rounded-2xl bg-white/[0.03] p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-bold text-white">Обновление</p>
+                      <p className="text-[11px] font-medium text-white/35 mt-0.5">{isDesktop ? `v${appVersion}` : "Веб-версия"}</p>
                     </div>
-                    {updateStatus === "downloading" && (
-                      <div className="mt-4 w-full bg-white/10 rounded-full h-2 overflow-hidden">
-                        <div
-                          className="bg-[#8341EF] h-full transition-all duration-300 rounded-full"
-                          style={{ width: `${updateProgress}%` }}
-                        />
-                      </div>
-                    )}
-                    {updateMessage && (
-                      <p className="mt-3 text-xs font-semibold text-white/70">{updateMessage}</p>
+                    {isDesktop ? (
+                      <button type="button" disabled={updateStatus === "checking" || updateStatus === "downloading"} onClick={handleCheckOrStartUpdate} className="rounded-full bg-white/10 hover:bg-white/20 px-4 py-2 text-[11px] font-bold text-white transition active:scale-95 disabled:opacity-50">
+                        {updateStatus === "checking" && "Проверка..."}{updateStatus === "idle" && "Проверить"}{updateStatus === "up-to-date" && "Актуально ✓"}{updateStatus === "has-update" && "Обновить 🚀"}{updateStatus === "downloading" && `${updateProgress}%`}
+                      </button>
+                    ) : (
+                      <a href="/api/download-app" target="_blank" rel="noopener noreferrer" download className="rounded-full bg-white/10 hover:bg-white/20 px-4 py-2 text-[11px] font-bold text-white transition active:scale-95">Скачать .exe</a>
                     )}
                   </div>
+                  {updateStatus === "downloading" && (
+                    <div className="mt-3 w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                      <div className="bg-white/50 h-full transition-all duration-300 rounded-full" style={{ width: `${updateProgress}%` }} />
+                    </div>
+                  )}
+                  {updateMessage && <p className="mt-2 text-[11px] font-medium text-white/50">{updateMessage}</p>}
                 </div>
               </div>
             )}
 
-                        {activeTab === "developer" && (
-              <div key="developer" className="animate-[fadeIn_0.3s_ease-out]">
-                <h3 className="text-2xl font-black mb-8 text-white">Для разработчиков</h3>
-                
-                <div className="space-y-6">
-                  <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-                    <div className="flex items-start gap-3">
-                      <svg className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                      <div className="text-xs font-semibold text-yellow-500/80 leading-relaxed">
-                        Эти настройки предназначены для опытных пользователей. Не изменяйте их, если не уверены в том, что делаете.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-[11px] font-black uppercase tracking-widest text-white/40 mb-2">SoundCloud Client ID</label>
-                      <input
-                        value={draft.soundCloudClientId}
-                        onChange={(event) => updateField("soundCloudClientId", event.target.value)}
-                        className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 font-mono text-sm font-bold text-white outline-none focus:border-[#8341EF] transition-colors"
-                        placeholder="client_id"
-                        spellCheck={false}
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-[11px] font-black uppercase tracking-widest text-white/40 mb-2">SoundCloud Client Secret</label>
-                      <input
-                        value={draft.soundCloudClientSecret}
-                        onChange={(event) => updateField("soundCloudClientSecret", event.target.value)}
-                        type="password"
-                        className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 font-mono text-sm font-bold text-white outline-none focus:border-[#8341EF] transition-colors"
-                        placeholder="Опционально"
-                        spellCheck={false}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-black uppercase tracking-widest text-white/40 mb-2">HTTP Proxies (по одному на строку)</label>
-                      <textarea
-                        value={draft.soundCloudHttpProxies}
-                        onChange={(event) => updateField("soundCloudHttpProxies", event.target.value)}
-                        className="h-32 w-full resize-none bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 font-mono text-sm font-bold text-white outline-none focus:border-[#8341EF] transition-colors custom-scrollbar"
-                        placeholder={"45.141.185.15:5882\n163.5.189.210:3888"}
-                        spellCheck={false}
-                      />
-                    </div>
-                  </div>
+            {activeTab === "developer" && (
+              <div key="developer" className="animate-[fadeIn_0.3s_ease-out] pt-4 space-y-5">
+                <div className="rounded-xl bg-yellow-500/10 p-3.5">
+                  <p className="text-[11px] font-semibold text-yellow-500/80">⚠️ Только для опытных пользователей</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-white/30 mb-2">SoundCloud Client ID</label>
+                  <input value={draft.soundCloudClientId} onChange={(event) => updateField("soundCloudClientId", event.target.value)} className="w-full bg-white/[0.03] rounded-xl px-4 py-3 font-mono text-sm font-bold text-white outline-none border border-transparent focus:border-white/15 transition" placeholder="client_id" spellCheck={false} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-white/30 mb-2">SoundCloud Client Secret</label>
+                  <input value={draft.soundCloudClientSecret} onChange={(event) => updateField("soundCloudClientSecret", event.target.value)} type="password" className="w-full bg-white/[0.03] rounded-xl px-4 py-3 font-mono text-sm font-bold text-white outline-none border border-transparent focus:border-white/15 transition" placeholder="Опционально" spellCheck={false} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-white/30 mb-2">HTTP Proxies</label>
+                  <textarea value={draft.soundCloudHttpProxies} onChange={(event) => updateField("soundCloudHttpProxies", event.target.value)} className="h-28 w-full resize-none bg-white/[0.03] rounded-xl px-4 py-3 font-mono text-sm font-bold text-white outline-none border border-transparent focus:border-white/15 transition custom-scrollbar" placeholder={"45.141.185.15:5882\n163.5.189.210:3888"} spellCheck={false} />
                 </div>
               </div>
             )}
           </div>
         </div>
       </div>
+    </React.Fragment>
+  );
+}
+
+function SettingsToggleInline({ title, description, checked, onChange, disabled = false }) {
+  return (
+    <label className={`flex cursor-pointer items-center justify-between gap-4 rounded-2xl bg-white/[0.03] p-4 transition hover:bg-white/[0.05] ${disabled ? "opacity-40 pointer-events-none" : ""}`}>
+      <div>
+        <p className="text-sm font-bold text-white">{title}</p>
+        {description && <p className="text-[11px] font-medium text-white/35 mt-0.5">{description}</p>}
+      </div>
+      <div className={`relative h-6 w-10 shrink-0 rounded-full transition-colors duration-200 ${checked ? "bg-white/40" : "bg-white/10"}`}>
+        <div className={`absolute top-[3px] left-[3px] h-[18px] w-[18px] rounded-full bg-white transition-transform duration-200 shadow-sm ${checked ? "translate-x-4" : "translate-x-0"}`} />
+      </div>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="hidden" disabled={disabled} />
+    </label>
+  );
+}
+
+function SettingsSelectInline({ label, value, onChange, options }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-2xl bg-white/[0.03] p-4">
+      <span className="text-sm font-bold text-white">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="bg-white/[0.06] rounded-lg px-3 py-1.5 text-[11px] font-bold text-white outline-none border-none cursor-pointer max-w-[180px]">
+        {options.map(opt => <option key={opt.value} value={opt.value} className="bg-[#1a1a1e]">{opt.label}</option>)}
+      </select>
     </div>
-  </React.Fragment>
-);
+  );
 }
 
 function formatDuration(seconds) {
@@ -929,7 +584,6 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
                 <span className="block truncate font-bold text-white max-w-[120px]">
                   {profileData?.displayName || currentUser || "Local"}
                 </span>
-                <span className="text-[10px] uppercase tracking-wider text-[#8341EF]">Локально</span>
               </span>
             </span>
           </button>
@@ -1138,7 +792,7 @@ export function ArtistAvatar({ artist, track, size = "h-4 w-4", className = "" }
   );
 }
 
-function ArtistLinks({ track, onOpenArtist, className = "text-xs text-white/40", showAvatar = true, avatarSize = "h-4 w-4" }) {
+export function ArtistLinks({ track, onOpenArtist, className = "text-xs text-white/40", showAvatar = true, avatarSize = "h-4 w-4" }) {
   const artists = getTrackArtists(track).filter((artist) => artist.name || artist.username);
 
   return (
@@ -1157,8 +811,9 @@ function ArtistLinks({ track, onOpenArtist, className = "text-xs text-white/40",
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
+                const isYandex = track.source === "yandex" || String(track.id).startsWith("yandex_");
                 onOpenArtist?.({
-                  id: artist.id || "",
+                  id: isYandex ? "" : (artist.id || ""),
                   name: artist.name || artist.username,
                   username: artist.username || artist.name,
                   avatar: getYandexCachedArtistAvatar(artistName) || avatarUrl,
@@ -1831,7 +1486,17 @@ function SearchPanel({ onOpenArtist }) {
               {tracks.length > 0 && (
                 <section>
                   <h2 className="text-2xl font-black text-white mb-6">Треки</h2>
-                  <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4 snap-x">
+                  <div 
+                    className="flex gap-4 overflow-x-auto no-scrollbar pb-4 snap-x"
+                    onWheel={(e) => {
+                      if (e.deltaY !== 0) {
+                        e.currentTarget.scrollBy({
+                          left: e.deltaY > 0 ? 300 : -300,
+                          behavior: 'smooth'
+                        });
+                      }
+                    }}
+                  >
                     {tracks.slice(0, 10).map(track => (
                       <div key={track.id} onClick={() => playTrack(track, tracks)} className="group snap-start shrink-0 w-[160px] flex flex-col gap-3 cursor-pointer">
                         <div className="w-[160px] h-[160px] relative rounded-2xl overflow-hidden shadow-lg">
@@ -1856,7 +1521,17 @@ function SearchPanel({ onOpenArtist }) {
               {artists.length > 0 && (
                 <section>
                   <h2 className="text-2xl font-black text-white mb-6">Артисты</h2>
-                  <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4 snap-x">
+                  <div 
+                    className="flex gap-4 overflow-x-auto no-scrollbar pb-4 snap-x"
+                    onWheel={(e) => {
+                      if (e.deltaY !== 0) {
+                        e.currentTarget.scrollBy({
+                          left: e.deltaY > 0 ? 300 : -300,
+                          behavior: 'smooth'
+                        });
+                      }
+                    }}
+                  >
                     {artists.slice(0, 8).map(artist => (
                       <div key={artist.id || artist.username} onClick={() => openArtist(artist)} className="group snap-start shrink-0 w-[140px] flex flex-col items-center gap-3 cursor-pointer text-center">
                         <div className="w-[140px] h-[140px] relative rounded-full overflow-hidden shadow-lg">
@@ -1970,7 +1645,7 @@ function ChartPositionBadge({ position, progress, shift }) {
 }
 
 function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
-  const { playTrack } = useAudioPlayer();
+  const { playTrack, currentTrack, togglePlay } = useAudioPlayer();
   const [tracks, setTracks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -2003,26 +1678,25 @@ function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
   }, [loadYandexChart]);
 
   return (
-    <section className="flex-1 overflow-y-auto rounded-[17.76px] border border-white/[0.04] bg-[#121212] p-[26.6px] shadow-2xl">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-white/5 pb-5">
-        <div>
-          <h2 className="text-2xl font-black tracking-tight text-white">Топ-100</h2>
-          <p className="mt-1 text-sm font-semibold text-white/40">
-            Самые популярные треки прямо сейчас.
-          </p>
-        </div>
+    <section className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-[#000000] relative">
+      {/* Header Area */}
+      <div className="shrink-0 w-full flex flex-col items-center pt-4 md:pt-6 pb-4 px-4">
 
-        <div className="flex items-center gap-3">
+        <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight text-center">Чарты</h1>
+        <p className="mt-2 text-sm md:text-base text-white/40 font-medium text-center max-w-md">
+          Самые популярные треки прямо сейчас
+        </p>
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-3 mt-5">
           {tracks.length > 0 && (
             <button
               type="button"
               onClick={() => playTrack(tracks[0], tracks)}
-              className="flex items-center gap-2 rounded-full bg-[#8341EF] px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-[#9352ff] active:scale-95"
+              className="flex items-center gap-2.5 rounded-full bg-white px-7 py-3 text-sm font-bold text-black shadow-lg transition hover:scale-105 active:scale-95"
             >
-              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-              Слушать чарт
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              Слушать
             </button>
           )}
           <button
@@ -2030,7 +1704,7 @@ function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
             onClick={loadYandexChart}
             disabled={isLoading}
             title="Обновить чарт"
-            className="grid h-9 w-9 place-items-center rounded-full bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white active:scale-95 disabled:opacity-50"
+            className="grid h-11 w-11 place-items-center rounded-full bg-white/[0.06] text-white/60 transition hover:bg-white/10 hover:text-white active:scale-95 disabled:opacity-50"
           >
             <svg className={`w-4 h-4 fill-current ${isLoading ? "animate-spin" : ""}`} viewBox="0 0 24 24">
               <path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
@@ -2039,78 +1713,72 @@ function TrendsPanel({ onOpenArtist, onOpenAlbum }) {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-4 flex items-center justify-between rounded-xl bg-red-500/10 p-4 border border-red-500/20 text-sm text-red-300">
-          <span>{error}</span>
-          <button type="button" onClick={loadYandexChart} className="font-bold underline hover:text-white">Повторить</button>
-        </div>
-      )}
+      {/* Results Body */}
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 pb-32 animate-fade-in">
+        {error && (
+          <div className="mb-4 flex items-center justify-between rounded-xl bg-red-500/10 p-4 border border-red-500/20 text-sm text-red-300">
+            <span>{error}</span>
+            <button type="button" onClick={loadYandexChart} className="font-bold underline hover:text-white">Повторить</button>
+          </div>
+        )}
 
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-white/40">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#8341EF]" />
-          <span className="text-sm font-semibold">Загрузка Топ-100 Яндекс Музыки...</span>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1 max-w-5xl">
-          {tracks.map((track, index) => (
-            <div
-              key={track.id || index}
-              className="group flex items-center gap-3 sm:gap-4 rounded-xl p-2.5 sm:p-3 text-left transition hover:bg-white/[0.06] border border-transparent hover:border-white/5"
-            >
-              <ChartPositionBadge
-                position={track.chartPosition || index + 1}
-                progress={track.chartProgress}
-                shift={track.chartShift}
-              />
-
-              <button
-                type="button"
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3 text-white/40">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#8341EF]" />
+            <span className="text-sm font-semibold">Загрузка...</span>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-0.5 w-full">
+            {tracks.map((track, index) => (
+              <div
+                key={track.id || index}
+                className="group flex items-center gap-3 sm:gap-4 rounded-xl p-2.5 sm:p-3 text-left transition hover:bg-white/[0.04] active:bg-white/[0.08] active:scale-[0.99] cursor-pointer"
                 onClick={() => playTrack(track, tracks)}
-                className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg shadow-md group/cover"
               >
-                <img src={track.cover} alt={track.title} className="h-12 w-12 object-cover transition duration-300 group-hover/cover:scale-105" />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover/cover:opacity-100">
-                  <svg className="h-5 w-5 fill-white" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </div>
-              </button>
+                <ChartPositionBadge
+                  position={track.chartPosition || index + 1}
+                  progress={track.chartProgress}
+                  shift={track.chartShift}
+                />
 
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => playTrack(track, tracks)}
-                    className="truncate text-left text-[15px] font-bold text-white transition hover:text-white/80"
-                  >
-                    {track.title}
-                  </button>
-                  {track.listeners > 0 && (
-                    <span className="hidden md:inline-block rounded-md bg-white/5 px-2 py-0.5 text-[11px] font-medium text-white/40 shrink-0">
-                      🎧 {formatListeners(track.listeners)}
-                    </span>
-                  )}
+                <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg shadow-md">
+                  <img src={track.cover} alt={track.title} className="h-12 w-12 object-cover transition duration-300 group-hover:scale-105" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+                    <svg className="h-5 w-5 fill-white" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </div>
                 </div>
-                <ArtistLinks track={track} onOpenArtist={onOpenArtist} />
-              </div>
 
-              <div className="relative w-16 h-10 flex items-center justify-end shrink-0 select-none">
-                <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
-                  {formatDuration(track.duration)}
-                </span>
-                <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                  <TrackMenuButton
-                    track={track}
-                    onOpenArtist={onOpenArtist}
-                    onOpenAlbum={onOpenAlbum}
-                  />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[15px] font-bold text-white">{track.title}</span>
+                    {track.listeners > 0 && (
+                      <span className="hidden md:inline-block rounded-md bg-white/5 px-2 py-0.5 text-[11px] font-medium text-white/40 shrink-0">
+                        🎧 {formatListeners(track.listeners)}
+                      </span>
+                    )}
+                  </div>
+                  <ArtistLinks track={track} onOpenArtist={onOpenArtist} />
+                </div>
+
+                <div className="relative w-16 h-10 flex items-center justify-end shrink-0 select-none" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-xs font-semibold text-white/30 group-hover:opacity-0 transition-opacity duration-150 pr-2">
+                    {formatDuration(track.duration)}
+                  </span>
+                  <div className="absolute inset-0 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                    <TrackMenuButton
+                      track={track}
+                      onOpenArtist={onOpenArtist}
+                      onOpenAlbum={onOpenAlbum}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -2203,7 +1871,7 @@ function PlayerIconButton({ id, icon, label, onClick, active = false, badge = ""
       className={[
         "relative grid h-9 w-9 place-items-center rounded-full transition active:scale-95",
         active
-          ? "bg-[var(--player-accent-soft)] opacity-100"
+          ? "bg-white/10 opacity-100"
           : "opacity-60 hover:bg-white/10 hover:opacity-100"
       ].join(" ")}
     >
@@ -2312,7 +1980,7 @@ function PlayerSeekBar() {
 }
 
 function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
-  const { currentTrack, effectiveVolume, playTrack, queue, reorderQueue, setVolume, isEqualizerOpen, setIsEqualizerOpen } = useAudioPlayer();
+  const { currentTrack, currentIndex, effectiveVolume, playTrack, queue, reorderQueue, removeFromQueue, setVolume, isEqualizerOpen, setIsEqualizerOpen } = useAudioPlayer();
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isVolumeOpen, setIsVolumeOpen] = useState(false);
   const volumeTimerRef = useRef(null);
@@ -2356,97 +2024,151 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
           onClick={() => setIsQueueOpen((value) => !value)}
           active={isQueueOpen}
         />
-        {isQueueOpen && (
-          <div className="absolute bottom-11 right-0 z-50 w-80 rounded-2xl border border-white/10 bg-[#171717]/95 p-3 shadow-2xl backdrop-blur-md">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-bold text-white/80">Очередь</p>
-              <span className="text-[10px] font-semibold text-white/35">{queue.length} треков</span>
-            </div>
-            <div
-              onWheel={(e) => {
-                if (draggedQueueIndex !== null) {
-                  e.currentTarget.scrollTop += e.deltaY;
-                }
-              }}
-              onDragOver={(e) => {
-                if (draggedQueueIndex === null) return;
-                e.preventDefault();
-                const container = e.currentTarget;
-                const rect = container.getBoundingClientRect();
-                const offsetY = e.clientY - rect.top;
-                if (offsetY < 40) {
-                  container.scrollTop -= 10;
-                } else if (rect.height - offsetY < 40) {
-                  container.scrollTop += 10;
-                }
-              }}
-              className="max-h-72 space-y-1 overflow-y-auto pr-1"
+        <div className={`fixed inset-0 z-[150] flex justify-end transition-all duration-300 ${isQueueOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+            <div 
+              className={`absolute inset-0 bg-black/40 transition-all duration-300 ease-out ${isQueueOpen ? 'backdrop-blur-md opacity-100' : 'backdrop-blur-none opacity-0'}`}
+              onClick={() => setIsQueueOpen(false)}
+            />
+            
+            <div 
+              className={`relative w-[85%] md:w-[400px] h-full bg-[#0a0a0a] shadow-2xl flex flex-col border-l border-white/5 transition-transform duration-300 ease-out ${isQueueOpen ? 'translate-x-0' : 'translate-x-full'}`}
+              onClick={(e) => e.stopPropagation()}
             >
-              {queue.length === 0 ? (
-                <p className="py-5 text-center text-xs text-white/35">Очередь пустая</p>
-              ) : (
-                queue.map((track, index) => {
-                  const isCurrent = currentTrack.id === track.id;
-                  const isDragging = draggedQueueIndex === index;
-                  const isDragOver = dragOverQueueIndex === index;
+              <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.04]">
+                <div>
+                  <h3 className="text-[20px] font-bold text-white tracking-tight">Очередь</h3>
+                </div>
+                <button onClick={() => setIsQueueOpen(false)} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-full transition">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div
+                className="flex-1 overflow-y-auto custom-scrollbar p-3"
+                onWheel={(e) => {
+                  if (draggedQueueIndex !== null) {
+                    e.currentTarget.scrollTop += e.deltaY;
+                  }
+                }}
+                onDragOver={(e) => {
+                  if (draggedQueueIndex === null) return;
+                  e.preventDefault();
+                  const container = e.currentTarget;
+                  const rect = container.getBoundingClientRect();
+                  const offsetY = e.clientY - rect.top;
+                  if (offsetY < 40) {
+                    container.scrollTop -= 10;
+                  } else if (rect.height - offsetY < 40) {
+                    container.scrollTop += 10;
+                  }
+                }}
+              >
+                {(() => {
+                  const startIdx = Math.max(0, currentIndex);
+                  const visibleQueue = queue.slice(startIdx);
+                  if (visibleQueue.length === 0) {
+                    return <p className="py-5 text-center text-sm text-white/35">Очередь пустая</p>;
+                  }
+                  
+                  return visibleQueue.map((track, vIndex) => {
+                    const actualIndex = startIdx + vIndex;
+                    const isCurrent = currentTrack?.id === track.id;
+                    const isDragging = draggedQueueIndex === vIndex;
+                    const isDragOver = dragOverQueueIndex === vIndex;
 
-                  return (
-                    <div
-                      key={`${track.id}-${index}`}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData("text/plain", String(index));
-                        setDraggedQueueIndex(index);
-                      }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setDragOverQueueIndex(index);
-                      }}
-                      onDragLeave={() => setDragOverQueueIndex(null)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const fromIdx = draggedQueueIndex;
-                        setDraggedQueueIndex(null);
-                        setDragOverQueueIndex(null);
-                        if (fromIdx !== null && fromIdx !== index) {
-                          reorderQueue(fromIdx, index);
-                        }
-                      }}
-                      onDragEnd={() => {
-                        setDraggedQueueIndex(null);
-                        setDragOverQueueIndex(null);
-                      }}
-                      className={`group flex items-center justify-between rounded-xl p-2 transition cursor-grab active:cursor-grabbing ${
-                        isCurrent
-                          ? "bg-white/10"
-                          : isDragOver
-                            ? "bg-[#8341EF]/20 border border-[#8341EF]/50"
-                            : "hover:bg-white/5"
-                      } ${isDragging ? "opacity-30 scale-95" : ""}`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => playTrack(track, queue)}
-                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    const itemNode = (
+                      <div
+                        key={`${track.id}-${actualIndex}`}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/plain", String(vIndex));
+                          setDraggedQueueIndex(vIndex);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverQueueIndex(vIndex);
+                        }}
+                        onDragLeave={() => setDragOverQueueIndex(null)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const fromVIdx = draggedQueueIndex;
+                          setDraggedQueueIndex(null);
+                          setDragOverQueueIndex(null);
+                          if (fromVIdx !== null && fromVIdx !== vIndex) {
+                            reorderQueue(startIdx + fromVIdx, startIdx + vIndex);
+                          }
+                        }}
+                        onDragEnd={() => {
+                          setDraggedQueueIndex(null);
+                          setDragOverQueueIndex(null);
+                        }}
+                        className={`group flex items-center justify-between rounded-xl p-2 transition cursor-grab active:cursor-grabbing ${
+                          isCurrent
+                            ? "bg-white/10"
+                            : isDragOver
+                              ? "bg-white/10 border border-white/30"
+                              : "hover:bg-white/5"
+                        } ${isDragging ? "opacity-30 scale-95" : ""}`}
                       >
-                        <img src={track.cover} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-sm" />
-                        <div className="min-w-0 flex-1">
-                          <p className={`truncate text-xs font-bold ${isCurrent ? "text-[#8341EF]" : "text-white"}`}>
-                            {track.title}
-                          </p>
-                          <p className="truncate text-[10px] font-semibold text-white/40">{track.artist}</p>
+                        <button
+                          type="button"
+                          onClick={() => { playTrack(track, queue); }}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        >
+                          <img src={track.cover} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover shadow-sm" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-bold text-white">
+                              {track.title}
+                            </p>
+                            <p className="truncate text-xs font-semibold text-white/40">{track.artist}</p>
+                          </div>
+                        </button>
+                        
+                        <div className="flex items-center gap-2 opacity-0 transition group-hover:opacity-100">
+                          <TrackMenuButton track={track} />
+                          {!isCurrent && removeFromQueue && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeFromQueue(actualIndex);
+                              }}
+                              className="p-1 text-white/30 hover:text-red-400 hover:bg-white/10 rounded-full transition"
+                              title="Удалить из очереди"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
-                      </button>
-                      <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
-                        <TrackMenuButton track={track} />
                       </div>
-                    </div>
-                  );
-                })
-              )}
+                    );
+
+                    if (vIndex === 0) {
+                      return (
+                        <React.Fragment key={`active-${actualIndex}`}>
+                          <h4 className="text-[13px] font-bold text-white/50 mb-1 px-1 mt-1">Активно</h4>
+                          {itemNode}
+                        </React.Fragment>
+                      );
+                    }
+                    if (vIndex === 1) {
+                      return (
+                        <React.Fragment key={`queue-${actualIndex}`}>
+                          <h4 className="text-[13px] font-bold text-white/50 mt-4 mb-1 px-1">Очередь</h4>
+                          {itemNode}
+                        </React.Fragment>
+                      );
+                    }
+                    return itemNode;
+                  });
+                })()}
+              </div>
             </div>
           </div>
-        )}
       </div>
       <PlayerIconButton
         icon="/equalizer.svg"
@@ -2910,7 +2632,7 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, 
       <div
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        className="relative z-10 w-full rounded-[var(--player-radius,20px)] max-sm:rounded-xl border border-white/[0.06] max-sm:border-0 shadow-2xl max-sm:shadow-none transition-all duration-300"
+        className="relative z-10 w-full rounded-[var(--player-radius,20px)] max-sm:rounded-xl shadow-2xl max-sm:shadow-none transition-all duration-300"
         style={{
           "--player-accent": `color-mix(in srgb, ${trackPalette.line} 70%, #ffffff)`,
           "--player-accent-muted": `color-mix(in srgb, ${trackPalette.line} 45%, #8a8a8a)`,

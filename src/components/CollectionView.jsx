@@ -220,7 +220,7 @@ function FavoriteArtistCard({ artist, index, onOpen }) {
       })}
       className="group flex w-36 shrink-0 flex-col items-center rounded-[var(--cover-radius,16px)] p-3 text-center transition hover:bg-white/[0.04]"
     >
-      <div className="relative mb-3 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] shadow-2xl">
+      <div className="relative mb-3 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-white/[0.04] shadow-2xl">
         <img
           src={avatarSrc}
           alt={artist.name}
@@ -250,7 +250,7 @@ function ReleaseCard({ release, onOpen, onUnlike }) {
         onClick={() => onOpen(release)}
         className="w-full text-left disabled:cursor-default disabled:opacity-60"
       >
-        <div className="relative aspect-square overflow-hidden rounded-[var(--cover-radius,16px)] border border-white/10 bg-white/[0.04]">
+        <div className="relative aspect-square overflow-hidden rounded-[var(--cover-radius,16px)] bg-white/[0.04]">
           <img src={release.cover} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
           <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/25" />
           <div className="absolute bottom-2 right-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-black text-white/70">
@@ -429,7 +429,7 @@ function PlaylistView({
                 <button
                   type="button"
                   onClick={() => tracks.length && onPlay(tracks[0], tracks)}
-                  className="flex items-center gap-2 rounded-full bg-[#8341EF] px-6 py-3 text-sm font-bold text-white shadow-xl transition hover:scale-105 active:scale-95"
+                  className="flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-black shadow-xl transition hover:scale-105 active:scale-95"
                 >
                   <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                   Слушать
@@ -506,7 +506,7 @@ function PlaylistView({
         {tracks.length ? tracks.map((track, index) => {
           const isDragging = draggedTrackIndex === index;
           const isDragOver = dragOverTrackIndex === index;
-          const isCurrent = currentTrack?.id === track.id;
+          const isCurrent = currentTrack?.id && String(currentTrack.id) === String(track.id);
 
           return (
             <div
@@ -548,7 +548,7 @@ function PlaylistView({
                 "group flex items-center gap-3 rounded-[var(--cover-radius,12px)] p-2 max-md:px-2 max-md:py-2.5 max-md:rounded-none max-md:w-full transition hover:bg-white/[0.04] cursor-pointer",
                 isEditable ? "cursor-grab active:cursor-grabbing" : "",
                 isDragging ? "opacity-30 scale-95" : "opacity-100",
-                isDragOver ? "border-2 border-[#8341EF]" : "border border-transparent",
+                isDragOver ? "border-2 border-white/50" : "border border-transparent",
                 isCurrent ? "bg-white/[0.08]" : ""
               ].join(" ")}
             >
@@ -585,7 +585,7 @@ function PlaylistView({
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className={`truncate text-sm font-bold transition ${isCurrent ? "text-[#8341EF]" : "text-white"}`}>{track.title}</p>
+                  <p className="truncate text-sm font-bold text-white">{track.title}</p>
                   <TrackArtistLinks track={track} onOpenArtist={onOpenArtist} />
                 </div>
               </div>
@@ -1039,11 +1039,11 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
                 placeholder={isImporting ? importStatus : "Ссылка на плейлист (music.yandex.ru/...)"}
                 className="min-w-0 flex-1 bg-transparent px-3 py-2 text-xs sm:text-sm font-semibold text-white placeholder:text-white/30 outline-none disabled:opacity-50"
               />
-              <button
-                type="submit"
-                disabled={isImporting || !importUrl}
-                className="rounded-full bg-[#8341EF] px-5 py-2.5 text-xs font-black text-white transition hover:bg-[#9254f6] active:scale-95 disabled:opacity-50"
-              >
+                <button
+                  type="submit"
+                  disabled={isImporting || !importUrl}
+                  className="rounded-full bg-white px-5 py-2.5 text-xs font-black text-black transition hover:bg-white/80 active:scale-95 disabled:opacity-50"
+                >
                 Импортировать
               </button>
             </form>
@@ -1054,75 +1054,42 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   }
 
   return (
-    <div className="relative flex flex-1 min-h-0 w-full select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none bg-[#090909] p-4 md:p-8 pb-[140px] md:pb-8 text-white">
+    <div className="relative flex flex-1 min-h-0 w-full select-none flex-col overflow-hidden bg-[#000000] text-white">
       {isImporting && (
-        <div className="absolute top-0 left-0 right-0 h-1.5 bg-white/5 z-50 overflow-hidden rounded-t-[17.76px]">
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-white/5 z-50 overflow-hidden">
           <div 
-            className="h-full bg-gradient-to-r from-[#8341EF] to-[#b388ff] transition-all duration-300 ease-out"
+            className="h-full bg-white transition-all duration-300 ease-out"
             style={{ width: `${importProgress}%` }}
           />
         </div>
       )}
-      <div className="mb-6 mt-1 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black tracking-tight">Коллекция</h1>
-          <p className="mt-0.5 text-xs md:text-sm font-medium text-white/40">
-            Реальные лайки и сохранённые плейлисты
-          </p>
+
+      {/* Header Area */}
+      <div className="shrink-0 w-full flex flex-col items-center pt-4 md:pt-6 pb-4 px-4">
+
+        <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight text-center">Коллекция</h1>
+        <p className="mt-2 text-sm md:text-base text-white/40 font-medium text-center max-w-md">
+          Лайки, плейлисты и сохранённые альбомы
+        </p>
+
+        <div className="flex items-center gap-3 mt-5">
+          <button
+            type="button"
+            onClick={openLikedTracks}
+            className="flex items-center gap-2.5 rounded-full bg-white/[0.06] px-5 py-2.5 hover:bg-white/10 active:scale-95 transition"
+            title="Открыть список понравившихся треков"
+          >
+            <img src="/like.svg" alt="" className="h-4 w-4 opacity-80" />
+            <span className="text-sm font-bold text-white/80">Мне нравится</span>
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent("amymusic:open-profile"))}
-          className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 py-1.5 px-3 hover:bg-white/10 active:scale-95 transition"
-          title="Открыть профиль и настройки"
-        >
-          <img src="/user.svg" alt="" className="h-4 w-4 opacity-80" />
-          <span className="text-xs font-bold text-white/80">Профиль</span>
-        </button>
       </div>
 
+      {/* Scrollable Content */}
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 pb-[140px] md:pb-32 animate-fade-in">
+
       <div className="mb-10">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <HeartHeaderIcon />
 
-            <div className="flex flex-col justify-center">
-              <button type="button" onClick={openLikedTracks} className="flex items-center gap-1.5 text-2xl font-black hover:opacity-80 transition text-left">
-                <span>Мне нравится</span>
-                <span className="text-xl text-white/40">›</span>
-              </button>
-
-              <span className="mt-0.5 text-xs font-semibold text-white/40">
-                {likedTracks.length} {likedTracks.length === 1 ? "трек" : "треков"}
-              </span>
-            </div>
-          </div>
-
-          {likedTracks.length > 5 && (
-            <div className="flex md:hidden items-center gap-1.5">
-              <button
-                type="button"
-                onClick={scrollLikedLeft}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95"
-                aria-label="Назад"
-              >
-                <svg className="h-5 w-5 fill-current rotate-90" viewBox="0 0 24 24">
-                  <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={scrollLikedRight}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white active:scale-95"
-                aria-label="Вперед"
-              >
-                <svg className="h-5 w-5 fill-current -rotate-90" viewBox="0 0 24 24">
-                  <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
-                </svg>
-              </button>
-            </div>
-          )}
-        </div>
 
         {likedTracks.length === 0 ? (
           <div className="rounded-[var(--cover-radius,16px)] border border-white/10 bg-white/[0.03] px-6 py-10 text-center">
@@ -1146,7 +1113,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
             });
 
             const renderTrackItem = (track) => {
-              const isCurrent = currentTrack?.id === track.id;
+              const isCurrent = currentTrack?.id && String(currentTrack.id) === String(track.id);
               return (
                 <div
                   key={track.id}
@@ -1184,10 +1151,10 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
                       </div>
                     </div>
 
-                    <div className="flex min-w-0 flex-col">
-                      <p className={`truncate text-left text-sm font-semibold transition ${isCurrent ? "text-[#8341EF]" : "text-white"}`}>
-                        {track.title}
-                      </p>
+                      <div className="flex min-w-0 flex-col">
+                        <p className="truncate text-left text-sm font-semibold text-white">
+                          {track.title}
+                        </p>
                       <TrackArtistLinks track={track} onOpenArtist={openTrackArtist} />
                     </div>
                   </div>
@@ -1230,6 +1197,14 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
                   ref={mobileLikedScrollRef}
                   className="flex md:hidden overflow-x-auto gap-3 snap-x snap-mandatory scrollbar-hide w-full pb-2"
                   style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                  onWheel={(e) => {
+                    if (e.deltaY !== 0) {
+                      e.currentTarget.scrollBy({
+                        left: e.deltaY > 0 ? 300 : -300,
+                        behavior: 'smooth'
+                      });
+                    }
+                  }}
                 >
                   {mobileChunks.map((chunk, chunkIdx) => (
                     <div key={chunkIdx} className="w-full shrink-0 snap-start flex flex-col gap-1">
@@ -1276,7 +1251,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
               onClick={() => setIsAddPlaylistOpen(true)}
               className="group relative w-40 shrink-0 text-left"
             >
-              <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-[var(--cover-radius,16px)] border border-white/10 bg-white/[0.04] transition duration-300 group-hover:bg-white/[0.08]">
+              <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-[var(--cover-radius,16px)] bg-white/[0.04] transition duration-300 group-hover:bg-white/[0.08]">
                 <span className="text-5xl font-light text-white/30 transition duration-300 group-hover:scale-110 group-hover:text-white/60">+</span>
               </div>
               <p className="mt-2 truncate text-sm font-black text-white transition group-hover:text-white/80">Добавить</p>
@@ -1302,6 +1277,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
           ))}
         </HorizontalScrollSection>
       )}
+      </div>
     </div>
   );
 }

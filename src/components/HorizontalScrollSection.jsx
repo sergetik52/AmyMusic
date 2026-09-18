@@ -40,6 +40,14 @@ export function HorizontalScrollSection({ title, children }) {
         ref={scrollRef}
         className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        onWheel={(e) => {
+          if (e.deltaY !== 0) {
+            e.currentTarget.scrollBy({
+              left: e.deltaY > 0 ? 300 : -300,
+              behavior: 'smooth'
+            });
+          }
+        }}
       >
         {children}
       </div>

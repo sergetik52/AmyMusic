@@ -435,7 +435,7 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
       <button
         type="button"
         onClick={onOpenFull}
-        className="song-cover overflow-hidden rounded-[28px] object-cover ring-1 ring-white/10"
+        className="song-cover overflow-hidden rounded-[28px] object-cover"
         aria-label="Open full player"
       >
         <img src={currentTrack.cover} alt={currentTrack.title} className="h-full w-full object-cover" />
@@ -462,11 +462,11 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
       </div>
 
       <div className="absolute bottom-12 max-md:bottom-[calc(84px+env(safe-area-inset-bottom,0px))] left-1/2 z-30 flex w-full max-w-lg max-md:max-w-none px-4 -translate-x-1/2 flex-col items-center gap-6 max-md:gap-3">
-        <div className="grid min-h-[58px] w-full grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-3 rounded-full border border-white/10 bg-black/45 px-3 py-2 text-sm font-semibold text-white shadow-2xl backdrop-blur-md transition hover:border-white/20 hover:bg-black/55">
+        <div className="grid min-h-[58px] w-full grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-3 rounded-full bg-black/45 px-3 py-2 text-sm font-semibold text-white shadow-2xl backdrop-blur-md transition hover:bg-black/55">
           <button
             type="button"
             onClick={onOpenFull}
-            className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-white/10 bg-white/5 active:scale-95 transition-all duration-500"
+            className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-white/5 active:scale-95 transition-all duration-500"
             style={{
               opacity: isPlaying ? 0 : 1,
               transform: isPlaying ? "scale(0.5)" : "scale(1)",

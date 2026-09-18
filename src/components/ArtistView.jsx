@@ -294,7 +294,7 @@ function RelatedArtistCard({ artist, onOpen }) {
       onClick={() => onOpen(artist)}
       className="group w-36 shrink-0 text-center"
     >
-      <div className="mx-auto h-32 w-32 overflow-hidden rounded-full border border-white/10 bg-white/[0.04]">
+      <div className="mx-auto h-32 w-32 overflow-hidden rounded-full bg-white/[0.04]">
         <img
           src={avatarSrc}
           alt={artist.name}
@@ -347,7 +347,7 @@ export function AlbumView({
           </button>
 
           <div className="flex items-end gap-7 max-md:flex-col max-md:items-center max-md:text-center max-md:gap-4">
-            <img src={album.cover} alt={album.title} className="h-56 w-56 max-md:h-56 max-md:w-56 shrink-0 rounded-3xl border border-white/10 object-cover shadow-2xl" />
+            <img src={album.cover} alt={album.title} className="h-56 w-56 max-md:h-56 max-md:w-56 shrink-0 rounded-3xl object-cover shadow-2xl" />
             <div className="max-w-4xl pb-2 max-md:flex max-md:flex-col max-md:items-center max-md:w-full">
               <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-white/35 max-md:text-center">{releaseType}</p>
               <h1 className="text-5xl max-md:text-2xl font-black tracking-tight text-white max-md:text-center break-words">{album.title}</h1>
@@ -713,7 +713,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
               src={profileAvatar}
               alt={profile.name}
               onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/user.svg"; }}
-              className="h-52 w-52 max-md:h-36 max-md:w-36 shrink-0 rounded-full border border-white/10 object-cover shadow-2xl"
+              className="h-52 w-52 max-md:h-36 max-md:w-36 shrink-0 rounded-full object-cover shadow-2xl"
             />
             <div className="max-w-4xl pb-2 max-md:flex max-md:flex-col max-md:items-center">
               <h1 className="text-5xl max-md:text-2xl font-black tracking-tight text-white max-md:text-center">{profile.username || profile.name}</h1>
@@ -817,6 +817,14 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
                         ref={popularScrollRef}
                         className="flex md:hidden overflow-x-auto gap-3 snap-x snap-mandatory scrollbar-hide w-full pb-2"
                         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                        onWheel={(e) => {
+                          if (e.deltaY !== 0) {
+                            e.currentTarget.scrollBy({
+                              left: e.deltaY > 0 ? 300 : -300,
+                              behavior: 'smooth'
+                            });
+                          }
+                        }}
                       >
                         {popTrackChunks.map((chunk, chunkIdx) => (
                           <div key={chunkIdx} className="w-full shrink-0 snap-start flex flex-col gap-1">

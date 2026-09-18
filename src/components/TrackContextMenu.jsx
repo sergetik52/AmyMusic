@@ -1,28 +1,14 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
-
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-  return isMobile;
-}
+import { resolveStreamUrl } from "../services/soundCloudApi";
 
 export function TrackContextMenu({
   track,
   onClose,
-  onOpenArtist,
-  onOpenAlbum,
-  onShareTrack,
-  onRemoveFromPlaylist,
-  onRemoveFromQueue,
-  placement = "bottom",
-  positionStyle = null
+  x,
+  y
 }) {
-  const isMobile = useIsMobile();
   const {
     likedTrackIds,
     toggleLike,
@@ -30,39 +16,23 @@ export function TrackContextMenu({
     toggleDislike,
     openTrackWave,
     playNext,
-    addToQueueEnd,
-    removeFromQueue,
-    userPlaylists,
-    addTrackToUserPlaylist,
-    setIsFullOpen
+    addToQueueEnd
   } = useAudioPlayer();
 
   const menuRef = useRef(null);
-  const subTimerRef = useRef(null);
   const isLiked = likedTrackIds.has(track.id);
   const isDisliked = dislikedTrackIds.has(track.id);
-  const [isSubOpen, setIsSubOpen] = useState(false);
-  const [actualPlacement, setActualPlacement] = useState(placement);
-  const [subPlacementLeft, setSubPlacementLeft] = useState(false);
+  const [view, setView] = useState("main"); // "main" | "download"
+  const [actualSize, setActualSize] = useState({ width: 240, height: 350 });
 
   useLayoutEffect(() => {
-    if (!menuRef.current) return;
-    const rect = menuRef.current.getBoundingClientRect();
-    const windowHeight = window.innerHeight || document.documentElement.clientHeight;
-    const windowWidth = window.innerWidth || document.documentElement.clientWidth;
-
-    if (rect.bottom > windowHeight - 12 && rect.top > 300) {
-      setActualPlacement("top");
-    } else if (rect.top < 10) {
-      setActualPlacement("bottom");
+    if (menuRef.current) {
+      setActualSize({
+        width: menuRef.current.offsetWidth,
+        height: menuRef.current.offsetHeight
+      });
     }
-
-    if (rect.right + 230 > windowWidth - 10) {
-      setSubPlacementLeft(true);
-    } else {
-      setSubPlacementLeft(false);
-    }
-  }, [placement]);
+  }, [view]);
 
   // Close when clicking outside
   useEffect(() => {
@@ -75,444 +45,258 @@ export function TrackContextMenu({
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [onClose]);
 
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => clearTimeout(subTimerRef.current);
-  }, []);
+  const handleDownloadMp3 = async () => {
+    // Open tab synchronously to bypass popup blocker
+    let newTab = null;
+    if (typeof window !== "undefined") {
+      newTab = window.open("about:blank", "_blank");
+    }
 
-  const openSub = useCallback(() => {
-    clearTimeout(subTimerRef.current);
-    setIsSubOpen(true);
-  }, []);
+    try {
+      if (!track.streamUrl && !track.id) {
+        if (newTab) newTab.close();
+        return;
+      }
+      const url = await resolveStreamUrl(track);
+      if (url) {
+        let downloaded = false;
+        try {
+          // Attempt to fetch via CORS proxy for true file download
+          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+          const res = await fetch(proxyUrl);
+          if (res.ok) {
+            const blob = await res.blob();
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `${track.artist} - ${track.title}.mp3`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+            downloaded = true;
+          }
+        } catch (fetchErr) {
+          console.warn("Proxy download failed, falling back to direct tab:", fetchErr);
+        }
 
-  const closeSub = useCallback(() => {
-    subTimerRef.current = setTimeout(() => setIsSubOpen(false), 150);
-  }, []);
-
-  const handleAction = (actionFn) => {
-    actionFn();
+        if (downloaded) {
+          if (newTab) newTab.close();
+        } else {
+          // Fallback: redirect the blank tab
+          if (newTab) {
+            newTab.location.href = url;
+          } else {
+            window.open(url, "_blank");
+          }
+        }
+      } else {
+        if (newTab) newTab.close();
+      }
+    } catch (e) {
+      console.error("Download failed:", e);
+      if (newTab) newTab.close();
+    }
     onClose();
   };
 
-  const handleOpenArtist = () => {
-    if (!track.artist) return;
-    onOpenArtist?.({
-      id: track.artistId || "",
-      name: track.artist,
-      username: track.artist,
-      avatar: track.artistAvatar || track.cover || "/logo.png",
-      permalinkUrl: track.artistPermalinkUrl || ""
-    });
+  const handleDownloadCover = async () => {
+    try {
+      if (!track.cover) return;
+      let coverUrl = track.cover;
+      // Change to highest res (1000x1000) for downloading
+      if (coverUrl.includes("200x200") || coverUrl.includes("400x400") || coverUrl.includes("50x50")) {
+        coverUrl = coverUrl.replace(/50x50|200x200|400x400/, "1000x1000");
+      }
+      const res = await fetch(coverUrl);
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${track.artist} - ${track.title} Cover.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      console.error("Download cover failed:", e);
+    }
+    onClose();
   };
 
-  const handleOpenAlbum = () => {
-    let albumObj = track.album || track.release;
-    if (!albumObj && track.playlistId) {
-      albumObj = { id: track.playlistId, title: track.playlistTitle || "Альбом", cover: track.cover };
-    }
+  const padding = 10;
+  const screenWidth = typeof window !== "undefined" ? window.innerWidth : 1000;
+  const screenHeight = typeof window !== "undefined" ? window.innerHeight : 800;
+  
+  // Default to bottom-left of the click origin
+  let menuX = x - actualSize.width + 15;
+  let menuY = y + 10;
+  
+  // Clamp boundaries
+  menuX = Math.max(padding, Math.min(menuX, screenWidth - actualSize.width - padding));
+  menuY = Math.max(padding, Math.min(menuY, screenHeight - actualSize.height - padding));
 
-    if (albumObj) {
-      onOpenAlbum?.(albumObj);
-    } else {
-      onOpenAlbum?.({
-        id: `single-${track.id}`,
-        title: track.title,
-        kind: "single",
-        artist: track.artist,
-        artistId: track.artistId,
-        artistAvatar: track.artistAvatar || track.cover,
-        cover: track.cover,
-        trackCount: 1,
-        tracks: [track]
-      });
-    }
+  const menuStyle = {
+    position: "fixed",
+    zIndex: 99999,
+    left: menuX,
+    top: menuY,
+    boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
   };
 
-  const hasAlbum = true;
+  if (typeof document === "undefined") return null;
 
-  if (isMobile) {
-    return (
-      <div
-        className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 backdrop-blur-xl animate-[fadeIn_0.2s_ease-out] pointer-events-auto"
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-      >
-        <div
-          ref={menuRef}
-          className="w-full max-h-[85vh] overflow-y-auto rounded-t-[24px] border-t border-white/10 bg-[#161616]/95 p-4 pb-10 text-white shadow-2xl backdrop-blur-2xl animate-bottom-sheet"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Pull handle bar */}
-          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
-
-          {/* Track header preview */}
-          <div className="mb-3 flex items-center gap-3 border-b border-white/[0.08] pb-3">
-            <img src={track.cover} alt="" className="h-12 w-12 rounded-xl object-cover shrink-0" />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-bold text-white">{track.title}</span>
-              <span className="truncate text-xs font-medium text-white/40">{track.artist}</span>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="space-y-0.5">
-            <button
-              type="button"
-              onClick={() => handleAction(() => toggleLike(track.id, track))}
-              className="flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm font-bold text-white/90 transition hover:bg-white/10 active:bg-white/15"
-            >
-              <img src="/menu/like.svg" alt="" className={`h-5 w-5 shrink-0 ${isLiked ? "text-purple-500" : "opacity-60"}`} />
-              <span>{isLiked ? "Удалить из Любимых" : "Нравится"}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleAction(() => openTrackWave(track))}
-              className="flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm font-bold text-white/90 transition hover:bg-white/10 active:bg-white/15"
-            >
-              <img src="/menu/my-wave-of-track.svg" alt="" className="h-5 w-5 shrink-0 opacity-60" />
-              <span>Моя волна по треку</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleAction(() => playNext(track))}
-              className="flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm font-bold text-white/90 transition hover:bg-white/10 active:bg-white/15"
-            >
-              <img src="/menu/next-of-queue.svg" alt="" className="h-5 w-5 shrink-0 opacity-60" />
-              <span>Играть следующим</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleAction(() => addToQueueEnd(track))}
-              className="flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm font-bold text-white/90 transition hover:bg-white/10 active:bg-white/15"
-            >
-              <img src="/menu/end-of-queue.svg" alt="" className="h-5 w-5 shrink-0 opacity-60" />
-              <span>Добавить в конец очереди</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleAction(() => toggleDislike(track.id, track))}
-              className="flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm font-bold text-white/90 transition hover:bg-white/10 active:bg-white/15"
-            >
-              <img src="/menu/dislike.svg" alt="" className={`h-5 w-5 shrink-0 ${isDisliked ? "text-purple-500" : "opacity-60"}`} />
-              <span>{isDisliked ? "Дизлайк отменен" : "Не нравится"}</span>
-            </button>
-
-            <div>
-              <button
-                type="button"
-                onClick={() => setIsSubOpen(!isSubOpen)}
-                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-bold text-white/90 transition hover:bg-white/10 active:bg-white/15"
-              >
-                <div className="flex items-center gap-3.5">
-                  <img src="/menu/playlist.svg" alt="" className="h-5 w-5 shrink-0 opacity-60" />
-                  <span>Добавить в плейлист</span>
-                </div>
-                <span className={`text-xs text-white/40 transition-transform duration-200 ${isSubOpen ? "rotate-90" : ""}`}>›</span>
-              </button>
-
-              {isSubOpen && (
-                <div className="ml-4 my-1 space-y-1 border-l-2 border-white/10 pl-3 py-1">
-                  {userPlaylists.length > 0 ? (
-                    userPlaylists.map((playlist) => (
-                      <button
-                        key={playlist.id}
-                        onClick={() => handleAction(() => addTrackToUserPlaylist(playlist.id, track))}
-                        className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10"
-                      >
-                        <span className="truncate">{playlist.title}</span>
-                      </button>
-                    ))
-                  ) : (
-                    <span className="block px-3 py-2 text-xs font-bold text-white/30 italic">
-                      Нет плейлистов
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleAction(() => setIsFullOpen(true))}
-              className="flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm font-bold text-white/90 transition hover:bg-white/10 active:bg-white/15"
-            >
-              <img src="/menu/lyrics.svg" alt="" className="h-5 w-5 shrink-0 opacity-60" />
-              <span>Показать текст песни</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleAction(handleOpenAlbum)}
-              className="flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm font-bold text-white/90 transition hover:bg-white/10 active:bg-white/15"
-            >
-              <img src="/menu/album.svg" alt="" className="h-5 w-5 shrink-0 opacity-60" />
-              <span>{track.album || track.release ? "Перейти к альбому" : "Перейти к синглу"}</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={!track.artist}
-              onClick={() => handleAction(handleOpenArtist)}
-              className="flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm font-bold text-white/90 transition hover:bg-white/10 active:bg-white/15 disabled:opacity-30"
-            >
-              <img src="/menu/artist.svg" alt="" className="h-5 w-5 shrink-0 opacity-60" />
-              <span>Перейти к исполнителю</span>
-            </button>
-
-            {onRemoveFromQueue && (
-              <button
-                type="button"
-                onClick={() => handleAction(onRemoveFromQueue)}
-                className="flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm font-bold text-red-400 transition hover:bg-red-500/10 active:bg-red-500/20"
-              >
-                <img src="/menu/delete.svg" alt="" className="h-5 w-5 shrink-0 opacity-60" />
-                <span>Удалить из очереди</span>
-              </button>
-            )}
-
-            {onRemoveFromPlaylist && (
-              <button
-                type="button"
-                onClick={() => handleAction(onRemoveFromPlaylist)}
-                className="flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm font-bold text-red-400 transition hover:bg-red-500/10 active:bg-red-500/20"
-              >
-                <img src="/menu/delete.svg" alt="" className="h-5 w-5 shrink-0 opacity-60" />
-                <span>Удалить из плейлиста</span>
-              </button>
-            )}
+  return createPortal(
+    <div
+      ref={menuRef}
+      style={menuStyle}
+      className="w-[240px] rounded-2xl bg-black/40 text-white backdrop-blur-3xl animate-in fade-in zoom-in-95 pointer-events-auto overflow-hidden"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Header Block with Blurred Background */}
+      <div className="relative p-3 mb-1">
+        <div className="absolute inset-0 z-0 overflow-hidden opacity-40">
+          <img src={track.cover} alt="" className="w-full h-full object-cover blur-lg scale-125" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/40" />
+        </div>
+        <div className="relative z-10 flex items-center gap-3">
+          <img src={track.cover} alt="" className="h-[42px] w-[42px] shrink-0 rounded-lg object-cover shadow-md" />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-[13px] font-black text-white leading-tight">{track.title}</span>
+            <span className="truncate text-[11px] font-bold text-white/60 leading-tight">{track.artist}</span>
           </div>
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div
-      ref={menuRef}
-      className={`z-[100] w-56 rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md animate-slide-up-fade pointer-events-auto ${
-        positionStyle
-          ? "fixed"
-          : `absolute right-0 ${actualPlacement === "top" ? "bottom-full mb-2" : "top-full mt-1"}`
-      }`}
-      style={
-        positionStyle || {
-          boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
-        }
-      }
-      onClick={(e) => e.stopPropagation()}
-    >
-      {/* 1. Нравится */}
-      <button
-        type="button"
-        onClick={() => handleAction(() => toggleLike(track.id, track))}
-        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
-      >
-        <img src="/menu/like.svg" alt="" className={`h-4.5 w-4.5 shrink-0 ${isLiked ? "text-purple-500" : "opacity-60"}`} />
-        <span>{isLiked ? "Удалить из Любимых" : "Нравится"}</span>
-      </button>
-
-      {/* 2. Моя волна по треку */}
-      <button
-        type="button"
-        onClick={() => handleAction(() => openTrackWave(track))}
-        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
-      >
-        <img src="/menu/my-wave-of-track.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
-        <span>Моя волна по треку</span>
-      </button>
-
-      {/* 3. Играть следующим */}
-      <button
-        type="button"
-        onClick={() => handleAction(() => playNext(track))}
-        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
-      >
-        <img src="/menu/next-of-queue.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
-        <span>Играть следующим</span>
-      </button>
-
-      {/* 4. Добавить в конец очереди */}
-      <button
-        type="button"
-        onClick={() => handleAction(() => addToQueueEnd(track))}
-        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
-      >
-        <img src="/menu/end-of-queue.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
-        <span>Добавить в конец очереди</span>
-      </button>
-
-      {/* 5. Не нравится */}
-      <button
-        type="button"
-        onClick={() => handleAction(() => toggleDislike(track.id, track))}
-        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
-      >
-        <img src="/menu/dislike.svg" alt="" className={`h-4.5 w-4.5 shrink-0 ${isDisliked ? "text-purple-500" : "opacity-60"}`} />
-        <span>{isDisliked ? "Дизлайк отменен" : "Не нравится"}</span>
-      </button>
-
-      {/* 6. Добавить в плейлист */}
-      <div
-        className="relative"
-        onMouseEnter={openSub}
-        onMouseLeave={closeSub}
-      >
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsSubOpen(!isSubOpen);
-          }}
-          className="flex w-full items-center justify-between px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
-        >
-          <div className="flex items-center gap-3">
-            <img src="/menu/playlist.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
-            <span>Добавить в плейлист</span>
-          </div>
-          <span className="text-[10px] text-white/40">›</span>
-        </button>
-
-        {/* Submenu */}
-        {isSubOpen && (
-          <div
-            className={`absolute w-56 rounded-2xl border border-white/10 bg-[#161616]/95 py-2 text-white shadow-2xl backdrop-blur-md pointer-events-auto animate-slide-up-fade ${
-              subPlacementLeft ? "right-full mr-1" : "left-full ml-1"
-            } ${actualPlacement === "top" ? "bottom-0" : "top-0"}`}
-            style={{
-              boxShadow: "0 10px 40px rgba(0,0,0,0.6)"
-            }}
-            onMouseEnter={openSub}
-            onMouseLeave={closeSub}
-          >
-            <div className="px-4 py-1.5 text-[9px] font-black uppercase tracking-wider text-white/30 border-b border-white/[0.04] mb-1">
-              Мои плейлисты
-            </div>
-            <div className="max-h-48 overflow-y-auto">
-              {userPlaylists.length > 0 ? (
-                userPlaylists.map((playlist) => (
-                  <button
-                    key={playlist.id}
-                    onClick={() => handleAction(() => addTrackToUserPlaylist(playlist.id, track))}
-                    className="flex w-full items-center px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
-                  >
-                    <span className="truncate">{playlist.title}</span>
-                  </button>
-                ))
-              ) : (
-                <span className="block px-4 py-2.5 text-xs font-bold text-white/30 italic">
-                  Нет плейлистов
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 7. Показать текст песни */}
-      <button
-        type="button"
-        onClick={() => handleAction(() => setIsFullOpen(true))}
-        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
-      >
-        <img src="/menu/lyrics.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
-        <span>Показать текст песни</span>
-      </button>
-
-      {/* 8. Перейти к альбому */}
-      <button
-        type="button"
-        disabled={!hasAlbum}
-        onClick={() => handleAction(handleOpenAlbum)}
-        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:pointer-events-none"
-      >
-        <img src="/menu/album.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
-        <span>{track.album || track.release ? "Перейти к альбому" : "Перейти к синглу"}</span>
-      </button>
-
-      {/* 9. Перейти к исполнителю */}
-      <button
-        type="button"
-        disabled={!track.artist}
-        onClick={() => handleAction(handleOpenArtist)}
-        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:pointer-events-none"
-      >
-        <img src="/menu/artist.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
-        <span>Перейти к исполнителю</span>
-      </button>
-
-      {/* 10. Удалить из очереди */}
-      {onRemoveFromQueue && (
-        <>
-          <div className="my-1 border-t border-white/[0.06]" />
+      {view === "main" ? (
+        <div className="flex flex-col pb-2 animate-in fade-in slide-in-from-left-2 duration-200">
+          {/* Action Block 1 */}
           <button
             type="button"
-            onClick={() => handleAction(onRemoveFromQueue)}
-            className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
+            onClick={() => handleAction(() => playNext(track))}
+            className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] font-bold text-white/90 transition hover:bg-white/10"
           >
-            <img src="/menu/delete.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
-            <span>Удалить из очереди</span>
+            <img src="/menu/next-of-queue.svg" alt="" className="h-4 w-4 shrink-0 opacity-60" />
+            <span>Следующим</span>
           </button>
-        </>
-      )}
-
-      {/* 11. Удалить из плейлиста (optional) */}
-      {onRemoveFromPlaylist && (
-        <>
-          <div className="my-1 border-t border-white/[0.06]" />
+          
           <button
             type="button"
-            onClick={() => handleAction(onRemoveFromPlaylist)}
-            className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs font-bold text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
+            onClick={() => handleAction(() => addToQueueEnd(track))}
+            className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] font-bold text-white/90 transition hover:bg-white/10"
           >
-            <img src="/menu/delete.svg" alt="" className="h-4.5 w-4.5 shrink-0 opacity-60" />
-            <span>Удалить из плейлиста</span>
+            <img src="/menu/end-of-queue.svg" alt="" className="h-4 w-4 shrink-0 opacity-60" />
+            <span>Добавить в очередь</span>
           </button>
-        </>
+
+          <button
+            type="button"
+            onClick={() => handleAction(() => openTrackWave(track))}
+            className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] font-bold text-white/90 transition hover:bg-white/10"
+          >
+            <img src="/menu/my-wave-of-track.svg" alt="" className="h-4 w-4 shrink-0 opacity-60" />
+            <span>Волна по треку</span>
+          </button>
+
+          <div className="my-1.5 mx-3 border-t border-white/[0.04]" />
+
+          {/* Action Block 2 */}
+          <button
+            type="button"
+            onClick={() => handleAction(() => toggleLike(track.id, track))}
+            className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] font-bold text-white/90 transition hover:bg-white/10"
+          >
+            <img src="/menu/like.svg" alt="" className={`h-4 w-4 shrink-0 ${isLiked ? "text-purple-500" : "opacity-60"}`} />
+            <span>{isLiked ? "Удалить из избранного" : "Добавить в избранное"}</span>
+          </button>
+
+
+          <button
+            type="button"
+            onClick={() => handleAction(() => toggleDislike(track.id, track))}
+            className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] font-bold text-white/90 transition hover:bg-white/10"
+          >
+            <img src="/menu/dislike.svg" alt="" className={`h-4 w-4 shrink-0 ${isDisliked ? "text-purple-500" : "opacity-60"}`} />
+            <span>Не интересно</span>
+          </button>
+
+          <div className="my-1.5 mx-3 border-t border-white/[0.04]" />
+
+          {/* Action Block 3: Download */}
+          <button
+            type="button"
+            onClick={() => setView("download")}
+            className="flex w-full items-center justify-between px-4 py-2 text-left text-[13px] font-bold text-white/90 transition hover:bg-white/10"
+          >
+            <div className="flex items-center gap-3">
+              <svg className="h-4 w-4 shrink-0 opacity-60 fill-current" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+              <span>Скачать</span>
+            </div>
+            <span className="text-white/40 font-normal opacity-60 text-lg leading-none">›</span>
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col pb-2 animate-in fade-in slide-in-from-right-2 duration-200">
+          <button
+            type="button"
+            onClick={handleDownloadMp3}
+            className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] font-bold text-white/90 transition hover:bg-white/10"
+          >
+            <svg className="h-4 w-4 shrink-0 opacity-60 fill-current" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            <span>В файл</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadCover}
+            className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] font-bold text-white/90 transition hover:bg-white/10"
+          >
+            <svg className="h-4 w-4 shrink-0 opacity-60 fill-current" viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+            <span>Обложка</span>
+          </button>
+
+          <div className="mt-2 flex justify-center w-full px-4">
+            <button
+              type="button"
+              onClick={() => setView("main")}
+              className="w-full py-2.5 text-[13px] font-bold text-white/80 hover:text-white transition rounded-xl bg-white/[0.04] hover:bg-white/[0.08]"
+            >
+              Назад
+            </button>
+          </div>
+        </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 
-export function TrackMenuButton({
-  track,
-  onOpenArtist,
-  onOpenAlbum,
-  onShareTrack,
-  onRemoveFromPlaylist,
-  placement = "bottom"
-}) {
+export function TrackMenuButton({ track }) {
   const [isOpen, setIsOpen] = useState(false);
-  const closeTimer = useRef(null);
+  const [coords, setCoords] = useState({ x: 0, y: 0 });
+  const containerRef = useRef(null);
 
   useEffect(() => {
-    return () => clearTimeout(closeTimer.current);
-  }, []);
+    const parent = containerRef.current?.closest('.group');
+    if (!parent) return;
 
-  const handleEnter = useCallback(() => {
-    clearTimeout(closeTimer.current);
-  }, []);
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setCoords({ x: e.clientX + 10, y: e.clientY + 10 });
+      setIsOpen(true);
+    };
 
-  const handleLeave = useCallback(() => {
-    closeTimer.current = setTimeout(() => setIsOpen(false), 200);
+    parent.addEventListener('contextmenu', handleContextMenu);
+    return () => parent.removeEventListener('contextmenu', handleContextMenu);
   }, []);
 
   return (
-    <div
-      className="relative"
-      onMouseEnter={handleEnter}
-      onMouseLeave={handleLeave}
-    >
+    <div className="relative" ref={containerRef}>
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          clearTimeout(closeTimer.current);
+          const rect = e.currentTarget.getBoundingClientRect();
+          setCoords({ x: rect.right, y: rect.bottom });
           setIsOpen(!isOpen);
         }}
         className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 text-white/50 hover:text-white transition active:scale-95"
@@ -524,12 +308,9 @@ export function TrackMenuButton({
       {isOpen && (
         <TrackContextMenu
           track={track}
+          x={coords.x}
+          y={coords.y}
           onClose={() => setIsOpen(false)}
-          onOpenArtist={onOpenArtist}
-          onOpenAlbum={onOpenAlbum}
-          onShareTrack={onShareTrack}
-          onRemoveFromPlaylist={onRemoveFromPlaylist}
-          placement={placement}
         />
       )}
     </div>

@@ -75,17 +75,7 @@ async function getTrackAudioUrl(track, forceFresh = false) {
   }
 
   if (track.source === "yandex" || String(track.id).startsWith("yandex_") || track.yandexId) {
-    try {
-      const resolvedUrl = await resolveYandexTrackStream(track.yandexId || track.id);
-      if (resolvedUrl) {
-        track.streamUrl = resolvedUrl;
-        track._fetchedAt = Date.now();
-        return resolvedUrl;
-      }
-    } catch (yandexErr) {
-      logWarn("audio", "Direct Yandex stream resolution failed, attempting SoundCloud fallback...", yandexErr);
-    }
-
+    // Force SoundCloud fallback for Yandex tracks as direct streaming from Yandex is disabled
     const scStreamUrl = await resolveChartTrackViaSoundCloud(track);
     if (scStreamUrl) {
       track.streamUrl = scStreamUrl;
@@ -93,7 +83,7 @@ async function getTrackAudioUrl(track, forceFresh = false) {
       return scStreamUrl;
     }
 
-    throw new Error("Не удалось загрузить аудиопоток для трека");
+    throw new Error("Не удалось найти трек на SoundCloud");
   }
 
   const resolvedUrl = await resolveStreamUrl(track);
@@ -590,6 +580,7 @@ export function AudioProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [isFullOpen, setIsFullOpen] = useState(false);
   const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
+  const consecutiveFailuresRef = useRef(0);
 
   // Audio Cache Engine State
   const [isAudioCacheEnabled, setIsAudioCacheEnabled] = useState(() => {
@@ -1214,30 +1205,6 @@ export function AudioProvider({ children }) {
         }
         pendingAutoplayRef.current = false;
         setIsPlaying(false);
-      } else {
-        const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator?.userAgent || ""));
-        if (!isMobile && track && (track.yandexId || String(track.id).startsWith("yandex_"))) {
-          logWarn("audio", "Audio element error for chart track, attempting direct stream recovery", { id: track.id });
-          track.streamUrl = null;
-          resolveYandexTrackStream(track.yandexId || track.id)
-            .then((directUrl) => {
-              if (directUrl && audioRef.current) {
-                track.streamUrl = directUrl;
-                loadedStreamUrlRef.current = directUrl;
-                audioRef.current.src = directUrl;
-                audioRef.current.play().catch(() => {
-                  setIsPlaying(false);
-                  setError("Не удалось загрузить аудиопоток");
-                });
-              }
-            })
-            .catch(() => {
-              setIsPlaying(false);
-              setError("Не удалось загрузить аудиопоток");
-            });
-          return;
-        }
-
         setIsPlaying(false);
         setError("Не удалось загрузить аудиопоток");
       }

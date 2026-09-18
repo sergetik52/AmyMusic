@@ -683,6 +683,10 @@ button {
   to { opacity: 0; transform: translateY(20px) scale(0.98); }
 }
 
+.animate-slide-down-fade {
+  animation: slideDownFade 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 @keyframes bottomSheetSlideUp {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }

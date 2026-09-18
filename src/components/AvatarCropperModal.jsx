@@ -17,7 +17,6 @@ export function AvatarCropperModal({ imageSrc, onCrop, onCancel }) {
   useEffect(() => {
     if (!imageSrc) return;
     const img = new Image();
-    img.crossOrigin = "anonymous";
     img.onload = () => {
       imageRef.current = img;
       setImgLoaded(true);
@@ -72,7 +71,7 @@ export function AvatarCropperModal({ imageSrc, onCrop, onCancel }) {
     ctx.fill();
 
     // Circle border accent
-    ctx.strokeStyle = "#8341EF";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(width / 2, height / 2, width / 2 - 16, 0, Math.PI * 2);
@@ -112,14 +111,22 @@ export function AvatarCropperModal({ imageSrc, onCrop, onCancel }) {
     const img = imageRef.current;
     if (!img) return;
 
-    // Create high-res export canvas (360x360)
     const exportCanvas = document.createElement("canvas");
     exportCanvas.width = 360;
     exportCanvas.height = 360;
     const ctx = exportCanvas.getContext("2d");
 
-    const width = 300; // Preview canvas size
+    // Preview coordinate system
+    const width = 300;
     const height = 300;
+    const cropSize = 268;
+    const cropX = 16;
+    const cropY = 16;
+
+    // Scale context to map crop box to 360x360 canvas
+    const exportScale = 360 / cropSize;
+    ctx.scale(exportScale, exportScale);
+    ctx.translate(-cropX, -cropY);
 
     const aspect = img.width / img.height;
     let drawW = width * scale;
@@ -136,25 +143,10 @@ export function AvatarCropperModal({ imageSrc, onCrop, onCancel }) {
     const drawX = centerX - drawW / 2;
     const drawY = centerY - drawH / 2;
 
-    // Crop area is circle inside (16px inset on 300px canvas -> 268px circle)
-    const cropSize = width - 32;
-    const cropX = 16;
-    const cropY = 16;
-
-    // Draw onto export canvas
-    ctx.save();
-    ctx.drawImage(
-      img,
-      (cropX - drawX) * (img.width / drawW),
-      (cropY - drawY) * (img.height / drawH),
-      cropSize * (img.width / drawW),
-      cropSize * (img.height / drawH),
-      0,
-      0,
-      360,
-      360
-    );
-    ctx.restore();
+    // Draw background and image matching preview
+    ctx.fillStyle = "#0c0c0c";
+    ctx.fillRect(cropX, cropY, cropSize, cropSize);
+    ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
     const croppedUrl = exportCanvas.toDataURL("image/jpeg", 0.9);
     onCrop(croppedUrl);
@@ -197,16 +189,21 @@ export function AvatarCropperModal({ imageSrc, onCrop, onCancel }) {
         {/* Zoom controls */}
         <div className="mt-5 flex items-center gap-3 px-2">
           <span className="text-xs font-bold text-white/40">Масштаб</span>
-          <input
-            type="range"
-            min="0.5"
-            max="3"
-            step="0.05"
-            value={scale}
-            onChange={(e) => setScale(parseFloat(e.target.value))}
-            className="player-seek-slider flex-1"
-          />
-          <span className="text-xs font-mono font-bold text-[#8341EF] w-10 text-right">
+          <div className="player-seek-wrap relative h-5 flex-1 cursor-pointer">
+            <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full bg-black/50">
+              <div className="h-full rounded-full bg-white/50" style={{ width: `${((scale - 0.5) / 2.5) * 100}%` }} />
+            </div>
+            <input
+              type="range"
+              min="0.5"
+              max="3"
+              step="0.05"
+              value={scale}
+              onChange={(e) => setScale(parseFloat(e.target.value))}
+              className="player-seek-slider"
+            />
+          </div>
+          <span className="text-xs font-mono font-bold text-white w-10 text-right">
             {Math.round(scale * 100)}%
           </span>
         </div>
@@ -223,7 +220,7 @@ export function AvatarCropperModal({ imageSrc, onCrop, onCancel }) {
           <button
             type="button"
             onClick={handleSaveCrop}
-            className="flex-1 rounded-xl bg-[#8341EF] hover:bg-[#7232d6] py-2.5 text-xs font-bold text-white shadow-lg transition"
+            className="flex-1 rounded-xl bg-white hover:bg-white/90 py-2.5 text-xs font-bold text-black shadow-lg transition active:scale-95"
           >
             Сохранить
           </button>

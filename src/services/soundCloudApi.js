@@ -534,10 +534,17 @@ async function resolveArtistUser(artist) {
     const found = await searchArtists(name);
     if (found.length > 0) {
       const normName = normalizeComparable(name);
-      const exact = found.find(
+      const exacts = found.filter(
         (a) => normalizeComparable(a.username || a.name) === normName
       );
-      return exact || null;
+      if (exacts.length > 0) {
+        exacts.sort((a, b) => (b.followers || 0) - (a.followers || 0));
+        return exacts[0];
+      }
+      
+      // Fallback: sort all matches by followers if no exact match
+      found.sort((a, b) => (b.followers || 0) - (a.followers || 0));
+      return found[0] || null;
     }
   } catch (err) {
     logWarn("api", "resolveArtistUser search failed", err);

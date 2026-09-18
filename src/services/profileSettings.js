@@ -25,7 +25,13 @@ export const defaultProfileSettings = {
   crossfadeEnabled: false,
   audioCacheEnabled: true,
   crossfadeSeconds: 4,
-  discordRpcEnabled: true
+  discordRpcEnabled: true,
+  lyricsSettings: {
+    textSize: "lg", // "sm", "base", "lg", "xl"
+    displayMode: "cover-text", // "cover-text", "hidden", "text-only"
+    syncMode: "lines", // "lines", "words"
+    textStyle: "blur" // "normal", "blur", "scale"
+  }
 };
 
 function readJson(value) {
@@ -46,7 +52,7 @@ export function getProfileSettings() {
   };
 }
 
-export function saveProfileSettings(settings) {
+export function saveProfileSettings(settings, silent = false) {
   if (typeof window === "undefined") return defaultProfileSettings;
 
   const normalized = {
@@ -70,7 +76,11 @@ export function saveProfileSettings(settings) {
   };
 
   window.localStorage.setItem(PROFILE_SETTINGS_KEY, JSON.stringify(normalized));
-  window.dispatchEvent(new CustomEvent("amymusic:profile-settings-changed", { detail: normalized }));
+  
+  if (!silent) {
+    window.dispatchEvent(new CustomEvent("amymusic:profile-settings-changed", { detail: normalized }));
+  }
+  
   return normalized;
 }
 

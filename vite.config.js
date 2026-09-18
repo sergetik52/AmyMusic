@@ -238,10 +238,10 @@ function createSoundCloudProxyPlugin(env) {
         upstreamUrl.searchParams.delete("_proxies");
         const startedAt = Date.now();
 
-        console.info("[AmyMusic:proxy] request", {
-          upstream: maskSecrets(upstreamUrl.toString()),
-          proxy: proxy || "direct"
-        });
+        // console.info("[AmyMusic:proxy] request", {
+        //   upstream: maskSecrets(upstreamUrl.toString()),
+        //   proxy: proxy || "direct"
+        // });
 
         try {
           let response = null;
@@ -286,12 +286,12 @@ function createSoundCloudProxyPlugin(env) {
               response = await requestUpstream(upstreamUrl, req, candidateProxy, authHeaders);
               usedProxy = candidateProxy;
 
-              console.info("[AmyMusic:proxy] attempt", {
-                status: response.statusCode,
-                ms: Date.now() - startedAt,
-                proxy: candidateProxy || "direct",
-                auth: accessToken ? "bearer" : "client_id"
-              });
+              // console.info("[AmyMusic:proxy] attempt", {
+              //   status: response.statusCode,
+              //   ms: Date.now() - startedAt,
+              //   proxy: candidateProxy || "direct",
+              //   auth: accessToken ? "bearer" : "client_id"
+              // });
 
               if (![403, 429, 500, 502, 503, 504].includes(response.statusCode)) {
                 break;
@@ -309,11 +309,11 @@ function createSoundCloudProxyPlugin(env) {
             throw lastError;
           }
 
-          console.info("[AmyMusic:proxy] response", {
-            status: response.statusCode,
-            ms: Date.now() - startedAt,
-            proxy: usedProxy || "direct"
-          });
+          // console.info("[AmyMusic:proxy] response", {
+          //   status: response.statusCode,
+          //   ms: Date.now() - startedAt,
+          //   proxy: usedProxy || "direct"
+          // });
 
           res.statusCode = response.statusCode;
           Object.entries(response.headers).forEach(([key, value]) => {

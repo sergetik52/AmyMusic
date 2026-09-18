@@ -2,6 +2,7 @@ import WaveSeedModal from "./WaveSeedModal";
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
 import { getPersonalWaveTracks, getWaveTracks, searchTracks, searchArtists } from "../services/soundCloudApi";
+import { ArtistLinks } from "../App";
 
 
 function formatTime(val) {
@@ -318,7 +319,7 @@ export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist }
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-bold text-white/25 uppercase tracking-wider mr-1">Волна по:</span>
             {waveSeeds.slice(0, 6).map((seed, i) => (
-              <div key={`chip-${seed.type}-${seed.id}-${i}`} className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] rounded-full pl-1 pr-2.5 py-0.5">
+              <div key={`chip-${seed.type}-${seed.id}-${i}`} className="flex items-center gap-1.5 bg-white/[0.04] rounded-full pl-1 pr-2.5 py-0.5">
                 <img src={seed.cover || "/user.svg"} alt="" className={`h-5 w-5 shrink-0 object-cover ${seed.type === "artist" ? "rounded-full" : "rounded"}`} />
                 <span className="text-[11px] font-semibold text-white/60 truncate max-w-[80px]">{seed.name}</span>
               </div>
@@ -333,7 +334,7 @@ export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist }
             className="home-card group relative h-[80px] rounded-[18px] overflow-hidden bg-black shadow-[inset_0_0_0_1px_rgba(0,0,0,1)] ring-1 ring-inset ring-black/20 transform-gpu transition-all duration-300 hover:shadow-[inset_0_0_0_1px_rgba(0,0,0,1),0_0_15px_rgba(255,255,255,0.05)] text-left">
             <div className="absolute inset-0 scale-[1.03] origin-center"><CoverMosaic covers={historyCovers} /><div className="absolute inset-0 bg-gradient-to-r from-black via-black/60 to-black/20" /></div>
             <div className="relative z-10 flex h-full items-center px-5 gap-3.5">
-              <div className="h-10 w-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/10">
+              <div className="h-10 w-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0">
                 <svg className="h-4 w-4 text-white/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
               </div>
               <div className="flex flex-col min-w-0">
@@ -346,7 +347,7 @@ export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist }
             className="home-card group relative h-[80px] rounded-[18px] overflow-hidden bg-black shadow-[inset_0_0_0_1px_rgba(0,0,0,1)] ring-1 ring-inset ring-black/20 transform-gpu transition-all duration-300 hover:shadow-[inset_0_0_0_1px_rgba(0,0,0,1),0_0_15px_rgba(255,255,255,0.05)] text-left">
             <div className="absolute inset-0 scale-[1.03] origin-center"><CoverMosaic covers={favCovers} /><div className="absolute inset-0 bg-gradient-to-r from-black via-black/60 to-black/20" /></div>
             <div className="relative z-10 flex h-full items-center px-5 gap-3.5">
-              <div className="h-10 w-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/10">
+              <div className="h-10 w-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0">
                 <svg className="h-4 w-4 text-white/80" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>
               </div>
               <div className="flex flex-col min-w-0">
@@ -413,16 +414,14 @@ export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist }
                       >
                         {track.title}
                       </button>
-                      <button 
-                        type="button"
-                        onClick={() => { 
-                          if (onOpenArtist) onOpenArtist({ name: track.artist, id: track.userId || track.artist });
-                          setShowHistoryPanel(false);
-                        }}
-                        className="text-[12px] font-medium text-white/40 truncate text-left mt-0.5 hover:text-white/80 hover:underline w-fit"
-                      >
-                        {track.artist || "soundcloud"}
-                      </button>
+                      <div className="mt-0.5" onClick={() => setShowHistoryPanel(false)}>
+                        <ArtistLinks
+                          track={track}
+                          onOpenArtist={onOpenArtist}
+                          showAvatar={true}
+                          className="text-[12px] font-medium text-white/40"
+                        />
+                      </div>
                     </div>
                     
                     {/* Duration */}
