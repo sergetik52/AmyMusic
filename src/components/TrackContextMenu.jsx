@@ -144,6 +144,11 @@ export function TrackContextMenu({
 
   if (typeof document === "undefined") return null;
 
+  const handleAction = (action) => {
+    action();
+    onClose();
+  };
+
   return createPortal(
     <div
       ref={menuRef}
@@ -204,7 +209,7 @@ export function TrackContextMenu({
             onClick={() => handleAction(() => toggleLike(track.id, track))}
             className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] font-bold text-white/90 transition hover:bg-white/10"
           >
-            <img src="/menu/like.svg" alt="" className={`h-4 w-4 shrink-0 ${isLiked ? "text-purple-500" : "opacity-60"}`} />
+            <img src={isLiked ? "/menu/like.svg" : "/unlike.svg"} alt="" className={`h-4 w-4 shrink-0 ${isLiked ? "text-purple-500" : "opacity-60"}`} />
             <span>{isLiked ? "Удалить из избранного" : "Добавить в избранное"}</span>
           </button>
 

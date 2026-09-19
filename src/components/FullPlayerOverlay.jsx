@@ -193,6 +193,23 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   const [lyricsContextMenu, setLyricsContextMenu] = useState(null);
   const [lyricsUserOffset, setLyricsUserOffset] = useState(0);
 
+  const handleUpdateLyricsOffset = (val) => {
+    setLyricsUserOffset(val);
+    if (currentTrack?.id) {
+      try {
+        const saved = JSON.parse(localStorage.getItem("amymusic.lyricsOffsets") || "{}");
+        if (val === 0) {
+          delete saved[currentTrack?.id];
+        } else {
+          saved[currentTrack?.id] = val;
+        }
+        localStorage.setItem("amymusic.lyricsOffsets", JSON.stringify(saved));
+      } catch (e) {
+        console.error("Failed to save lyrics offset", e);
+      }
+    }
+  };
+
   useEffect(() => {
     return subscribeProfileSettings(setProfileSettings);
   }, []);
@@ -378,12 +395,19 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     let isCancelled = false;
     lyricRefs.current = [];
     setLyricsOffset(0);
-    setLyricsUserOffset(0);
 
     const trackId = currentTrack?.id;
     if (!trackId || trackId === "empty") {
+      setLyricsUserOffset(0);
       setLyricsState({ status: "empty", lines: [], error: "" });
       return undefined;
+    }
+
+    try {
+      const saved = JSON.parse(localStorage.getItem("amymusic.lyricsOffsets") || "{}");
+      setLyricsUserOffset(saved[trackId] || 0);
+    } catch (e) {
+      setLyricsUserOffset(0);
     }
 
     setLyricsState({ status: "loading", lines: [], error: "" });
@@ -413,16 +437,32 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     }
 
     const stage = lyricsStageRef.current;
-    const anchor = lyricRefs.current[lyricsAnchorIndex];
-    if (!stage || !anchor) return;
+    if (!stage) return;
 
-    const nextOffset =
-      stage.clientHeight / 2 -
-      anchor.offsetTop -
-      anchor.offsetHeight / 2;
+    const recalculateOffset = () => {
+      const anchor = lyricRefs.current[lyricsAnchorIndex];
+      if (!stage || !anchor) return;
+      const nextOffset = stage.clientHeight / 2 - anchor.offsetTop - anchor.offsetHeight / 2;
+      setLyricsOffset(nextOffset);
+    };
 
-    setLyricsOffset(nextOffset);
-  }, [lyricsAnchorIndex, lyricsState.lines, shouldShowLyricsPanel, isMobile]);
+    recalculateOffset();
+
+    // Use ResizeObserver to recalculate during CSS transitions (like width changes on text-only mode)
+    const wrapper = stage.firstElementChild;
+    const resizeObserver = new ResizeObserver(() => {
+      recalculateOffset();
+    });
+
+    resizeObserver.observe(stage);
+    if (wrapper) {
+      resizeObserver.observe(wrapper);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [lyricsAnchorIndex, lyricsState.lines, shouldShowLyricsPanel, isMobile, lyricsSettings.textSize, lyricsSettings.displayMode, lyricsSettings.textStyle, lyricsSettings.syncMode]);
 
   const handleClose = () => {
     setIsClosing(true);
@@ -758,7 +798,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                   lyricsSettings.textSize === "base" ? "text-[17px]" :
                   lyricsSettings.textSize === "lg" ? "text-[19px]" : "text-[22px]"
                 }`
-              : `mx-auto flex max-w-[760px] flex-col gap-8 text-center font-extrabold leading-[1.2] tracking-tight transition-all duration-300 ease-out ${
+              : `mx-auto flex w-[760px] max-w-[calc(100vw-6rem)] flex-col gap-8 text-center font-extrabold leading-[1.2] tracking-tight transition-all duration-300 ease-out ${
                   lyricsSettings.textSize === "sm" ? "text-[20px]" :
                   lyricsSettings.textSize === "base" ? "text-[28px]" :
                   lyricsSettings.textSize === "lg" ? "text-[36px]" : "text-[46px]"
@@ -1702,7 +1742,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             saveProfileSettings(nextSettings, true);
           }}
           offset={lyricsUserOffset}
-          onUpdateOffset={(val) => setLyricsUserOffset(val)}
+          onUpdateOffset={handleUpdateLyricsOffset}
           activeDisplayMode={shouldShowSidePanel ? lyricsSettings.displayMode : "hidden"}
           onShowText={() => {
             setSidePanel("lyrics");

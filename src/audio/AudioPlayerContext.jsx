@@ -674,9 +674,14 @@ export function AudioProvider({ children }) {
 
   const showNotification = useCallback((message, type = "info") => {
     const id = Math.random().toString(36).substr(2, 9);
-    setNotifications((prev) => [...prev, { id, message, type }]);
+    setNotifications((prev) => [...prev, { id, message, type, isExiting: false }]);
     setTimeout(() => {
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isExiting: true } : n))
+      );
+      setTimeout(() => {
+        setNotifications((prev) => prev.filter((n) => n.id !== id));
+      }, 300);
     }, 3000);
   }, []);
 
@@ -2516,7 +2521,7 @@ export function AudioProvider({ children }) {
         {notifications.map((n) => (
           <div
             key={n.id}
-            className="flex items-center gap-2.5 rounded-full border border-white/10 bg-[#121212]/80 px-5 py-2.5 text-xs font-bold text-white shadow-2xl backdrop-blur-md transition-all duration-300 animate-slide-down-notify pointer-events-auto"
+            className={`flex items-center gap-2.5 rounded-full border border-white/10 bg-[#121212]/80 px-5 py-2.5 text-xs font-bold text-white shadow-2xl backdrop-blur-md transition-all duration-300 pointer-events-auto ${n.isExiting ? "animate-slide-up-notify opacity-0" : "animate-slide-down-notify opacity-100"}`}
             style={{
               boxShadow: "0 8px 32px rgba(0,0,0,0.4)"
             }}

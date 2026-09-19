@@ -711,6 +711,21 @@ button {
   animation: slideDownNotify 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
+@keyframes slideUpNotify {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.95);
+  }
+}
+
+.animate-slide-up-notify {
+  animation: slideUpNotify 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
 @media (max-width: 768px) {
   .song-wave-field {
     display: none !important;
