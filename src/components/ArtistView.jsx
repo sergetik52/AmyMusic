@@ -603,13 +603,9 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
   const tags = profile.tags?.length ? profile.tags : tracks.map((track) => track.mood).filter(Boolean).slice(0, 3);
 
   const latestRelease = useMemo(() => {
-    const allReleases = [...albums];
-    if (!allReleases.length && tracks.length) {
-      const latestTrack = [...tracks].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0];
-      if (latestTrack) return latestTrack;
-    }
-    if (!allReleases.length) return null;
-    return allReleases.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0];
+    const allItems = [...albums, ...tracks];
+    if (!allItems.length) return null;
+    return allItems.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0];
   }, [albums, tracks]);
 
   const handlePlayTrack = (track, queue = sortedTracks) => {
