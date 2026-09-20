@@ -79,6 +79,7 @@ export function SettingsView({ profileData, onProfileSave }) {
   const [cacheStats, setCacheStats] = useState({ covers: 0, lyrics: 0, tracks: 0 });
   const [draftProfile, setDraftProfile] = useState(profileData || { displayName: "", avatarUrl: "" });
   const [croppingImageSrc, setCroppingImageSrc] = useState(null);
+  const [localCacheSize, setLocalCacheSize] = useState("0 MB");
   
   const isDesktop = Boolean(typeof window !== "undefined" && window.amyMusicDesktop);
 
@@ -123,12 +124,37 @@ export function SettingsView({ profileData, onProfileSave }) {
       }).catch(() => {
         if (isMounted) setCacheStats({ covers: coversCount, lyrics: lyricsCount, tracks: 0 });
       });
+      
+      if (navigator.storage && navigator.storage.estimate) {
+        navigator.storage.estimate().then(estimate => {
+          if (!isMounted) return;
+          
+          let lsUsage = 0;
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const val = localStorage.getItem(key);
+            lsUsage += (key ? key.length : 0) + (val ? val.length : 0);
+          }
+          // localStorage stores UTF-16, so approx 2 bytes per char
+          lsUsage *= 2; 
+
+          const usage = (estimate.usage || 0) + lsUsage;
+          if (usage < 1024 * 1024 && usage > 0) {
+            setLocalCacheSize((usage / 1024).toFixed(1) + " KB");
+          } else {
+            setLocalCacheSize((usage / (1024 * 1024)).toFixed(1) + " MB");
+          }
+        }).catch(() => {
+          if (isMounted) setLocalCacheSize("0 MB");
+        });
+      }
     } else {
       setCacheStats({ covers: coversCount, lyrics: lyricsCount, tracks: 0 });
+      setLocalCacheSize("0 MB");
     }
 
     return () => { isMounted = false; };
-  }, [activeSubTab, audioCacheSize]);
+  }, [activeSubTab]);
 
   const handleClearTracks = async () => {
     if (typeof window !== "undefined" && "caches" in window) {
@@ -189,10 +215,106 @@ export function SettingsView({ profileData, onProfileSave }) {
     event.target.value = "";
   };
 
-  const handleHotkeyAssign = async (action) => {
-    // Basic assignment logic placeholder
-    console.log("Assign hotkey for", action);
+  const [activeBindAction, setActiveBindAction] = useState(null);
+  const [bindValue, setBindValue] = useState("");
+
+  const handleHotkeyAssign = (action) => {
+    setActiveBindAction(action);
+    setBindValue("");
   };
+
+  const handleHotkeyDelete = (action) => {
+    const nextBinds = { ...settings.globalBinds };
+    delete nextBinds[action];
+    updateField("globalBinds", nextBinds);
+    if (window.amyMusicDesktop?.registerHotkey) {
+      window.amyMusicDesktop.unregisterAllHotkeys().then(() => {
+        if (settings.bindsEnabled) {
+          Object.entries(nextBinds).forEach(([act, combo]) => {
+            if (combo) window.amyMusicDesktop.registerHotkey(act, combo);
+          });
+        }
+      });
+    }
+  };
+
+  const handleBindKeyDown = (e) => {
+    e.preventDefault();
+    if (e.key === "Escape") {
+      setActiveBindAction(null);
+      return;
+    }
+    
+    const isModifier = ["Control", "Shift", "Alt", "Meta"].includes(e.key);
+    if (isModifier) {
+      // Wait for the main key
+      return;
+    }
+
+    let combo = [];
+    if (e.ctrlKey || e.metaKey) combo.push("CommandOrControl");
+    if (e.altKey) combo.push("Alt");
+    if (e.shiftKey) combo.push("Shift");
+    
+    // Process key name for Electron using e.code to bypass Russian layout
+    let keyName = e.key;
+    if (e.code.startsWith("Key")) {
+      keyName = e.code.replace("Key", ""); // "KeyA" -> "A"
+    } else if (e.code.startsWith("Digit")) {
+      keyName = e.code.replace("Digit", ""); // "Digit1" -> "1"
+    } else if (e.code === "Space") {
+      keyName = "Space";
+    } else if (e.code === "ArrowUp") keyName = "Up";
+    else if (e.code === "ArrowDown") keyName = "Down";
+    else if (e.code === "ArrowLeft") keyName = "Left";
+    else if (e.code === "ArrowRight") keyName = "Right";
+    else {
+      // Fallback to capitalizing first letter
+      keyName = keyName.charAt(0).toUpperCase() + keyName.slice(1);
+    }
+    
+    // Force modifiers for letters and numbers to prevent typing issues
+    const isAlphanumeric = /^[A-Z0-9]$/.test(keyName);
+    if (isAlphanumeric && combo.length === 0) {
+      setBindValue("Требуется Ctrl, Alt или Shift!");
+      setTimeout(() => setBindValue(""), 1500);
+      return;
+    }
+    
+    combo.push(keyName);
+    const comboStr = combo.join("+");
+    setBindValue(comboStr);
+    
+    setTimeout(() => {
+      // Remove this combo from any other action to prevent duplicates
+      const nextBinds = { ...(settings.globalBinds || {}) };
+      Object.keys(nextBinds).forEach(key => {
+        if (nextBinds[key] === comboStr) {
+          delete nextBinds[key];
+        }
+      });
+      nextBinds[activeBindAction] = comboStr;
+      
+      updateField("globalBinds", nextBinds);
+      if (window.amyMusicDesktop?.registerHotkey) {
+        window.amyMusicDesktop.unregisterAllHotkeys().then(() => {
+          if (settings.bindsEnabled) {
+            Object.entries(nextBinds).forEach(([act, cb]) => {
+              if (cb) window.amyMusicDesktop.registerHotkey(act, cb);
+            });
+          }
+        });
+      }
+      setActiveBindAction(null);
+    }, 200);
+  };
+
+  useEffect(() => {
+    if (activeBindAction) {
+      window.addEventListener("keydown", handleBindKeyDown);
+      return () => window.removeEventListener("keydown", handleBindKeyDown);
+    }
+  }, [activeBindAction]);
 
   // SVG Icons
   const IconMain = <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>;
@@ -202,6 +324,31 @@ export function SettingsView({ profileData, onProfileSave }) {
 
   return (
     <>
+      {activeBindAction && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl p-8 flex flex-col items-center max-w-[400px] w-full shadow-2xl">
+            <div className="text-xl font-bold mb-2 text-center">Назначение клавиши</div>
+            <div className="text-sm text-white/50 text-center mb-8">
+              Нажмите желаемую комбинацию клавиш...
+            </div>
+            
+            <div className="bg-[#0a0a0a] border border-[#333] rounded-xl px-6 py-4 min-w-[200px] min-h-[60px] flex justify-center items-center mb-8">
+              {bindValue ? (
+                <div className="text-xl font-bold tracking-widest text-[#fff] animate-[pulse_1s_ease-in-out_infinite]">{bindValue}</div>
+              ) : (
+                <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+              )}
+            </div>
+            
+            <button 
+              className="px-6 py-2.5 rounded-full bg-[#2a2a2a] text-white hover:bg-[#333] transition-colors text-sm font-semibold"
+              onClick={() => setActiveBindAction(null)}
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
       {croppingImageSrc && (
         <AvatarCropperModal
           key="avatar-cropper-dialog"
@@ -319,6 +466,23 @@ export function SettingsView({ profileData, onProfileSave }) {
                   onChange={(v) => updateField("discordRpcEnabled", v)} 
                   disabled={!isDesktop}
                 />
+
+                <div className="mt-12 pt-8 border-t border-red-900/30">
+                  <div className="text-xl font-bold text-red-500 mb-2">Опасная зона</div>
+                  <div className="text-sm text-white/50 mb-6">Действия ниже невозможно отменить</div>
+                  <button 
+                    onClick={() => {
+                      if (confirm("Вы уверены, что хотите сбросить все настройки приложения по умолчанию?")) {
+                        localStorage.removeItem("amymusic-player-settings");
+                        localStorage.removeItem("amymusic-audio-state");
+                        window.location.reload();
+                      }
+                    }}
+                    className="px-6 py-3 rounded-xl border border-red-500/50 text-red-500 font-semibold hover:bg-red-500/10 transition-colors"
+                  >
+                    Сбросить все настройки
+                  </button>
+                </div>
               </div>
             )}
 
@@ -386,7 +550,7 @@ export function SettingsView({ profileData, onProfileSave }) {
                 <div className="bg-[#141414] rounded-2xl p-12 flex flex-col justify-center items-center mb-8">
                   <div className="w-[220px] h-[220px] rounded-full border-2 border-[#333] flex flex-col justify-center items-center relative mb-8">
                     <div className="absolute inset-[-2px] rounded-full border-2 border-transparent border-t-[#666] border-r-[#666] -rotate-45" />
-                    <div className="text-[28px] font-bold">{audioCacheSize || "0 MB"}</div>
+                    <div className="text-[28px] font-bold">{localCacheSize || "0 MB"}</div>
                     <div className="text-xs text-white/50 mt-1.5 uppercase tracking-wider">Занято</div>
                   </div>
                   
@@ -426,7 +590,7 @@ export function SettingsView({ profileData, onProfileSave }) {
                   onChange={(v) => updateField("bindsEnabled", v)} 
                 />
 
-                <div className="mt-10 flex flex-col gap-1.5">
+                <div className={`mt-10 flex flex-col gap-1.5 transition-opacity ${!settings.bindsEnabled ? "opacity-30 pointer-events-none" : ""}`}>
                   {[
                     { id: "playPause", label: "Воспроизвести/пауза", desc: "Начинает или приостанавливает воспроизведение" },
                     { id: "nextTrack", label: "Следующий трек", desc: "Переключает на следующий трек в очереди" },
@@ -441,9 +605,20 @@ export function SettingsView({ profileData, onProfileSave }) {
                         <div className="text-base font-semibold mb-1.5">{bind.label}</div>
                         <div className="text-sm text-white/50">{bind.desc}</div>
                       </div>
-                      <button className="bg-transparent border-none text-[#555] cursor-pointer text-sm font-medium flex items-center gap-1 hover:text-white transition" onClick={() => handleHotkeyAssign(bind.id)}>
-                        {settings.globalBinds?.[bind.id] || "+ Назначить"}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button className="bg-transparent border-none text-[#555] cursor-pointer text-sm font-medium flex items-center gap-1 hover:text-white transition" onClick={() => handleHotkeyAssign(bind.id)}>
+                          {settings.globalBinds?.[bind.id] || "+ Назначить"}
+                        </button>
+                        {settings.globalBinds?.[bind.id] && (
+                          <button 
+                            className="bg-transparent border-none text-red-500/50 hover:text-red-500 cursor-pointer p-1 transition"
+                            onClick={() => handleHotkeyDelete(bind.id)}
+                            title="Удалить бинд"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

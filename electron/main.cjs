@@ -1062,13 +1062,10 @@ function createWindow() {
     }
   });
 
-  mainWindow.on("minimize", (event) => {
+  mainWindow.on("minimize", () => {
     if (mainWindow && mainWindow.webContents) {
       mainWindow.webContents.setFrameRate(10);
     }
-    if (!isTrayEnabled) return;
-    event.preventDefault();
-    mainWindow.hide();
   });
 
   mainWindow.on("restore", () => {

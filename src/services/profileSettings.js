@@ -30,6 +30,7 @@ export const defaultProfileSettings = {
   audioQuality: "256", // "192", "256", "320", "1411"
   volumeNormalization: false,
   gaplessPlayback: false,
+  bindsEnabled: false,
   globalBinds: {
     playPause: "",
     nextTrack: "",
@@ -90,6 +91,7 @@ export function saveProfileSettings(settings, silent = false) {
     audioQuality: String(settings?.audioQuality || defaultProfileSettings.audioQuality),
     volumeNormalization: Boolean(settings?.volumeNormalization),
     gaplessPlayback: Boolean(settings?.gaplessPlayback),
+    bindsEnabled: Boolean(settings?.bindsEnabled),
     globalBinds: {
       ...defaultProfileSettings.globalBinds,
       ...(settings?.globalBinds || {})
@@ -113,7 +115,9 @@ export function getPlayerRuntimeSettings() {
     audioOutputDevice: settings.audioOutputDevice,
     audioQuality: settings.audioQuality,
     volumeNormalization: settings.volumeNormalization,
-    gaplessPlayback: settings.gaplessPlayback
+    gaplessPlayback: settings.gaplessPlayback,
+    bindsEnabled: settings.bindsEnabled,
+    globalBinds: settings.globalBinds
   };
 }
 

@@ -547,7 +547,15 @@ export function AudioProvider({ children }) {
     storedAudioStateRef.current = readStoredAudioState() || false;
   }
   const storedAudioState = storedAudioStateRef.current || {};
-  const audioRef = useRef(null);
+  const [activeEngineIdx, setActiveEngineIdx] = useState(0);
+  const audioRefs = useRef([null, null]);
+  const hlsRefs = useRef([null, null]);
+  const activeEngineRef = useRef(0);
+  const crossfadeTimeoutRef = useRef(null);
+  
+  // Use activeEngineRef in getters so stale closures always read the CORRECT current engine!
+  const audioRef = { get current() { return audioRefs.current[activeEngineRef.current]; }, set current(val) { audioRefs.current[activeEngineRef.current] = val; } };
+  const hlsRef = { get current() { return hlsRefs.current[activeEngineRef.current]; }, set current(val) { hlsRefs.current[activeEngineRef.current] = val; } };
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const frequencyDataRef = useRef(null);
@@ -729,8 +737,7 @@ export function AudioProvider({ children }) {
   // Refs for volume/mute to avoid recreating loadTrack on every volume change
   const volumeRef = useRef(volume);
   const isMutedRef = useRef(isMuted);
-  // HLS instance ref for tracks that only have HLS transcodings
-  const hlsRef = useRef(null);
+
   // Track the last resolved CDN stream URL (audio.src may be blob:// when using HLS)
   const loadedStreamUrlRef = useRef("");
   const manualActionRef = useRef(false);
@@ -753,6 +760,24 @@ export function AudioProvider({ children }) {
     }),
     []
   );
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.amyMusicDesktop) {
+      if (playerSettings.bindsEnabled && playerSettings.globalBinds) {
+        logDebug("audio", "Syncing hotkeys (ENABLED)", playerSettings.globalBinds);
+        // Unregister old binds first to avoid conflicts
+        window.amyMusicDesktop.unregisterAllHotkeys().then(() => {
+          Object.entries(playerSettings.globalBinds).forEach(([action, combo]) => {
+            if (combo) {
+              window.amyMusicDesktop.registerHotkey(action, combo);
+            }
+          });
+        });
+      } else {
+        logDebug("audio", "Syncing hotkeys (DISABLED)", { bindsEnabled: playerSettings.bindsEnabled });
+        window.amyMusicDesktop.unregisterAllHotkeys();
+      }
+    }
+  }, [playerSettings.bindsEnabled, playerSettings.globalBinds]);
 
 
   useEffect(() => {
@@ -862,15 +887,45 @@ export function AudioProvider({ children }) {
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0.68;
 
-      const source = context.createMediaElementSource(audio);
+      if (!audioRefs.current[0]) return null;
+      if (!audioRefs.current[1]) return null;
+      
+      const source0 = context.createMediaElementSource(audioRefs.current[0]);
+      const source1 = context.createMediaElementSource(audioRefs.current[1]);
+      
+      const gain0 = context.createGain();
+      const gain1 = context.createGain();
+      gain0.gain.value = activeEngineRef.current === 0 ? 1 : 0;
+      gain1.gain.value = activeEngineRef.current === 1 ? 1 : 0;
+      
+      // Store gain nodes to manipulate them during crossfade
+      audioRefs.current[0].gainNode = gain0;
+      audioRefs.current[1].gainNode = gain1;
 
-      // Studio Master transparent limiter (preserves full dynamic range, crisp treble and clear punch, avoids muddy compression)
+      source0.connect(gain0);
+      source1.connect(gain1);
+      
+      const mixedSource = context.createGain();
+      mixedSource.gain.value = 1;
+      gain0.connect(mixedSource);
+      gain1.connect(mixedSource);
+
       const compressor = context.createDynamicsCompressor();
-      compressor.threshold.value = -0.5;
-      compressor.knee.value = 40;
-      compressor.ratio.value = 12;
-      compressor.attack.value = 0.001;
-      compressor.release.value = 0.05;
+      if (playerSettingsRef.current?.volumeNormalization) {
+        // Aggressive Studio Normalizer
+        compressor.threshold.value = -24;
+        compressor.knee.value = 30;
+        compressor.ratio.value = 12;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.25;
+      } else {
+        // Transparent Limiter
+        compressor.threshold.value = -0.5;
+        compressor.knee.value = 40;
+        compressor.ratio.value = 12;
+        compressor.attack.value = 0.001;
+        compressor.release.value = 0.05;
+      }
 
       // 10-Band Real Equalizer BiquadFilterNodes
       const eqFilters = EQUALIZER_FREQUENCIES.map((band, idx) => {
@@ -884,7 +939,7 @@ export function AudioProvider({ children }) {
       });
       eqFiltersRef.current = eqFilters;
 
-      let currentSource = source;
+      let currentSource = mixedSource;
       eqFilters.forEach((filter) => {
         currentSource.connect(filter);
         currentSource = filter;
@@ -983,13 +1038,25 @@ export function AudioProvider({ children }) {
   }, [startAudioAnalysis, stopAudioAnalysis]);
 
   useEffect(() => {
-    const audio = new Audio();
-    audio.preload = "auto";
-    audio.crossOrigin = "anonymous";
+    if (!audioRefs.current[0]) {
+      audioRefs.current[0] = new Audio();
+      audioRefs.current[0].crossOrigin = "anonymous";
+      audioRefs.current[0].preload = "auto";
+    }
+    if (!audioRefs.current[1]) {
+      audioRefs.current[1] = new Audio();
+      audioRefs.current[1].crossOrigin = "anonymous";
+      audioRefs.current[1].preload = "auto";
+    }
+    
+    // Sync ref
+    activeEngineRef.current = activeEngineIdx;
+    
+    const audio = audioRefs.current[activeEngineIdx];
     audio.volume = volume;
-    audio.playbackRate = 1.0; // explicit safety: never allow accidental speed-up
-    audioRef.current = audio;
-    logDebug("audio", "HTMLAudioElement created", { volume });
+    audio.playbackRate = 1.0;
+    
+    logDebug("audio", "HTMLAudioElement listeners attached", { engine: activeEngineIdx });
 
     const lastTimeRef = { current: 0 };
     const isSeekingRef = { current: false };
@@ -1015,6 +1082,66 @@ export function AudioProvider({ children }) {
       lastTimeRef.current = now;
       setCurrentTime(now);
 
+      // --- CROSSFADE LOGIC ---
+      const crossfadeSettings = playerSettingsRef.current || {};
+      const isCrossfade = crossfadeSettings.crossfadeEnabled;
+      const triggerOffset = isCrossfade ? (crossfadeSettings.crossfadeSeconds || 8) : 0;
+      
+      if (triggerOffset > 0 && dur > 20 && now >= dur - triggerOffset && queueRef.current.length > 1) {
+         if (!crossfadeTimeoutRef.current) {
+            logDebug("audio", "initiating crossfade/gapless sequence", { triggerOffset });
+            crossfadeTimeoutRef.current = true; // prevent re-entry
+            
+            const nextIdx = (currentIndexRef.current + 1) % queueRef.current.length;
+            const nextTrack = queueRef.current[nextIdx];
+            
+            if (nextTrack && nextTrack.id !== "empty") {
+              const oldEngineIdx = activeEngineRef.current;
+              // Fade out current
+              const currentAudio = audioRefs.current[oldEngineIdx];
+              if (isCrossfade && currentAudio.gainNode) {
+                 const ctx = audioContextRef.current;
+                 if (ctx && ctx.state === "running") {
+                   currentAudio.gainNode.gain.cancelScheduledValues(ctx.currentTime);
+                   currentAudio.gainNode.gain.setValueAtTime(1, ctx.currentTime); // Force 1 to avoid reading stale .value
+                   currentAudio.gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + triggerOffset);
+                 }
+              }
+              
+              // Switch engines
+              const nextEngineIdx = oldEngineIdx === 0 ? 1 : 0;
+              
+              // We dispatch state updates. The useEffect will tear down listeners on old audio and attach to new audio.
+              setActiveEngineIdx(nextEngineIdx);
+              setCurrentIndex(nextIdx);
+              pendingAutoplayRef.current = true;
+              
+              // Cleanup old engine after crossfade finishes
+              setTimeout(() => {
+                 const oldHls = hlsRefs.current[oldEngineIdx];
+                 if (oldHls) {
+                     oldHls.destroy();
+                     hlsRefs.current[oldEngineIdx] = null;
+                 }
+                 if (currentAudio) {
+                     currentAudio.pause();
+                     currentAudio.removeAttribute('src');
+                     currentAudio.load();
+                     if (currentAudio.gainNode && audioContextRef.current) {
+                         currentAudio.gainNode.gain.setValueAtTime(0, audioContextRef.current.currentTime);
+                     }
+                 }
+                 crossfadeTimeoutRef.current = false;
+              }, triggerOffset * 1000 + 2000);
+            }
+         }
+      }
+      
+      // Reset crossfade lock if we seeked back
+      if (now < dur - 15) {
+         crossfadeTimeoutRef.current = false;
+      }
+      
       // Pre-fetch fresh URL and pre-buffer stream for next track 20s before current track ends
       if (dur > 20 && now >= dur - 20 && queueRef.current.length > 1) {
         const nextIdx = (currentIndexRef.current + 1) % queueRef.current.length;
@@ -1098,24 +1225,31 @@ export function AudioProvider({ children }) {
 
       const isFresh = nextTrack.streamUrl && nextTrack._fetchedAt && (Date.now() - nextTrack._fetchedAt <= 90000);
 
-      if (isFresh) {
-        loadedStreamUrlRef.current = nextTrack.streamUrl;
-        audio.src = nextTrack.streamUrl;
+      const playStream = (streamUrl) => {
+        const isHls = /\.m3u8($|\?)/i.test(streamUrl) || streamUrl.includes("/hls/") || streamUrl.includes("format=hls");
+        if (isHls && Hls.isSupported()) {
+          const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+          hlsRef.current = hls;
+          hls.loadSource(streamUrl);
+          hls.attachMedia(audio);
+        } else {
+          audio.src = streamUrl;
+        }
         audio.currentTime = 0;
         audio.play().then(finishTransition).catch((err) => {
-          logWarn("audio", "synchronous background transition play failed", err);
+          logWarn("audio", "sync transition play failed", err);
           finishTransition();
         });
+      };
+
+      if (isFresh) {
+        loadedStreamUrlRef.current = nextTrack.streamUrl;
+        playStream(nextTrack.streamUrl);
       } else {
         getTrackAudioUrl(nextTrack, true).then((streamUrl) => {
           if (streamUrl && audioRef.current && loadedTrackIdRef.current === String(nextTrack.id)) {
             loadedStreamUrlRef.current = streamUrl;
-            audioRef.current.src = streamUrl;
-            audioRef.current.currentTime = 0;
-            audioRef.current.play().then(finishTransition).catch((err) => {
-              logWarn("audio", "async background play failed", err);
-              finishTransition();
-            });
+            playStream(streamUrl);
           } else {
             finishTransition();
           }
@@ -1250,13 +1384,6 @@ export function AudioProvider({ children }) {
 
     return () => {
       stopAudioAnalysis();
-      // Destroy HLS instance before pausing audio
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-      audio.pause();
-      audio.src = "";
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("seeking", handleSeeking);
       audio.removeEventListener("seeked", handleSeeked);
@@ -1270,12 +1397,8 @@ export function AudioProvider({ children }) {
       audio.removeEventListener("canplaythrough", handleCanPlay);
       audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("error", handleError);
-      audioContextRef.current?.close?.();
-      audioContextRef.current = null;
-      analyserRef.current = null;
-      frequencyDataRef.current = null;
     };
-  }, [startAudioAnalysis, stopAudioAnalysis]);
+  }, [activeEngineIdx, volume, startAudioAnalysis, stopAudioAnalysis]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1455,7 +1578,61 @@ export function AudioProvider({ children }) {
   }, [queue.length]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+    let unsubscribeHotkey;
+    if (typeof window !== "undefined" && window.amyMusicDesktop?.onHotkey) {
+      unsubscribeHotkey = window.amyMusicDesktop.onHotkey((action) => {
+        logDebug("audio", "Global hotkey triggered", action);
+        switch (action) {
+          case "playPause":
+            if (audioRef.current?.paused === false) {
+              audioRef.current.pause();
+              setIsPlaying(false);
+            } else {
+              audioRef.current?.play().then(() => setIsPlaying(true)).catch(console.warn);
+            }
+            break;
+          case "nextTrack":
+            next();
+            break;
+          case "prevTrack":
+            previous();
+            break;
+          case "toggleLike":
+            const track = currentTrackRef.current;
+            if (track && track.id !== "empty") {
+              setLikedTrackIds((ids) => {
+                const nextIds = new Set(ids);
+                if (nextIds.has(String(track.id))) {
+                  nextIds.delete(String(track.id));
+                  setLikedTracks((tracks) => tracks.filter((item) => String(item.id) !== String(track.id)));
+                } else {
+                  nextIds.add(String(track.id));
+                  setLikedTracks((tracks) => {
+                    if (!tracks.some((item) => String(item.id) === String(track.id))) {
+                      return [track, ...tracks];
+                    }
+                    return tracks;
+                  });
+                }
+                return nextIds;
+              });
+            }
+            break;
+          case "volumeUp":
+            setVolume(Math.min(1, volumeRef.current + 0.1));
+            break;
+          case "volumeDown":
+            setVolume(Math.max(0, volumeRef.current - 0.1));
+            break;
+          default:
+            break;
+        }
+      });
+    }
+
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return () => {
+      if (unsubscribeHotkey) unsubscribeHotkey();
+    };
 
     const actionHandlers = [
       ["play", async () => {
@@ -1501,6 +1678,10 @@ export function AudioProvider({ children }) {
         // Ignore unsupported action types
       }
     }
+    
+    return () => {
+      if (unsubscribeHotkey) unsubscribeHotkey();
+    };
   }, [next, previous]);
 
   const loadTrack = useCallback(async (track, shouldPlay = false, isManual = false) => {
@@ -1624,6 +1805,17 @@ export function AudioProvider({ children }) {
             }, 12000);
           });
           await ensureAudioGraph();
+          if (audio.gainNode && audioContextRef.current) {
+             const ctx = audioContextRef.current;
+             if (crossfadeTimeoutRef.current && playerSettingsRef.current?.crossfadeEnabled) {
+                 audio.gainNode.gain.cancelScheduledValues(ctx.currentTime);
+                 audio.gainNode.gain.setValueAtTime(0, ctx.currentTime);
+                 audio.gainNode.gain.linearRampToValueAtTime(1, ctx.currentTime + (playerSettingsRef.current?.crossfadeSeconds || 8));
+             } else {
+                 audio.gainNode.gain.cancelScheduledValues(ctx.currentTime);
+                 audio.gainNode.gain.setValueAtTime(1, ctx.currentTime);
+             }
+          }
           await audio.play();
         } else {
           audio.volume = targetVolume;
@@ -1636,6 +1828,17 @@ export function AudioProvider({ children }) {
 
         if (shouldPlay) {
           await ensureAudioGraph();
+          if (audio.gainNode && audioContextRef.current) {
+             const ctx = audioContextRef.current;
+             if (crossfadeTimeoutRef.current && playerSettingsRef.current?.crossfadeEnabled) {
+                 audio.gainNode.gain.cancelScheduledValues(ctx.currentTime);
+                 audio.gainNode.gain.setValueAtTime(0, ctx.currentTime);
+                 audio.gainNode.gain.linearRampToValueAtTime(1, ctx.currentTime + (playerSettingsRef.current?.crossfadeSeconds || 8));
+             } else {
+                 audio.gainNode.gain.cancelScheduledValues(ctx.currentTime);
+                 audio.gainNode.gain.setValueAtTime(1, ctx.currentTime);
+             }
+          }
           await audio.play();
         } else {
           audio.volume = targetVolume;
