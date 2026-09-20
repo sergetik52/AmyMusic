@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
-import { getCachedLyricsForTrack, getActiveLyricIndex } from "../services/lyricsApi";
+import { getCachedLyricsForTrack, getActiveLyricIndex, clearLyricsCacheForTrack } from "../services/lyricsApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { TrackContextMenu, TrackMenuButton } from "./TrackContextMenu";
 import { LyricsContextMenu } from "./LyricsContextMenu";
@@ -28,6 +28,39 @@ function splitArtistNames(value = "") {
     }
   });
   return result;
+}
+
+function formatLyricText(text) {
+  if (typeof text !== "string") return text;
+  const parts = text.split(/(\([^)]+\))/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (part.startsWith("(") && part.endsWith(")")) {
+      return (
+        <span key={i} className="text-[0.85em] italic text-white/30">
+          {part.slice(1, -1)}
+        </span>
+      );
+    }
+    return part;
+  });
+}
+
+/** Extract annotation IDs from a line's text */
+function getAnnotationIds(text) {
+  if (typeof text !== "string") return [];
+  const ids = [];
+  const re = /<annotation id="([0-9]+)">/g;
+  let m;
+  while ((m = re.exec(text)) !== null) ids.push(m[1]);
+  return [...new Set(ids)];
+}
+
+/** Render text, stripping <annotation> tags and applying formatLyricText */
+function renderCleanText(text) {
+  if (typeof text !== "string") return text;
+  const cleaned = text.replace(/<\/?annotation[^>]*>/g, '');
+  return formatLyricText(cleaned);
 }
 
 function getTrackArtists(track) {
@@ -192,6 +225,11 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   const [profileSettings, setProfileSettings] = useState(getProfileSettings());
   const [lyricsContextMenu, setLyricsContextMenu] = useState(null);
   const [lyricsUserOffset, setLyricsUserOffset] = useState(0);
+  const [expandedAnnotationLine, setExpandedAnnotationLine] = useState(null);
+
+  const toggleAnnotationLine = (lineIndex) => {
+    setExpandedAnnotationLine(prev => prev === lineIndex ? null : lineIndex);
+  };
 
   const handleUpdateLyricsOffset = (val) => {
     setLyricsUserOffset(val);
@@ -208,6 +246,17 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
         console.error("Failed to save lyrics offset", e);
       }
     }
+  };
+
+  const handleReloadLyrics = () => {
+    if (!currentTrack) return;
+    clearLyricsCacheForTrack(currentTrack);
+    setLyricsContextMenu(null);
+    setLyricsState({ status: "loading", lines: [], error: "" });
+    getCachedLyricsForTrack(currentTrack, duration)
+      .then((nextLyricsState) => {
+        setLyricsState(nextLyricsState);
+      });
   };
 
   useEffect(() => {
@@ -329,13 +378,11 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
 
     if (deltaTime > 600) return;
 
-    // Swipe DOWN dismisses full player
     if (deltaY > 50 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
       handleClose();
       return;
     }
 
-    // Horizontal swipe switches tracks
     if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
       if (deltaX < 0) {
         next();
@@ -368,7 +415,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
 
     if (deltaTime > 600) return;
 
-    // Swipe DOWN dismisses queue sheet
     if (deltaY > 50 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
       setIsQueueModalOpen(false);
     }
@@ -448,7 +494,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
 
     recalculateOffset();
 
-    // Use ResizeObserver to recalculate during CSS transitions (like width changes on text-only mode)
     const wrapper = stage.firstElementChild;
     const resizeObserver = new ResizeObserver(() => {
       recalculateOffset();
@@ -493,6 +538,10 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     }
     if (isMoreOpen) {
       setIsMoreOpen(false);
+      return;
+    }
+    if (expandedAnnotationLine !== null) {
+      setExpandedAnnotationLine(null);
       return;
     }
 
@@ -592,7 +641,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           ref={(node) => {
             lyricRefs.current[-1] = node;
           }}
-          className="karaoke-dots flex h-12 items-center justify-center gap-2"
+          className={`karaoke-dots flex h-12 items-center gap-2 ${lyricsSettings.displayMode === "text-only" ? "justify-center" : "justify-start"}`}
           aria-hidden="true"
         >
           <span />
@@ -613,9 +662,9 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             onClick={() => seekToLyric(line, index)}
             disabled={!Number.isFinite(line.time)}
             aria-label={Number.isFinite(line.time) ? `Перемотать к ${formatTime(line.time)}` : undefined}
-            className={`group relative w-full max-w-[760px] cursor-pointer text-center text-[28px] leading-tight transition-[color,opacity,transform] duration-300 disabled:cursor-default ${isCurrent
-                ? "scale-[1.02] font-black text-white opacity-100"
-                : "font-extrabold text-neutral-700 opacity-95 hover:text-neutral-500"
+            className={`group relative w-full max-w-[760px] cursor-pointer ${lyricsSettings.displayMode === "text-only" ? "text-center" : "text-left"} text-[28px] leading-tight transition-[color,opacity,transform] duration-300 disabled:cursor-default ${isCurrent
+                ? "scale-[1.02] font-medium text-white opacity-100"
+                : "font-medium text-neutral-700 opacity-95 hover:text-neutral-500"
               }`}
           >
             <span>{line.text}</span>
@@ -716,7 +765,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
 
               <TrackMenuButton track={track} />
 
-              {/* Quick Remove from Queue Button */}
               <button
                 type="button"
                 onClick={(e) => {
@@ -767,10 +815,41 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             setLyricsContextMenu({ x: e.clientX, y: e.clientY });
           }}
         >
-          <div className={`mx-auto flex flex-col gap-4 text-center font-extrabold leading-normal text-white/80 ${plainSizes[lyricsSettings.textSize] || "text-[24px]"}`}>
-            {lyricsState.lines.map((line, index) => (
-              <p key={`${index}-${line.text}`}>{line.text}</p>
-            ))}
+          <div key={lyricsSettings.displayMode} className={`animate-in fade-in zoom-in-[0.98] duration-500 mx-auto flex max-w-[760px] flex-col gap-4 ${lyricsSettings.displayMode === "text-only" ? "text-center" : "text-left"} font-medium leading-normal text-white/80 ${plainSizes[lyricsSettings.textSize] || "text-[24px]"}`}>
+            {lyricsState.lines.map((line, index) => {
+              const isSectionHeader = /^\[.*\]$/.test(line.text.replace(/<[^>]+>/g, '').trim());
+              if (isSectionHeader) {
+                return <div key={`${index}-${line.text}`} className="h-8" />;
+              }
+              const annIds = getAnnotationIds(line.text);
+              const hasAnnotation = annIds.length > 0 && lyricsState.annotations && annIds.some(id => lyricsState.annotations[id]);
+              const isExpanded = expandedAnnotationLine === index;
+
+              return (
+                <div key={`${index}-${line.text}`}>
+                  <p
+                    className={hasAnnotation ? "cursor-pointer group" : ""}
+                    onClick={hasAnnotation ? (e) => { e.stopPropagation(); toggleAnnotationLine(index); } : undefined}
+                  >
+                    {renderCleanText(line.text)}
+                    {hasAnnotation && (
+                      <span className="inline-block ml-2 text-[1em] font-bold text-white/50 align-middle select-none transition-colors group-hover:text-white/80">"</span>
+                    )}
+                  </p>
+                  {hasAnnotation && (
+                    <div
+                      className={`grid transition-all duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="mt-2 mb-1 ml-4 border-l-2 border-white/10 pl-4 text-[0.75em] leading-snug text-white/50 whitespace-pre-line">
+                          {annIds.map(id => lyricsState.annotations?.[id]).filter(Boolean).join('\n')}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       );
@@ -791,14 +870,15 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
         className={isMobileLyrics ? "relative h-full w-full overflow-hidden px-3 touch-pan-y select-none" : "relative h-screen w-full overflow-hidden px-12 touch-none select-none"}
       >
         <div
+          key={lyricsSettings.displayMode}
           className={
             isMobileLyrics
-              ? `mx-auto flex flex-col gap-5 text-center max-xs:text-[16px] font-extrabold leading-[1.25] tracking-tight transition-all duration-300 ease-out ${
+              ? `animate-in fade-in zoom-in-[0.98] duration-500 mx-auto flex flex-col gap-5 ${lyricsSettings.displayMode === "text-only" ? "text-center" : "text-left"} max-xs:text-[16px] font-extrabold leading-[1.25] tracking-tight transition-all duration-300 ease-out ${
                   lyricsSettings.textSize === "sm" ? "text-[15px]" :
                   lyricsSettings.textSize === "base" ? "text-[17px]" :
                   lyricsSettings.textSize === "lg" ? "text-[19px]" : "text-[22px]"
                 }`
-              : `mx-auto flex w-[760px] max-w-[calc(100vw-6rem)] flex-col gap-8 text-center font-extrabold leading-[1.2] tracking-tight transition-all duration-300 ease-out ${
+              : `animate-in fade-in zoom-in-[0.98] duration-500 mx-auto flex w-[760px] max-w-[calc(100vw-6rem)] flex-col gap-8 ${lyricsSettings.displayMode === "text-only" ? "text-center" : "text-left"} font-extrabold leading-[1.2] tracking-tight transition-all duration-300 ease-out ${
                   lyricsSettings.textSize === "sm" ? "text-[20px]" :
                   lyricsSettings.textSize === "base" ? "text-[28px]" :
                   lyricsSettings.textSize === "lg" ? "text-[36px]" : "text-[46px]"
@@ -806,7 +886,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           }
           style={{ transform: `translateY(${lyricsOffset}px)` }}
         >
-          {/* Intro Bouncing Dots */}
           {lyricsState.lines.length > 0 && (() => {
             const introDist = isBeforeFirstLyric ? 0 : Math.abs(-1 - activeLyricIndex);
             const introBlur = introDist === 0 ? 0 : Math.min(10, introDist * 3);
@@ -855,26 +934,33 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
 
             const isActive = dist === 0;
 
-            let content = line.text;
+            let content = renderCleanText(line.text);
             if (lyricsSettings.syncMode === "words" && isActive) {
               const nextTime = lyricsState.lines[index + 1]?.time || (line.time + 3.0);
               const timeDiff = nextTime - line.time;
               const words = line.text.split(/(\s+)/);
-              // Max duration per word approx 0.4s to avoid getting stuck on a single line for 20 seconds
               const maxLineDuration = Math.max(2.0, (words.length / 2) * 0.4); 
               const lineDuration = Math.min(timeDiff, maxLineDuration);
               
               const progress = Math.max(0, Math.min(1, (currentTime + lyricsUserOffset / 1000 - line.time) / lineDuration));
               const activeWordIndex = Math.floor(progress * words.length);
 
+              let inBracket = false;
               content = words.map((word, wIdx) => {
                 const isWordActive = wIdx <= activeWordIndex;
+                const hasOpen = word.includes('(');
+                const hasClose = word.includes(')');
+                
+                if (hasOpen) inBracket = true;
+                const currentlyInBracket = inBracket;
+                if (hasClose) inBracket = false;
+
                 return (
                   <span
                     key={`${wIdx}-${word}`}
-                    className={`transition-colors duration-200 ${isWordActive ? "text-white" : "text-white/40"}`}
+                    className={`transition-colors duration-200 ${currentlyInBracket ? "text-[0.85em] italic text-white/30" : (isWordActive ? "text-white" : "text-white/40")}`}
                   >
-                    {word}
+                    {word.replace(/[()]/g, '')}
                   </span>
                 );
               });
@@ -896,7 +982,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                   transform: `scale(${lineScale})`,
                   pointerEvents: dist > 3 ? "none" : "auto"
                 }}
-                className={`cursor-pointer font-black transition-all duration-500 ease-out ${
+                className={`cursor-pointer font-medium transition-all duration-500 ease-out ${
                   dist <= 3 ? "hover:!opacity-95 hover:!filter-none hover:!scale-100" : ""
                 } ${
                   isActive ? "text-white drop-shadow-lg" : "text-white/80"
@@ -911,7 +997,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     );
   };
 
-  // --- MOBILE FULL PLAYER VIEW ---
   if (isMobile) {
     return (
       <div
@@ -928,9 +1013,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           "--player-accent": `color-mix(in srgb, ${trackPalette.line} 50%, #8341EF)`
         }}
       >
-        {/* Mobile Fluid Animated Mesh Background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 bg-[#090909]">
-          {/* 1. Slowly Breathing Blurred Cover Image Layer */}
           <div className="absolute inset-0 opacity-50 blur-[90px] animate-cover-breathe transform-gpu">
             <img
               src={coverUrl}
@@ -940,9 +1023,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             />
           </div>
 
-          {/* 2. Audio-Reactive Fluid Mesh Gradient Orbs */}
           <div className="absolute inset-0 filter blur-[80px] opacity-80 transform-gpu">
-            {/* Blob 1 - Base Accent */}
             <div
               className="absolute -top-[20%] -left-[20%] h-[80vw] w-[80vw] rounded-full animate-fluid-blob-1 opacity-80 transition-transform duration-300 ease-out"
               style={{
@@ -950,7 +1031,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                 transform: `scale(${1 + (audioEnergy?.bass || 0) * 0.22})`
               }}
             />
-            {/* Blob 2 - Line Accent */}
             <div
               className="absolute -top-[10%] -right-[20%] h-[85vw] w-[85vw] rounded-full animate-fluid-blob-2 opacity-75 transition-transform duration-300 ease-out"
               style={{
@@ -958,7 +1038,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                 transform: `scale(${1 + (audioEnergy?.mids || 0) * 0.2})`
               }}
             />
-            {/* Blob 3 - Bright Accent */}
             <div
               className="absolute top-[35%] left-[5%] h-[90vw] w-[90vw] rounded-full animate-fluid-blob-3 opacity-65 transition-transform duration-300 ease-out"
               style={{
@@ -966,7 +1045,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                 transform: `scale(${1 + (audioEnergy?.level || 0) * 0.25})`
               }}
             />
-            {/* Blob 4 - Deep Shadow Accent */}
             <div
               className="absolute bottom-[-15%] right-[-15%] h-[95vw] w-[95vw] rounded-full animate-fluid-blob-1 opacity-75 transition-transform duration-300 ease-out"
               style={{
@@ -976,16 +1054,12 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             />
           </div>
 
-          {/* 3. Deep Vignette & Contrast Overlay */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-[#090909]/65 to-[#090909] z-10" />
         </div>
 
-        {/* Top Swipe Indicator Handle */}
         <div className="absolute top-[calc(0.5rem+env(safe-area-inset-top,0px))] left-1/2 -translate-x-1/2 h-1 w-10 rounded-full bg-white/30 z-40 pointer-events-none" />
 
-        {/* 1 & 2. Top Header Bar: Hide (left), Navigation Tabs (center), and Queue (right) */}
         <div className="relative z-30 flex w-full items-center justify-between px-6 pt-[calc(1.25rem+env(safe-area-inset-top,0px))] pb-2 shrink-0">
-          {/* Top-Left: Hide Button */}
           <button
             type="button"
             onClick={handleClose}
@@ -998,7 +1072,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             </svg>
           </button>
 
-          {/* Top Center Block Navigation Bar */}
           <div className="flex items-center gap-1 rounded-full bg-white/10 p-1 border border-white/10 backdrop-blur-md">
             <button
               type="button"
@@ -1020,7 +1093,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             </button>
           </div>
 
-          {/* Top-Right: Queue Button */}
           <button
             type="button"
             onClick={() => setIsQueueModalOpen(true)}
@@ -1032,10 +1104,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           </button>
         </div>
 
-        {/* 3, 4, 5, 6, 7. Main Central Content Body */}
         <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-between px-6 pt-0 pb-3 text-white">
-          
-          {/* 3. Center Upper Area: Cover or Lyrics */}
           <div className="flex flex-1 min-h-0 w-full items-center justify-center py-1">
             {sidePanel === "lyrics" ? (
               <div
@@ -1055,9 +1124,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             )}
           </div>
 
-          {/* 4, 5, 6, 7. Unified Controls Section (Title, Artist, Seekbar, Time, Playback Controls) - Shifted slightly lower */}
           <div className="w-full max-w-sm shrink-0 flex flex-col items-center gap-3 mt-2 mb-2">
-            {/* Title & Artist & Seekbar */}
             <div className="w-full px-2 flex flex-col gap-0.5 text-center">
               <h2 className="text-lg max-xs:text-base font-extrabold text-white truncate max-w-[88vw] mx-auto leading-tight">
                 {currentTrack?.title || "Без названия"}
@@ -1080,7 +1147,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                 })}
               </div>
 
-              {/* Seekbar */}
               <div className="player-seek-wrap relative h-4 mt-1">
                 <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/20">
                   <div className="h-full bg-[var(--player-accent)]" style={{ width: `${(progress || 0) * 100}%` }} />
@@ -1103,9 +1169,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
               </div>
             </div>
 
-            {/* 7. Main Controls Row: [Dislike, Previous, Play/Pause, Next, Like] */}
             <div className="flex w-full max-w-xs items-center justify-between px-2">
-              {/* 1. Dislike (h-6 w-6, exact same size as like) */}
               <button
                 type="button"
                 onClick={() => toggleDislike(currentTrack?.id, currentTrack)}
@@ -1121,7 +1185,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                 </svg>
               </button>
 
-              {/* 2. Previous */}
               <button
                 type="button"
                 onClick={previous}
@@ -1132,7 +1195,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                 <img src="/prev.svg" alt="" className="h-6 w-6 brightness-200" />
               </button>
 
-              {/* 3. Play/Pause */}
               <button
                 type="button"
                 onClick={togglePlay}
@@ -1151,7 +1213,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                 )}
               </button>
 
-              {/* 4. Next */}
               <button
                 type="button"
                 onClick={next}
@@ -1162,7 +1223,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                 <img src="/next.svg" alt="" className="h-6 w-6 brightness-200" />
               </button>
 
-              {/* 5. Like */}
               <button
                 type="button"
                 onClick={toggleLike}
@@ -1176,9 +1236,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           </div>
         </div>
 
-        {/* 8. Bottom Attached Utility Bar: [Repeat, Equalizer, Text/Lyrics, Random/Shuffle] */}
         <div className="relative z-20 flex w-full items-center justify-around px-6 py-3 pb-4 bg-transparent shrink-0">
-          {/* 1. Repeat */}
           <button
             type="button"
             onClick={cycleRepeatMode}
@@ -1532,7 +1590,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           <div
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            className="relative h-80 w-80 max-sm:h-64 max-sm:w-64 max-xs:h-52 max-xs:w-52 cursor-pointer rounded-2xl shadow-2xl"
+            className="relative h-80 w-80 lg:h-[600px] lg:w-[600px] max-sm:h-64 max-sm:w-64 max-xs:h-52 max-xs:w-52 cursor-pointer rounded-2xl shadow-2xl transition-all duration-500 ease-out"
             style={{ boxShadow: "0 30px 90px rgba(0,0,0,.62)" }}
           >
             <img src={coverUrl} alt={currentTrack?.title || ""} className="h-full w-full object-cover rounded-2xl" />
@@ -1650,9 +1708,9 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             </div>
           </div>
 
-          <div className="text-center">
-            <h2 className="text-base font-bold text-white">{currentTrack?.title}</h2>
-            <div className="mt-2 flex max-w-80 flex-wrap items-center justify-center gap-1.5 overflow-hidden text-xs font-semibold text-white/60">
+          <div className="text-center w-80 lg:w-[600px] max-sm:w-64 max-xs:w-52 transition-all duration-500">
+            <h2 className="text-base lg:text-xl font-bold text-white">{currentTrack?.title}</h2>
+            <div className="mt-2 flex w-full flex-wrap items-center justify-center gap-1.5 overflow-hidden text-xs lg:text-sm font-semibold text-white/60">
               {getTrackArtists(currentTrack).map((artist, index) => {
                 return (
                   <React.Fragment key={`${artist.id || artist.name}-${index}`}>
@@ -1671,7 +1729,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             </div>
           </div>
 
-          <div className="w-80">
+          <div className="w-80 lg:w-[600px] max-sm:w-64 max-xs:w-52 transition-all duration-500">
             <div className="mb-1 flex items-center justify-between text-[10px] font-medium text-white/35">
               <span>{formatTime(currentTime)}</span>
               <span>{formatTime(duration)}</span>
@@ -1746,10 +1804,14 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           activeDisplayMode={shouldShowSidePanel ? lyricsSettings.displayMode : "hidden"}
           onShowText={() => {
             setSidePanel("lyrics");
+            setShowLyrics(true);
+            setLyricsContextMenu(null);
           }}
           onHideText={() => {
-            setSidePanel("none");
+            setShowLyrics(false);
+            setLyricsContextMenu(null);
           }}
+          onReloadLyrics={handleReloadLyrics}
         />
       )}
     </div>

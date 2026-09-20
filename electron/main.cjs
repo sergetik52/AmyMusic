@@ -543,9 +543,49 @@ async function handleSoundCloudProxy(req, res) {
   }
 }
 
+async function handleGeniusProxy(req, res) {
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.setHeader("access-control-allow-origin", "*");
+    res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
+    res.setHeader("access-control-allow-headers", "*");
+    res.end();
+    return;
+  }
+  const localUrl = new URL(req.url || "/", `http://127.0.0.1:${proxyPort}`);
+  const upstreamPath = localUrl.pathname.replace(/^\/proxy\/genius/, "") || "/";
+  const upstreamUrl = new URL(`${upstreamPath}${localUrl.search}`, "https://genius.com");
+  
+  try {
+    const response = await requestUpstream(upstreamUrl, req, null, {
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      "referer": "https://genius.com/"
+    });
+    res.statusCode = response.statusCode;
+    Object.entries(response.headers).forEach(([key, value]) => {
+      if (!["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+        res.setHeader(key, value);
+      }
+    });
+    res.setHeader("access-control-allow-origin", "*");
+    res.end(response.body);
+  } catch (error) {
+    sendJson(res, 502, { error: "GENIUS_PROXY_FAILED", message: error.message });
+  }
+}
+
 function startProxyServer() {
   return new Promise((resolve, reject) => {
-    proxyServer = http.createServer(handleSoundCloudProxy);
+    proxyServer = http.createServer((req, res) => {
+      const url = req.url || "/";
+      if (url.startsWith("/api/soundcloud")) {
+        handleSoundCloudProxy(req, res);
+      } else if (url.startsWith("/proxy/genius")) {
+        handleGeniusProxy(req, res);
+      } else {
+        sendJson(res, 404, { error: "NOT_FOUND" });
+      }
+    });
     proxyServer.on("error", reject);
     proxyServer.listen(0, "127.0.0.1", () => {
       proxyPort = proxyServer.address().port;

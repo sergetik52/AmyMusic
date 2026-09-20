@@ -374,6 +374,35 @@ function createYandexProxyPlugin() {
   };
 }
 
+function createGeniusProxyPlugin() {
+  return {
+    name: "amymusic-genius-proxy",
+    configureServer(server) {
+      server.middlewares.use("/proxy/genius", async (req, res) => {
+        const upstreamUrl = new URL(req.url || "/", "https://genius.com");
+        try {
+          const response = await requestUpstream(upstreamUrl, req, null, {
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "referer": "https://genius.com/"
+          });
+          res.statusCode = response.statusCode;
+          Object.entries(response.headers).forEach(([key, value]) => {
+            if (!["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+              res.setHeader(key, value);
+            }
+          });
+          res.end(response.body);
+        } catch (error) {
+          console.error("[AmyMusic:genius-proxy] failed", error);
+          res.statusCode = 502;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ error: "GENIUS_PROXY_FAILED", message: error.message }));
+        }
+      });
+    }
+  };
+}
+
 function createApiProxyPlugin() {
   return {
     name: "amymusic-api-proxy",
@@ -426,7 +455,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true
     },
-    plugins: [react(), createSoundCloudProxyPlugin(env), createYandexProxyPlugin(), createApiProxyPlugin()]
+    plugins: [react(), createSoundCloudProxyPlugin(env), createYandexProxyPlugin(), createGeniusProxyPlugin(), createApiProxyPlugin()]
   };
 });
 

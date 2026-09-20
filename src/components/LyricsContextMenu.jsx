@@ -11,7 +11,8 @@ export function LyricsContextMenu({
   onUpdateOffset,
   onHideText,
   activeDisplayMode,
-  onShowText
+  onShowText,
+  onReloadLyrics
 }) {
   const menuRef = useRef(null);
   const [actualSize, setActualSize] = useState({ width: 280, height: 350 });
@@ -167,6 +168,22 @@ export function LyricsContextMenu({
             {settings.textStyle === "scale" && "Масштаб"}
           </button>
         </div>
+
+        {/* Reload Lyrics */}
+        {onReloadLyrics && (
+          <div className="flex items-center justify-between">
+            <span className="text-white/40">Текст песни</span>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                onReloadLyrics();
+              }}
+              className="text-white hover:text-white/80 transition"
+            >
+              Обновить
+            </button>
+          </div>
+        )}
 
         {/* Offset Text */}
         <div className="flex items-center justify-between mt-2">
