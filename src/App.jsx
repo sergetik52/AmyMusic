@@ -10,6 +10,7 @@ import { AudioProvider, useAudioPlayer } from "./audio/AudioPlayerContext";
 import { TrackMenuButton } from "./components/TrackContextMenu";
 import { AvatarCropperModal } from "./components/AvatarCropperModal";
 import { EqualizerModal } from "./components/EqualizerModal";
+import { SettingsView } from "./components/SettingsView";
 import { updateProfile } from "./api";
 import {
   buildArtistsFromTracks,
@@ -503,10 +504,10 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
   }, []);
 
   useEffect(() => {
-    const handleOpenProfile = () => setIsProfileOpen(true);
+    const handleOpenProfile = () => setActiveTab("settings");
     window.addEventListener("amymusic:open-profile", handleOpenProfile);
     return () => window.removeEventListener("amymusic:open-profile", handleOpenProfile);
-  }, []);
+  }, [setActiveTab]);
 
   const handleProfileSaveEvent = async (data) => {
     if (onProfileSave) {
@@ -572,7 +573,7 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
 
           <button
             type="button"
-            onClick={() => setIsProfileOpen(true)}
+            onClick={() => setActiveTab("settings")}
             className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
             title={isCollapsed ? (profileData?.displayName || currentUser || "Local") : undefined}
           >
@@ -588,24 +589,7 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
             </span>
           </button>
         </div>
-
-      {isProfileOpen && (
-        <ProfileSettingsModal
-          settings={settings}
-          profileData={profileData}
-          onClose={() => setIsProfileOpen(false)}
-          onProfileSave={handleProfileSaveEvent}
-          onSave={async (nextSettings) => {
-            const savedSettings = saveProfileSettings(nextSettings);
-            await Promise.allSettled([
-              window.amyMusicDesktop?.setAutoLaunch?.(savedSettings.appLaunchOnStartup),
-              window.amyMusicDesktop?.setTrayEnabled?.(savedSettings.appMinimizeToTray)
-            ]);
-            setSettings(savedSettings);
-          }}
-        />
-      )}
-    </aside>
+      </aside>
     </>
   );
 }
@@ -2816,6 +2800,8 @@ export default function App() {
         }} onOpenCollection={() => setActiveTab("collection")} onOpenArtist={openArtist} />;
       case "collection":
         return <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
+      case "settings":
+        return <SettingsView profileData={profileData} onProfileSave={handleProfileSave} />;
       case "trends": return <TrendsPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
       case "artist":
         return activeArtist ? (
@@ -2856,10 +2842,10 @@ export default function App() {
           currentUser={currentUser}
           profileData={profileData}
           onLoginClick={() => {
-            window.dispatchEvent(new CustomEvent("amymusic:open-profile"));
+            selectTab("settings");
           }}
           onOpenProfile={() => {
-            window.dispatchEvent(new CustomEvent("amymusic:open-profile"));
+            selectTab("settings");
           }}
           renderContent={renderContent}
           BottomPlayer={BottomPlayer}
@@ -2919,7 +2905,7 @@ export default function App() {
         onProfileSave={handleProfileSave}
       />
       <div className="flex min-w-0 min-h-0 flex-1 flex-col justify-between gap-3 max-md:gap-0 max-md:pb-24 max-md:h-full max-md:overflow-hidden">
-        <div key={`${activeTab}-${activeArtist?.id || "none"}-${activeAlbum?.id || "noalbum"}-${apiSettingsVersion}`} className="contents">
+        <div key={`${activeTab}-${activeArtist?.id || "none"}-${activeAlbum?.id || "noalbum"}-${activeTab === 'settings' ? 'static' : apiSettingsVersion}`} className="contents">
           {renderContent()}
         </div>
         {true && (

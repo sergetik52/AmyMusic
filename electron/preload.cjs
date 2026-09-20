@@ -26,5 +26,12 @@ contextBridge.exposeInMainWorld("amyMusicDesktop", {
     const subscription = (_event, value) => callback(value);
     ipcRenderer.on("amymusic:update-progress", subscription);
     return () => ipcRenderer.removeListener("amymusic:update-progress", subscription);
+  },
+  registerHotkey: (action, combo) => ipcRenderer.invoke("amymusic:register-hotkey", { action, combo }),
+  unregisterAllHotkeys: () => ipcRenderer.invoke("amymusic:unregister-hotkeys"),
+  onHotkey: (callback) => {
+    const subscription = (_event, action) => callback(action);
+    ipcRenderer.on("amymusic:hotkey", subscription);
+    return () => ipcRenderer.removeListener("amymusic:hotkey", subscription);
   }
 });

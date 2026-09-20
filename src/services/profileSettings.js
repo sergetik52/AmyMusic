@@ -26,6 +26,19 @@ export const defaultProfileSettings = {
   audioCacheEnabled: true,
   crossfadeSeconds: 4,
   discordRpcEnabled: true,
+  audioOutputDevice: "default",
+  audioQuality: "256", // "192", "256", "320", "1411"
+  volumeNormalization: false,
+  gaplessPlayback: false,
+  globalBinds: {
+    playPause: "",
+    nextTrack: "",
+    prevTrack: "",
+    toggleLike: "",
+    volumeUp: "",
+    volumeDown: "",
+    toggleOverlay: ""
+  },
   lyricsSettings: {
     textSize: "lg", // "sm", "base", "lg", "xl"
     displayMode: "cover-text", // "cover-text", "hidden", "text-only"
@@ -72,7 +85,15 @@ export function saveProfileSettings(settings, silent = false) {
     crossfadeEnabled: Boolean(settings?.crossfadeEnabled),
     audioCacheEnabled: settings?.audioCacheEnabled !== undefined ? Boolean(settings.audioCacheEnabled) : true,
     crossfadeSeconds: Math.min(12, Math.max(1, Number(settings?.crossfadeSeconds) || defaultProfileSettings.crossfadeSeconds)),
-    discordRpcEnabled: settings?.discordRpcEnabled !== undefined ? Boolean(settings.discordRpcEnabled) : true
+    discordRpcEnabled: settings?.discordRpcEnabled !== undefined ? Boolean(settings.discordRpcEnabled) : true,
+    audioOutputDevice: String(settings?.audioOutputDevice || defaultProfileSettings.audioOutputDevice),
+    audioQuality: String(settings?.audioQuality || defaultProfileSettings.audioQuality),
+    volumeNormalization: Boolean(settings?.volumeNormalization),
+    gaplessPlayback: Boolean(settings?.gaplessPlayback),
+    globalBinds: {
+      ...defaultProfileSettings.globalBinds,
+      ...(settings?.globalBinds || {})
+    }
   };
 
   window.localStorage.setItem(PROFILE_SETTINGS_KEY, JSON.stringify(normalized));
@@ -88,7 +109,11 @@ export function getPlayerRuntimeSettings() {
   const settings = getProfileSettings();
   return {
     crossfadeEnabled: settings.crossfadeEnabled,
-    crossfadeSeconds: settings.crossfadeSeconds
+    crossfadeSeconds: settings.crossfadeSeconds,
+    audioOutputDevice: settings.audioOutputDevice,
+    audioQuality: settings.audioQuality,
+    volumeNormalization: settings.volumeNormalization,
+    gaplessPlayback: settings.gaplessPlayback
   };
 }
 

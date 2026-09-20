@@ -106,7 +106,7 @@ function sendDiscordIpcActivity(activity) {
 }
 
 
-const { app, BrowserWindow, ipcMain, Menu, protocol, Tray } = require("electron");
+const { app, BrowserWindow, ipcMain, Menu, protocol, Tray, globalShortcut } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const https = require("node:https");
@@ -768,6 +768,26 @@ function registerDesktopIpc() {
     return true;
   });
 
+  ipcMain.handle("amymusic:register-hotkey", (_event, { action, combo }) => {
+    try {
+      const success = globalShortcut.register(combo, () => {
+        if (mainWindow && mainWindow.webContents) {
+          mainWindow.webContents.send("amymusic:hotkey", action);
+        }
+      });
+      if (!success) console.warn("[AmyMusic] Failed to register hotkey", combo);
+      return success;
+    } catch (err) {
+      console.error("[AmyMusic] Hotkey error:", err);
+      return false;
+    }
+  });
+
+  ipcMain.handle("amymusic:unregister-hotkeys", () => {
+    globalShortcut.unregisterAll();
+    return true;
+  });
+
   ipcMain.handle("amymusic:parse-playlist-url", async (_event, url) => {
     return new Promise((resolve, reject) => {
       const hiddenWindow = new BrowserWindow({
@@ -1135,4 +1155,5 @@ app.on("before-quit", () => {
   isQuitting = true;
   proxyServer?.close();
   tray?.destroy();
+  globalShortcut.unregisterAll();
 });

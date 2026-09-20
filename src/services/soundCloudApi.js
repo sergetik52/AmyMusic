@@ -1,15 +1,34 @@
-
 // Global Artist Avatar Resolver & Cache System
 const globalArtistAvatarMap = new Map();
 
-export function getCachedArtistAvatar(artistName = "") {
+export async function getCachedArtistAvatar(artistName = "") {
   if (!artistName) return "";
+  const normalizedName = normalizeComparable(artistName);
+  const cacheUrl = `https://amymusic-cache.local/sc_artist_avatar_${encodeURIComponent(normalizedName)}`;
+  if (typeof caches !== "undefined") {
+    try {
+      const cache = await caches.open("amymusic-images-cache-v1");
+      const resp = await cache.match(cacheUrl);
+      if (resp) {
+        const text = await resp.text();
+        if (text) return text;
+      }
+    } catch {}
+  }
   const key = String(artistName).toLowerCase().trim();
   return globalArtistAvatarMap.get(key) || "";
 }
 
-export function cacheArtistAvatar(artistName = "", avatarUrl = "") {
+export async function cacheArtistAvatar(artistName = "", avatarUrl = "") {
   if (!artistName || !avatarUrl || avatarUrl.includes("logo.png") || avatarUrl.includes("user.svg")) return;
+  const normalizedName = normalizeComparable(artistName);
+  const cacheUrl = `https://amymusic-cache.local/sc_artist_avatar_${encodeURIComponent(normalizedName)}`;
+  if (typeof caches !== "undefined") {
+    try {
+      const cache = await caches.open("amymusic-images-cache-v1");
+      await cache.put(cacheUrl, new Response(avatarUrl, { headers: { 'Content-Type': 'text/plain' } }));
+    } catch {}
+  }
   const key = String(artistName).toLowerCase().trim();
   if (!globalArtistAvatarMap.has(key)) {
     globalArtistAvatarMap.set(key, avatarUrl);
@@ -21,8 +40,9 @@ export function cacheArtistAvatar(artistName = "", avatarUrl = "") {
 
 export async function fetchArtistAvatarByName(artistName = "") {
   if (!artistName) return "";
+  const cached = await getCachedArtistAvatar(artistName);
+  if (cached) return cached;
   const key = String(artistName).toLowerCase().trim();
-  if (globalArtistAvatarMap.has(key)) return globalArtistAvatarMap.get(key);
 
   try {
     const found = await searchArtists(artistName);
@@ -45,7 +65,7 @@ export async function fetchArtistAvatarByName(artistName = "") {
 
 
 import { logDebug, logWarn } from "../utils/logger.js";
-import { getSoundCloudRuntimeSettings } from "./profileSettings.js";
+import { getSoundCloudRuntimeSettings, getProfileSettings } from "./profileSettings.js";
 
 function getSoundCloudApiBase() {
   if (typeof window === "undefined") {
@@ -454,9 +474,25 @@ function normalizeSoundCloudTrack(track = {}, fallback = {}) {
   const transcodings = source.media?.transcodings || [];
   const fullTranscodings = transcodings.filter((t) => t.snipped === false);
   const pool = fullTranscodings.length > 0 ? fullTranscodings : transcodings;
-  const transcoding =
-    pool.find((item) => item.format?.protocol?.includes("progressive")) ||
-    pool[0];
+  
+  const settings = getProfileSettings();
+  const quality = settings?.audioQuality || "256";
+
+  let transcoding;
+  if (quality === "1411" || quality === "320") {
+    // Try to find HQ / high_tier AAC
+    transcoding = pool.find(item => item.quality === "hq" || item.preset?.includes("high_tier") || item.preset?.includes("aac")) 
+      || pool.find(item => item.format?.protocol?.includes("progressive")) 
+      || pool[0];
+  } else if (quality === "192") {
+    // Try to find lowest acceptable MP3 or progressive
+    transcoding = pool.find(item => item.quality === "sq" || item.preset?.includes("mp3_0_0")) 
+      || pool.find(item => item.format?.protocol?.includes("progressive")) 
+      || pool[0];
+  } else {
+    // Default 256 fallback
+    transcoding = pool.find(item => item.format?.protocol?.includes("progressive")) || pool[0];
+  }
 
   const userArtistName = user.username || user.full_name;
   let artistName = userArtistName || fallback.uploaderName || fallback.username || "";

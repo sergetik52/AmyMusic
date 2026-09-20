@@ -232,6 +232,8 @@ function md5(string) {
   return (wordToHex(a) + wordToHex(b) + wordToHex(c) + wordToHex(d)).toLowerCase();
 }
 
+import { getProfileSettings } from "./profileSettings.js";
+
 export const YANDEX_CLIENT_ID = "23cabbbdc6cd418abb4b39c32c41195d";
 const API_BASE = import.meta.env?.VITE_YANDEX_API_BASE || "/api/yandex";
 
@@ -366,8 +368,22 @@ export async function resolveYandexTrackStream(yandexTrackId) {
     throw new Error(`[YandexMusic] No download info available for track ${cleanId}`);
   }
 
-  // Pick highest bitrate mp3
-  const info = results.find((r) => r.codec === "mp3") || results[0];
+  const settings = getProfileSettings();
+  const quality = settings?.audioQuality || "256";
+
+  let info;
+  if (quality === "1411") {
+    // Try to find FLAC/Lossless first, then highest MP3
+    info = results.find((r) => r.codec === "flac" || r.codec === "lossless") || 
+           results.filter((r) => r.codec === "mp3").sort((a, b) => b.bitrateInKbps - a.bitrateInKbps)[0] || 
+           results[0];
+  } else if (quality === "320" || quality === "256") {
+    // Highest MP3 available
+    info = results.filter((r) => r.codec === "mp3").sort((a, b) => b.bitrateInKbps - a.bitrateInKbps)[0] || results[0];
+  } else {
+    // Standard or lower (192kbps)
+    info = results.filter((r) => r.codec === "mp3").sort((a, b) => a.bitrateInKbps - b.bitrateInKbps)[0] || results[0];
+  }
   let downloadInfoUrl = info.downloadInfoUrl;
 
   if (typeof window !== "undefined" && downloadInfoUrl.startsWith("https://api.music.yandex.net")) {

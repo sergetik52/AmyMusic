@@ -754,6 +754,7 @@ export function AudioProvider({ children }) {
     []
   );
 
+
   useEffect(() => {
     writeStoredAudioState({
       queue: queue.slice(0, 120),
@@ -850,6 +851,13 @@ export function AudioProvider({ children }) {
       if (!AudioContextClass) return null;
 
       const context = new AudioContextClass({ latencyHint: "playback" });
+      
+      if (typeof context.setSinkId === "function") {
+        const sinkId = playerSettingsRef.current?.audioOutputDevice;
+        const targetSink = sinkId && sinkId !== "default" ? sinkId : "";
+        context.setSinkId(targetSink).catch(e => logWarn("audio", "initial context setSinkId failed", e));
+      }
+
       const analyser = context.createAnalyser();
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0.68;
@@ -1341,6 +1349,22 @@ export function AudioProvider({ children }) {
     }
   }, [currentIndex, queue, likedTracks, dislikedTrackIds, dislikedTracks]);
 
+  // Handle Output Device Changes
+  useEffect(() => {
+    const sinkId = playerSettings.audioOutputDevice;
+    const targetSink = sinkId && sinkId !== "default" ? sinkId : "";
+    
+    // Apply to HTML Audio Element
+    if (audioRef.current && typeof audioRef.current.setSinkId === "function") {
+      audioRef.current.setSinkId(targetSink).catch((err) => logWarn("audio", "setSinkId failed", err));
+    }
+    
+    // Apply to Web Audio API Context (critical for when Equalizer/Visualizer graph is active)
+    if (audioContextRef.current && typeof audioContextRef.current.setSinkId === "function") {
+      audioContextRef.current.setSinkId(targetSink).catch((err) => logWarn("audio", "audioContext setSinkId failed", err));
+    }
+  }, [playerSettings.audioOutputDevice]);
+
   // MediaSession API Integration for Lock Screen / Dynamic Island / Bluetooth Controls
   useEffect(() => {
     if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
@@ -1632,6 +1656,24 @@ export function AudioProvider({ children }) {
     // volume and isMuted removed from deps — we read them via refs to avoid
     // recreating this function (and restarting the song) on every volume change
   }, [ensureAudioGraph]);
+
+  const prevQualityRef = useRef(playerSettings.audioQuality);
+  useEffect(() => {
+    if (prevQualityRef.current && prevQualityRef.current !== playerSettings.audioQuality) {
+      if (currentTrackRef.current && audioRef.current) {
+        logDebug("audio", "audioQuality changed, reloading track", { from: prevQualityRef.current, to: playerSettings.audioQuality });
+        currentTrackRef.current._fetchedAt = 0; // force re-fetch stream URL
+        const savedTime = audioRef.current.currentTime || 0;
+        const wasPlaying = isPlayingRef.current;
+        loadTrack(currentTrackRef.current, wasPlaying, true).then(() => {
+           if (audioRef.current && savedTime > 0) {
+              audioRef.current.currentTime = savedTime;
+           }
+        });
+      }
+    }
+    prevQualityRef.current = playerSettings.audioQuality;
+  }, [playerSettings.audioQuality, loadTrack]);
 
   useEffect(() => {
     if (!didMountTrackLoaderRef.current) {
