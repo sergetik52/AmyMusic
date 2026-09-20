@@ -2577,7 +2577,6 @@ export function AudioProvider({ children }) {
         details: currentTrack.title || "Unknown Track",
         state: currentTrack.artist || "Unknown Artist",
         largeImageKey: currentTrack.cover || currentTrack.artistAvatar || "amymusic",
-        largeImageText: currentTrack.title || "AmyMusic",
         smallImageKey: "soundcloud",
         smallImageText: "SoundCloud",
         startTimestamp,

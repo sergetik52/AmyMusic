@@ -80,7 +80,7 @@ function sendDiscordIpcActivity(activity) {
           state: activity.state || "Unknown Artist",
           assets: {
             large_image: activity.largeImageKey || "amymusic",
-            large_text: activity.largeImageText || activity.details || "AmyMusic",
+            large_text: activity.largeImageText || undefined,
             small_image: activity.smallImageKey || "soundcloud",
             small_text: activity.smallImageText || "SoundCloud"
           },
