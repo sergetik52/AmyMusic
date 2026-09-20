@@ -302,6 +302,9 @@ function readStoredAudioState() {
     const userPlaylists = Array.isArray(parsed.userPlaylists)
       ? parsed.userPlaylists.map(normalizeStoredPlaylist).filter(Boolean)
       : [];
+    const subscribedArtists = Array.isArray(parsed.subscribedArtists)
+      ? parsed.subscribedArtists.filter(Boolean)
+      : [];
 
     return {
       queue,
@@ -321,7 +324,9 @@ function readStoredAudioState() {
       savedReleaseIds: new Set(Array.isArray(parsed.savedReleaseIds) ? parsed.savedReleaseIds.map(String) : savedReleases.map((release) => release.id)),
       savedReleases,
       userPlaylists,
-      totalListenedSeconds: Number(parsed.totalListenedSeconds) || 0
+      totalListenedSeconds: Number(parsed.totalListenedSeconds) || 0,
+      subscribedArtistIds: new Set(Array.isArray(parsed.subscribedArtistIds) ? parsed.subscribedArtistIds.map(String) : subscribedArtists.map((artist) => artist.id)),
+      subscribedArtists
     };
   } catch (error) {
     logWarn("audio", "failed to read persisted state", error);
@@ -566,6 +571,8 @@ export function AudioProvider({ children }) {
   const [playHistory, setPlayHistory] = useState(() => storedAudioState.playHistory || []);
   const [savedReleaseIds, setSavedReleaseIds] = useState(() => storedAudioState.savedReleaseIds || new Set());
   const [savedReleases, setSavedReleases] = useState(() => storedAudioState.savedReleases || []);
+  const [subscribedArtistIds, setSubscribedArtistIds] = useState(() => storedAudioState.subscribedArtistIds || new Set());
+  const [subscribedArtists, setSubscribedArtists] = useState(() => storedAudioState.subscribedArtists || []);
   const [userPlaylists, setUserPlaylists] = useState(() => storedAudioState.userPlaylists || []);
   const [totalListenedSeconds, setTotalListenedSeconds] = useState(() => storedAudioState.totalListenedSeconds || 0);
   const [playerSettings, setPlayerSettings] = useState(() => getPlayerRuntimeSettings());
@@ -764,6 +771,8 @@ export function AudioProvider({ children }) {
       savedReleaseIds: [...savedReleaseIds],
       savedReleases: savedReleases.slice(0, 120),
       userPlaylists: userPlaylists.slice(0, 80),
+      subscribedArtistIds: [...subscribedArtistIds],
+      subscribedArtists: subscribedArtists.slice(0, 150),
       totalListenedSeconds
     });
   }, [
@@ -780,6 +789,8 @@ export function AudioProvider({ children }) {
     repeatMode,
     savedReleaseIds,
     savedReleases,
+    subscribedArtistIds,
+    subscribedArtists,
     userPlaylists,
     volume,
     totalListenedSeconds
@@ -1843,6 +1854,28 @@ export function AudioProvider({ children }) {
     return addedCount;
   }, []);
 
+  const toggleSubscribedArtist = useCallback((artist) => {
+    if (!artist || (!artist.id && !artist.name)) return;
+    const artistId = String(artist.id || artist.name);
+    
+    setSubscribedArtistIds((ids) => {
+      const nextIds = new Set(ids);
+      if (nextIds.has(artistId)) {
+        nextIds.delete(artistId);
+        setSubscribedArtists((prev) => prev.filter((a) => String(a.id || a.name) !== artistId));
+        showNotification("Отписка от артиста", "info");
+      } else {
+        nextIds.add(artistId);
+        setSubscribedArtists((prev) => {
+          if (prev.some((a) => String(a.id || a.name) === artistId)) return prev;
+          return [artist, ...prev];
+        });
+        showNotification("Подписка на артиста", "success");
+      }
+      return nextIds;
+    });
+  }, [showNotification]);
+
   const toggleLike = useCallback((trackId = currentTrack.id, track = currentTrack) => {
     setLikedTrackIds((ids) => {
       const nextIds = new Set(ids);
@@ -2406,6 +2439,8 @@ export function AudioProvider({ children }) {
       savedReleaseIds,
       savedReleases,
       userPlaylists,
+      subscribedArtistIds,
+      subscribedArtists,
       totalListenedSeconds,
       error,
       controls,
@@ -2426,6 +2461,7 @@ export function AudioProvider({ children }) {
       toggleLike,
       toggleDislike,
       toggleSavedRelease,
+      toggleSubscribedArtist,
       createUserPlaylist,
       addTrackToUserPlaylist,
       updateUserPlaylist,
@@ -2474,6 +2510,8 @@ export function AudioProvider({ children }) {
       playHistory,
       savedReleaseIds,
       savedReleases,
+      subscribedArtistIds,
+      subscribedArtists,
       next,
       pause,
       play,
@@ -2485,6 +2523,7 @@ export function AudioProvider({ children }) {
       setTracks,
       appendTracks,
       clearHistory,
+      toggleSubscribedArtist,
       setVolume,
       createUserPlaylist,
       addTrackToUserPlaylist,

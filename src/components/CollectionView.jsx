@@ -191,25 +191,11 @@ function TrackArtistLinks({ track, onOpenArtist }) {
 }
 
 function FavoriteArtistCard({ artist, index, onOpen }) {
-  const [avatarSrc, setAvatarSrc] = useState(() => {
-    const cached = getYandexCachedArtistAvatar(artist.name);
-    if (cached) return cached;
-    if (artist.avatar && !artist.avatar.includes("logo.png") && !artist.avatar.includes("user.svg")) return artist.avatar;
-    if (artist.cover && !artist.cover.includes("logo.png") && !artist.cover.includes("user.svg")) return artist.cover;
-    return "/user.svg";
-  });
-
-  React.useEffect(() => {
-    if (!artist.name) return;
-    const cached = getYandexCachedArtistAvatar(artist.name);
-    if (cached) {
-      setAvatarSrc(cached);
-      return;
-    }
-    fetchYandexArtistAvatar(artist.name).then((url) => {
-      if (url) setAvatarSrc(url);
-    });
-  }, [artist.name]);
+  const avatarSrc = (artist.avatar && !artist.avatar.includes("logo.png") && !artist.avatar.includes("user.svg")) 
+    ? artist.avatar 
+    : (artist.cover && !artist.cover.includes("logo.png") && !artist.cover.includes("user.svg")) 
+      ? artist.cover 
+      : "/user.svg";
 
   return (
     <button
@@ -228,14 +214,8 @@ function FavoriteArtistCard({ artist, index, onOpen }) {
           className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-black/20 opacity-0 transition group-hover:opacity-100" />
-        {index === 0 && (
-          <img src="/korona.svg" alt="" className="absolute right-3 top-3 h-5 w-5 object-contain" />
-        )}
       </div>
       <div className="w-full truncate text-sm font-black text-white">{artist.name}</div>
-      <div className="mt-0.5 text-[11px] font-semibold text-white/40">
-        {artist.count} {artist.count === 1 ? "лайк" : "лайков"}
-      </div>
     </button>
   );
 }
@@ -636,7 +616,8 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
     createPlaylist,
     playTrack,
     toggleLike,
-    toggleSavedRelease
+    toggleSavedRelease,
+    subscribedArtists
   } = useAudioPlayer();
   const [playlistTitle, setPlaylistTitle] = useState("");
   const [playlistCover, setPlaylistCover] = useState("");
@@ -703,10 +684,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   const [importStatus, setImportStatus] = useState("");
   const [importProgress, setImportProgress] = useState(0);
 
-  const favoriteArtists = useMemo(
-    () => buildArtistsFromLikes(likedTracks),
-    [likedTracks]
-  );
+  const favoriteArtists = subscribedArtists;
   const savedAlbums = useMemo(
     () => savedReleases.filter((release) => release.kind === "album"),
     [savedReleases]
@@ -912,20 +890,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   };
 
   const openFavoriteArtist = (artist) => {
-    const firstTrack = artist.tracks[0];
-    onOpenArtist?.({
-      id: artist.id || artist.name,
-      name: artist.name,
-      username: artist.name,
-      avatar: artist.avatar || firstTrack?.artistAvatar || firstTrack?.cover || "/logo.png",
-      permalinkUrl: artist.permalinkUrl || "",
-      followers: 0,
-      followings: 0,
-      trackCount: artist.tracks.length,
-      city: "",
-      country: "",
-      tags: []
-    });
+    onOpenArtist?.(artist);
   };
 
   if (resolvedActivePlaylist) {

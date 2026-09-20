@@ -501,7 +501,9 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
     savedReleaseIds,
     playTrack,
     toggleLike,
-    toggleSavedRelease
+    toggleSavedRelease,
+    subscribedArtistIds,
+    toggleSubscribedArtist
   } = useAudioPlayer();
   const [profile, setProfile] = useState(artist);
   const [tracks, setTracks] = useState([]);
@@ -695,6 +697,8 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
     ? profile.avatar
     : ((profile.cover && !profile.cover.includes("logo.png")) ? profile.cover : "/user.svg");
 
+  const isSubscribed = subscribedArtistIds.has(String(profile.id || profile.name));
+
   return (
     <section className="flex-1 min-h-0 w-full overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#090909] text-white shadow-2xl pb-[140px] md:pb-12">
       <div className="relative min-h-[330px] max-md:min-h-0 overflow-hidden border-b border-white/[0.05] px-7 pb-7 pt-5 max-md:px-4 max-md:pb-3 max-md:pt-2">
@@ -740,6 +744,17 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
               <div className="mt-5 flex flex-wrap items-center gap-2 max-md:justify-center max-md:w-full">
                 <button type="button" onClick={() => sortedTracks[0] && handlePlayTrack(sortedTracks[0], sortedTracks)} disabled={!sortedTracks.length} className="rounded-full bg-white px-5 py-2.5 max-md:px-4 max-md:py-2 text-sm max-md:text-xs font-black text-black transition hover:bg-white/85 disabled:cursor-default disabled:opacity-40">
                   ▶ Слушать все
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleSubscribedArtist(profile)}
+                  className={`rounded-full px-5 py-2.5 max-md:px-4 max-md:py-2 text-sm max-md:text-xs font-black transition ${
+                    isSubscribed
+                      ? "bg-white/5 text-white hover:bg-white/15"
+                      : "border border-white/30 bg-transparent text-white hover:bg-white/10 hover:border-white/50"
+                  }`}
+                >
+                  {isSubscribed ? "Отписаться" : "Подписаться"}
                 </button>
                 {tags.slice(0, 4).map((tag) => (
                   <span key={tag} className="rounded-full bg-white/8 px-3 py-1.5 text-xs font-bold text-white/45">
