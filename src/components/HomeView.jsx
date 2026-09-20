@@ -303,7 +303,7 @@ export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist }
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="p-4 md:p-6 space-y-5 pb-28">
+      <div className="p-4 md:p-6 space-y-5 pb-6 max-md:pb-28">
 
         {/* Wave Seed Modal */}
         {showSeedPicker && (
