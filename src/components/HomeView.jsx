@@ -16,7 +16,7 @@ function formatTime(val) {
 
 /* helper: cover mosaic - horizontal row */
 function CoverMosaic({ covers = [] }) {
-  const validCovers = covers.filter(Boolean).slice(0, 8);
+  const validCovers = covers.filter(Boolean).slice(0, 5);
   if (validCovers.length === 0) {
     return <div className="bg-white/[0.04] h-full w-full" />;
   }
@@ -78,8 +78,8 @@ export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist }
     return null;
   }, [currentTrack, playHistory]);
 
-  const historyCovers = useMemo(() => playHistory.filter(t => t.cover).slice(0, 8).map(t => t.cover), [playHistory]);
-  const favCovers = useMemo(() => likedTracks.filter(t => t.cover).slice(0, 8).map(t => t.cover), [likedTracks]);
+  const historyCovers = useMemo(() => playHistory.filter(t => t.cover).slice(0, 5).map(t => t.cover), [playHistory]);
+  const favCovers = useMemo(() => likedTracks.filter(t => t.cover).slice(0, 5).map(t => t.cover), [likedTracks]);
 
   // Build search queries from wave seeds
   const buildSeedQueries = useCallback(() => {
