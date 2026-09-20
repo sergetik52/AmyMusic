@@ -508,7 +508,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
   const [albums, setAlbums] = useState([]);
   const [playlists, setPlaylists] = useState([]);
   const [relatedArtists, setRelatedArtists] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeAlbum, setActiveAlbum] = useState(artist?.initialAlbum || initialAlbum || null);
   const [isAlbumLoading, setIsAlbumLoading] = useState(false);
@@ -641,6 +641,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
   if (activeAlbum) {
     return (
       <AlbumView
+        key={activeAlbum.id || activeAlbum.permalink || activeAlbum.title}
         album={activeAlbum}
         artist={profile}
         isLoading={isAlbumLoading}
@@ -678,6 +679,15 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
         onOpenArtist={onOpenArtist}
         onOpenAlbum={setActiveAlbum}
       />
+    );
+  }
+
+  if (isLoading && !tracks.length && !albums.length) {
+    return (
+      <section className="flex-1 min-h-0 w-full overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#090909] text-white shadow-2xl flex flex-col items-center justify-center gap-4">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-white/80" />
+        <p className="text-sm font-bold tracking-widest uppercase text-white/40">Загрузка...</p>
+      </section>
     );
   }
 
@@ -744,7 +754,6 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
 
       <div className="space-y-8 p-7 max-md:p-4">
         {error && <p className="text-sm font-semibold text-red-300">{error}</p>}
-        {isLoading && !tracks.length && <p className="text-sm font-bold text-white/40">Загружаю артиста...</p>}
 
         {previewTracks.length > 0 && (
           <section className="mt-2">

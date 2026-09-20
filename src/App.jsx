@@ -2241,7 +2241,7 @@ function AlbumViewContainer({ album, onBack, onOpenArtist, onOpenAlbum }) {
   } = useAudioPlayer();
 
   const [fullAlbum, setFullAlbum] = useState(album);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(!album?.tracks || album.tracks.length === 0);
 
   useEffect(() => {
     let isMounted = true;
@@ -2820,6 +2820,7 @@ export default function App() {
       case "artist":
         return activeArtist ? (
           <ArtistView
+            key={activeArtist.id || activeArtist.permalink || activeArtist.name}
             artist={activeArtist}
             onBack={closeArtist}
             onOpenArtist={openArtist}
@@ -2831,6 +2832,7 @@ export default function App() {
       case "album":
         return activeAlbum ? (
           <AlbumViewContainer
+            key={activeAlbum.id || activeAlbum.permalink || activeAlbum.title}
             album={activeAlbum}
             onBack={closeAlbum}
             onOpenArtist={openArtist}
