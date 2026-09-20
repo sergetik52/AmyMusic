@@ -879,7 +879,7 @@ async function hydrateAlbumTracks(album, artist = {}) {
           const query = `${current.artist || album.artist} ${current.title}`;
           const searched = await searchTracksLimited(query, 5);
           const normTitle = normalizeComparable(current.title);
-          const found = searched.find((s) => s.streamUrl && normalizeComparable(s.title || "").includes(normTitle)) || searched.find((s) => s.streamUrl);
+          const found = searched.find((s) => s.streamUrl && normalizeComparable(s.title || "").includes(normTitle));
           if (found) {
             current = {
               ...current,

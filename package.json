@@ -1,7 +1,7 @@
 {
   "name": "amymusic1",
   "private": true,
-  "version": "0.1.60",
+  "version": "0.1.61",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -51,7 +51,8 @@
       "allowToChangeInstallationDirectory": false,
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true
-    }
+    },
+    "npmRebuild": false
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

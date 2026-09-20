@@ -867,7 +867,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           e.preventDefault();
           setLyricsContextMenu({ x: e.clientX, y: e.clientY });
         }}
-        className={isMobileLyrics ? "relative h-full w-full overflow-hidden px-3 touch-pan-y select-none" : "relative h-screen w-full overflow-hidden px-12 touch-none select-none"}
+        className={isMobileLyrics ? "relative h-full w-full overflow-hidden px-3 touch-pan-y select-none" : "relative h-full w-full overflow-hidden px-12 touch-none select-none"}
       >
         <div
           key={lyricsSettings.displayMode}
@@ -878,7 +878,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                   lyricsSettings.textSize === "base" ? "text-[17px]" :
                   lyricsSettings.textSize === "lg" ? "text-[19px]" : "text-[22px]"
                 }`
-              : `animate-in fade-in zoom-in-[0.98] duration-500 mx-auto flex w-[760px] max-w-[calc(100vw-6rem)] flex-col gap-8 ${lyricsSettings.displayMode === "text-only" ? "text-center" : "text-left"} font-extrabold leading-[1.2] tracking-tight transition-all duration-300 ease-out ${
+              : `animate-in fade-in zoom-in-[0.98] duration-500 mx-auto flex w-[760px] max-w-full flex-col gap-8 ${lyricsSettings.displayMode === "text-only" ? "text-center" : "text-left"} font-extrabold leading-[1.2] tracking-tight transition-all duration-300 ease-out ${
                   lyricsSettings.textSize === "sm" ? "text-[20px]" :
                   lyricsSettings.textSize === "base" ? "text-[28px]" :
                   lyricsSettings.textSize === "lg" ? "text-[36px]" : "text-[46px]"
@@ -1115,7 +1115,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
               </div>
             ) : (
               <div
-                className="relative h-60 w-60 max-xs:h-48 max-xs:w-48 cursor-pointer rounded-2xl shadow-2xl overflow-hidden shrink-0"
+                className="relative aspect-square w-[min(100%,_240px)] max-h-[35vh] cursor-pointer rounded-2xl shadow-2xl overflow-hidden shrink-0"
                 style={{ boxShadow: "0 20px 60px rgba(0,0,0,.7)" }}
                 onClick={() => setSidePanel("lyrics")}
               >
@@ -1590,7 +1590,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           <div
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            className="relative h-80 w-80 lg:h-[600px] lg:w-[600px] max-sm:h-64 max-sm:w-64 max-xs:h-52 max-xs:w-52 cursor-pointer rounded-2xl shadow-2xl transition-all duration-500 ease-out"
+            className="relative aspect-square w-[min(100%,_50vh)] md:w-[min(100%,_55vh)] lg:w-[min(600px,_65vh)] cursor-pointer rounded-2xl shadow-2xl transition-all duration-500 ease-out"
             style={{ boxShadow: "0 30px 90px rgba(0,0,0,.62)" }}
           >
             <img src={coverUrl} alt={currentTrack?.title || ""} className="h-full w-full object-cover rounded-2xl" />
@@ -1729,7 +1729,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
             </div>
           </div>
 
-          <div className="w-80 lg:w-[600px] max-sm:w-64 max-xs:w-52 transition-all duration-500">
+          <div className="w-[min(100%,_600px)] max-sm:w-[min(100%,_256px)] max-xs:w-[min(100%,_208px)] transition-all duration-500">
             <div className="mb-1 flex items-center justify-between text-[10px] font-medium text-white/35">
               <span>{formatTime(currentTime)}</span>
               <span>{formatTime(duration)}</span>
