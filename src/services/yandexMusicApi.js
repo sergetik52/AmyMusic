@@ -255,35 +255,44 @@ function getBaseUrl() {
 }
 
 async function fetchYandexApi(path, options = {}) {
+  const profileSettings = getProfileSettings();
+  const yandexToken = profileSettings?.yandexToken || "";
+
   const headers = {
     "Accept": "application/json",
     "X-Yandex-Music-Client": "YandexMusicAndroid/24023241",
     "Client-Id": YANDEX_CLIENT_ID,
+    ...(yandexToken ? { "Authorization": `OAuth ${yandexToken}` } : {}),
     ...(options.headers || {})
   };
 
+  const directUrl = `https://api.music.yandex.net${path}`;
+  const isTauri = typeof window !== "undefined" && !!window.__TAURI_INTERNALS__;
+
+  // In Tauri, always go direct (our Rust proxy_fetch handles CORS bypass)
+  if (isTauri) {
+    const res = await fetch(directUrl, { ...options, headers });
+    if (!res.ok) throw new Error(`Yandex API ${path} → ${res.status}`);
+    return await res.json();
+  }
+
+  // In browser: try the local dev-proxy first, fall back to direct
   const resolvedBase = getYandexApiBase();
   const isRelative = resolvedBase.startsWith("/");
   const baseUrl = getBaseUrl();
   const primaryUrl = isRelative && baseUrl !== "https://api.music.yandex.net"
     ? `${baseUrl}${resolvedBase}${path}`
-    : `https://api.music.yandex.net${path}`;
+    : directUrl;
 
   try {
     const res = await fetch(primaryUrl, { ...options, headers });
-    if (res.ok) {
-      return await res.json();
-    }
+    if (res.ok) return await res.json();
   } catch (err) {
-    console.warn(`[YandexMusic] Primary request failed for ${primaryUrl}, trying direct API...`, err);
+    console.warn(`[YandexMusic] Primary request failed for ${primaryUrl}`, err);
   }
 
-  // Fallback to direct Yandex API
-  const directUrl = `https://api.music.yandex.net${path}`;
   const directRes = await fetch(directUrl, { ...options, headers });
-  if (!directRes.ok) {
-    throw new Error(`Yandex API request failed with status ${directRes.status}`);
-  }
+  if (!directRes.ok) throw new Error(`Yandex API request failed with status ${directRes.status}`);
   return await directRes.json();
 }
 

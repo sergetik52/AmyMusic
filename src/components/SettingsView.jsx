@@ -83,14 +83,86 @@ export function SettingsView({ profileData, onProfileSave }) {
   
   const isDesktop = Boolean(typeof window !== "undefined" && window.amyMusicDesktop);
 
+  // App auto-updater state
+  const [appVersion, setAppVersion] = useState("0.1.0");
+  const [updateStatus, setUpdateStatus] = useState("idle");
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateMessage, setUpdateMessage] = useState("");
+  const [latestDownloadUrl, setLatestDownloadUrl] = useState("");
+
+  useEffect(() => {
+    if (isDesktop && window.amyMusicDesktop?.getAppVersion) {
+      window.amyMusicDesktop.getAppVersion().then((v) => {
+        if (v) setAppVersion(v);
+      }).catch(() => {});
+    }
+  }, [isDesktop]);
+
+  const handleCheckOrStartUpdate = async () => {
+    if (!isDesktop || !window.amyMusicDesktop) return;
+    if (updateStatus === "has-update") {
+      setUpdateStatus("downloading");
+      setUpdateProgress(0);
+      setUpdateMessage("Скачивание обновления и запуск инсталлятора...");
+
+      const cleanup = window.amyMusicDesktop.onUpdateProgress?.((data) => {
+        if (data?.percent !== undefined) {
+          setUpdateProgress(data.percent);
+        }
+      });
+
+      const res = await window.amyMusicDesktop.startUpdate(latestDownloadUrl);
+      if (cleanup) cleanup();
+      if (!res?.success) {
+        setUpdateStatus("error");
+        setUpdateMessage(res?.error || "Ошибка скачивания обновления.");
+      }
+      return;
+    }
+
+    setUpdateStatus("checking");
+    setUpdateMessage("");
+    const res = await window.amyMusicDesktop.checkUpdate();
+    if (res?.hasUpdate) {
+      setUpdateStatus("has-update");
+      if (res.downloadUrl) setLatestDownloadUrl(res.downloadUrl);
+      setUpdateMessage(`Доступна новая версия v${res.latestVersion}! ${res.releaseNotes || ""}`);
+    } else {
+      setUpdateStatus("up-to-date");
+      setUpdateMessage("У вас установлена самая свежая версия приложения.");
+      setTimeout(() => setUpdateStatus("idle"), 3000);
+    }
+  };
+
   useEffect(() => subscribeProfileSettings(setSettings), []);
 
   useEffect(() => {
     if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-      navigator.mediaDevices.enumerateDevices().then((devices) => {
-        const audioOutputs = devices.filter((d) => d.kind === "audiooutput");
+      const getDevices = async () => {
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        // Edge WebView2 hides device labels until microphone permission is granted
+        if (devices.some(d => d.kind === "audiooutput" && !d.label)) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => track.stop()); // stop immediately
+            devices = await navigator.mediaDevices.enumerateDevices();
+          } catch(e) {
+            console.warn("Audio permission denied, device labels will be hidden");
+          }
+        }
+        
+        let audioOutputs = devices.filter((d) => d.kind === "audiooutput");
+        
+        // Remove redundant virtual devices from Windows/Edge
+        audioOutputs = audioOutputs.filter((d) => {
+          if (d.deviceId === 'default' || d.deviceId === 'communications') return false;
+          if (/^(default|communications|по умолчанию|связь)\s*[-:]*\s*/i.test(d.label)) return false;
+          return true;
+        });
+
         setAvailableDevices(audioOutputs);
-      }).catch(console.warn);
+      };
+      getDevices().catch(console.warn);
     }
   }, []);
 
@@ -466,6 +538,51 @@ export function SettingsView({ profileData, onProfileSave }) {
                   onChange={(v) => updateField("discordRpcEnabled", v)} 
                   disabled={!isDesktop}
                 />
+
+                <div className="flex items-center justify-between py-4">
+                  <div className="flex-1 pr-5">
+                    <div className="text-base font-semibold mb-1.5">Обновление приложения</div>
+                    <div className="text-sm text-white/50 leading-relaxed">
+                      {isDesktop ? `Установлена версия v${appVersion}` : "Доступно только в веб-версии"}
+                      {updateMessage && <div className="mt-1 text-[#8341EF]">{updateMessage}</div>}
+                    </div>
+                  </div>
+                  <div>
+                    {isDesktop ? (
+                      <button 
+                        type="button" 
+                        disabled={updateStatus === "checking" || updateStatus === "downloading"} 
+                        onClick={handleCheckOrStartUpdate} 
+                        className="bg-white/10 hover:bg-white/20 px-6 py-2 rounded-full text-sm font-semibold transition disabled:opacity-50 relative overflow-hidden"
+                      >
+                        {updateStatus === "checking" && "Проверка..."}
+                        {updateStatus === "idle" && "Проверить"}
+                        {updateStatus === "up-to-date" && (
+                          <span className="flex items-center gap-1.5">
+                            Актуально
+                            <svg className="w-4 h-4 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          </span>
+                        )}
+                        {updateStatus === "has-update" && "Обновить 🚀"}
+                        {updateStatus === "downloading" && `${updateProgress}%`}
+                        {updateStatus === "downloading" && (
+                          <div className="absolute left-0 bottom-0 h-1 bg-[#8341EF] transition-all" style={{ width: `${updateProgress}%` }} />
+                        )}
+                      </button>
+                    ) : (
+                      <a 
+                        href="/api/download-app" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="bg-white/10 hover:bg-white/20 px-6 py-2 rounded-full text-sm font-semibold transition inline-block"
+                      >
+                        Скачать .exe
+                      </a>
+                    )}
+                  </div>
+                </div>
 
                 <div className="mt-12 pt-8 border-t border-red-900/30">
                   <div className="text-xl font-bold text-red-500 mb-2">Опасная зона</div>

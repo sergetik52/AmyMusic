@@ -1,10 +1,74 @@
-import React, { useMemo, useState, useRef } from "react";
+import React, { useMemo, useState, useRef, useCallback, useEffect } from "react";
 import { useAudioPlayer } from "../audio/AudioPlayerContext";
 import { getAlbumDetails, getTrackWaveTracks, hydrateSoundCloudTracks, searchTracks } from "../services/soundCloudApi";
 import { parseYandexMusicUrl, getYandexCachedArtistAvatar, fetchYandexArtistAvatar } from "../services/yandexMusicApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { HorizontalScrollSection } from "./HorizontalScrollSection";
+import { useHorizontalScroll } from "../utils/useHorizontalScroll";
 import { TrackMenuButton } from "./TrackContextMenu";
+
+// ─── Pinned Playlists helpers (localStorage) ──────────────────────────────────
+const PINNED_KEY = "amymusic_pinned_playlists";
+
+export function getPinnedPlaylists() {
+  try {
+    const raw = localStorage.getItem(PINNED_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function savePinnedPlaylists(list) {
+  try { localStorage.setItem(PINNED_KEY, JSON.stringify(list)); } catch {}
+  window.dispatchEvent(new Event("amymusic:pinned-updated"));
+}
+
+export function togglePinnedPlaylist(playlist) {
+  const current = getPinnedPlaylists();
+  const idx = current.findIndex((p) => p.id === playlist.id);
+  let next;
+  if (idx >= 0) {
+    next = current.filter((_, i) => i !== idx);
+  } else {
+    if (current.length >= 5) return; // max 5
+    next = [...current, {
+      id: playlist.id,
+      title: playlist.title,
+      cover: playlist.cover || "/logo.png",
+      type: "playlist"
+    }];
+  }
+  savePinnedPlaylists(next);
+  return next;
+}
+
+export function togglePinnedArtist(artist) {
+  const id = `artist-${artist.name}`;
+  const current = getPinnedPlaylists();
+  const idx = current.findIndex((p) => p.id === id);
+  let next;
+  if (idx >= 0) {
+    next = current.filter((_, i) => i !== idx);
+  } else {
+    if (current.length >= 5) return;
+    next = [...current, {
+      id,
+      title: artist.name,
+      cover: artist.avatar || artist.cover || "/user.svg",
+      type: "artist",
+      artistData: { name: artist.name, username: artist.username || artist.name, avatar: artist.avatar || artist.cover || "/user.svg", permalinkUrl: artist.permalinkUrl || "" }
+    }];
+  }
+  savePinnedPlaylists(next);
+  return next;
+}
+
+export function isPinnedArtist(name) {
+  return getPinnedPlaylists().some((p) => p.id === `artist-${name}`);
+}
+
+export function isPinnedPlaylist(id) {
+  return getPinnedPlaylists().some((p) => p.id === id);
+}
 
 function HeartHeaderIcon() {
   return (
@@ -197,31 +261,53 @@ function FavoriteArtistCard({ artist, index, onOpen }) {
       ? artist.cover 
       : "/user.svg";
 
+  const [pinned, setPinned] = useState(() => isPinnedArtist(artist.name));
+
+  const handlePin = (e) => {
+    e.stopPropagation();
+    const next = togglePinnedArtist({ ...artist, avatar: avatarSrc });
+    if (next !== undefined) setPinned(next.some((p) => p.id === `artist-${artist.name}`));
+  };
+
   return (
-    <button
-      type="button"
-      onClick={() => onOpen({
-        ...artist,
-        avatar: avatarSrc
-      })}
-      className="group flex w-36 shrink-0 flex-col items-center rounded-[var(--cover-radius,16px)] p-3 text-center transition hover:bg-white/[0.04]"
-    >
-      <div className="relative mb-3 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-white/[0.04] shadow-2xl">
-        <img
-          src={avatarSrc}
-          alt={artist.name}
-          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/user.svg"; }}
-          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-        />
-        <div className="absolute inset-0 bg-black/20 opacity-0 transition group-hover:opacity-100" />
-      </div>
-      <div className="w-full truncate text-sm font-black text-white">{artist.name}</div>
-    </button>
+    <div className="group relative flex w-36 shrink-0 flex-col items-center">
+      <button
+        type="button"
+        onClick={() => onOpen({ ...artist, avatar: avatarSrc })}
+        className="flex w-full flex-col items-center rounded-[var(--cover-radius,16px)] p-3 text-center transition hover:bg-white/[0.04]"
+      >
+        <div className="relative mb-3 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-white/[0.04] shadow-2xl">
+          <img
+            src={avatarSrc}
+            alt={artist.name}
+            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/user.svg"; }}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-black/20 opacity-0 transition group-hover:opacity-100" />
+        </div>
+        <div className="w-full truncate text-sm font-black text-white">{artist.name}</div>
+      </button>
+      <button
+        type="button"
+        onClick={handlePin}
+        title={pinned ? "Открепить" : "Закрепить на панели"}
+        className={`absolute top-3 right-3 grid h-7 w-7 place-items-center rounded-full transition hover:scale-110 opacity-0 group-hover:opacity-100 ${pinned ? "bg-white/20" : "bg-black/50 hover:bg-black/80"}`}
+      >
+        <svg className="h-3.5 w-3.5 fill-white" viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+      </button>
+    </div>
   );
 }
 
-function ReleaseCard({ release, onOpen, onUnlike }) {
+function ReleaseCard({ release, onOpen, onUnlike, showPin }) {
   const tracks = release.tracks || [];
+  const [pinned, setPinned] = useState(() => isPinnedPlaylist(release.id));
+
+  const handlePin = (e) => {
+    e.stopPropagation();
+    const next = togglePinnedPlaylist(release);
+    if (next !== undefined) setPinned(next.some((p) => p.id === release.id));
+  };
 
   return (
     <div className="group relative w-40 shrink-0 text-left">
@@ -236,25 +322,40 @@ function ReleaseCard({ release, onOpen, onUnlike }) {
           <div className="absolute bottom-2 right-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-black text-white/70">
             {tracks.length || release.trackCount || 0}
           </div>
+          {pinned && showPin && (
+            <div className="absolute top-2 left-2 rounded-full bg-white/20 p-1" title="Закреплено">
+              <svg className="h-3 w-3 fill-white" viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+            </div>
+          )}
         </div>
         <p className="mt-2 truncate text-sm font-black text-white">{release.title}</p>
         <p className="truncate text-xs font-semibold text-white/35">{release.artist}</p>
       </button>
-      {onUnlike && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onUnlike(release);
-          }}
-          className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full bg-black/50 opacity-0 transition group-hover:opacity-100 hover:bg-black/80 hover:scale-110"
-        >
-          <img src="/like.svg" alt="" className="h-4 w-4" />
-        </button>
-      )}
+      <div className="absolute top-2 right-2 flex items-center gap-1.5">
+        {showPin && (
+          <button
+            type="button"
+            onClick={handlePin}
+            title={pinned ? "Открепить от панели" : "Закрепить на панели навигации"}
+            className={`grid h-8 w-8 place-items-center rounded-full transition hover:scale-110 opacity-0 group-hover:opacity-100 ${pinned ? "bg-white/20 hover:bg-white/30" : "bg-black/50 hover:bg-black/80"}`}
+          >
+            <svg className="h-4 w-4 fill-white" viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+          </button>
+        )}
+        {onUnlike && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onUnlike(release); }}
+            className="grid h-8 w-8 place-items-center rounded-full bg-black/50 opacity-0 transition group-hover:opacity-100 hover:bg-black/80 hover:scale-110"
+          >
+            <img src="/like.svg" alt="" className="h-4 w-4" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
+
 
 function PlaylistView({
   playlist,
@@ -531,6 +632,7 @@ function PlaylistView({
                 isDragOver ? "border-2 border-white/50" : "border border-transparent",
                 isCurrent ? "bg-white/[0.08]" : ""
               ].join(" ")}
+              style={{ WebkitAppRegion: "no-drag" }}
             >
               <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
                 {isEditable ? (
@@ -627,6 +729,29 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   const [trackWaveLoading, setTrackWaveLoading] = useState(false);
   const fileInputRef = React.useRef(null);
   const mobileLikedScrollRef = useRef(null);
+  useHorizontalScroll(mobileLikedScrollRef, [likedTracks]);
+
+  // Open playlist from sidebar pin click
+  useEffect(() => {
+    const handler = (e) => {
+      const plId = e.detail;
+      const found = userPlaylists.find((p) => p.id === plId) || savedReleases.find((p) => String(p.id) === String(plId));
+      if (found) {
+        openPlaylist(found);
+      }
+    };
+    window.addEventListener("amymusic:open-pinned-playlist", handler);
+    return () => window.removeEventListener("amymusic:open-pinned-playlist", handler);
+  }, [userPlaylists, savedReleases]);
+
+  // Open artist from sidebar pin click
+  useEffect(() => {
+    const handler = (e) => {
+      if (onOpenArtist) onOpenArtist(e.detail);
+    };
+    window.addEventListener("amymusic:open-pinned-artist", handler);
+    return () => window.removeEventListener("amymusic:open-pinned-artist", handler);
+  }, [onOpenArtist]);
 
   const scrollLikedLeft = () => {
     if (mobileLikedScrollRef.current) {
@@ -1162,14 +1287,6 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
                   ref={mobileLikedScrollRef}
                   className="flex md:hidden overflow-x-auto gap-3 snap-x snap-mandatory scrollbar-hide w-full pb-2"
                   style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-                  onWheel={(e) => {
-                    if (e.deltaY !== 0) {
-                      e.currentTarget.scrollBy({
-                        left: e.deltaY > 0 ? 300 : -300,
-                        behavior: 'smooth'
-                      });
-                    }
-                  }}
                 >
                   {mobileChunks.map((chunk, chunkIdx) => (
                     <div key={chunkIdx} className="w-full shrink-0 snap-start flex flex-col gap-1">
@@ -1197,7 +1314,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
           {savedAlbums.length > 0 && (
             <HorizontalScrollSection title="Альбомы">
               {savedAlbums.map((release) => (
-                <ReleaseCard key={release.id} release={release} onOpen={openPlaylist} onUnlike={toggleSavedRelease} />
+                <ReleaseCard key={release.id} release={release} onOpen={openPlaylist} onUnlike={toggleSavedRelease} showPin />
               ))}
             </HorizontalScrollSection>
           )}
@@ -1205,7 +1322,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
           {savedPlaylists.length > 0 && (
             <HorizontalScrollSection title="Плейлисты">
               {savedPlaylists.map((release) => (
-                <ReleaseCard key={release.id} release={release} onOpen={openPlaylist} onUnlike={toggleSavedRelease} />
+                <ReleaseCard key={release.id} release={release} onOpen={openPlaylist} onUnlike={toggleSavedRelease} showPin />
               ))}
             </HorizontalScrollSection>
           )}
@@ -1223,7 +1340,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
               <p className="truncate text-xs font-semibold text-white/35">Создать или импорт</p>
             </button>
             {userPlaylists.map((playlist) => (
-              <ReleaseCard key={playlist.id} release={playlist} onOpen={openPlaylist} />
+              <ReleaseCard key={playlist.id} release={playlist} onOpen={openPlaylist} showPin />
             ))}
           </HorizontalScrollSection>
         </div>

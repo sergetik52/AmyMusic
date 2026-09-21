@@ -1,3 +1,7 @@
+import { initDesktopApi } from "./desktopApi.js";
+initDesktopApi();
+import { useHorizontalScroll } from "./utils/useHorizontalScroll";
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Component } from "react";
@@ -7,7 +11,7 @@ import { CollectionView } from "./components/CollectionView";
 import { ArtistView, AlbumView } from "./components/ArtistView";
 import { FullPlayerOverlay } from "./components/FullPlayerOverlay";
 import { AudioProvider, useAudioPlayer } from "./audio/AudioPlayerContext";
-import { TrackMenuButton } from "./components/TrackContextMenu";
+import { TrackMenuButton, TrackContextMenu } from "./components/TrackContextMenu";
 import { AvatarCropperModal } from "./components/AvatarCropperModal";
 import { EqualizerModal } from "./components/EqualizerModal";
 import { SettingsView } from "./components/SettingsView";
@@ -42,6 +46,7 @@ import { initNativeShell } from "./native/capacitor";
 import { getCachedLyricsForTrack, getActiveLyricIndex } from "./services/lyricsApi";
 import { useEscapeKey } from "./utils/useEscapeKey";
 import { MobileLayout } from "./mobile/MobileLayout";
+import { getPinnedPlaylists } from "./components/CollectionView";
 import "./main.css";
 
 function useIsMobile() {
@@ -65,35 +70,13 @@ const initialNavigation = [
   { id: "collection", label: "Коллекция", icon: "/collection.svg" }
 ];
 
-function Logo({ isCollapsed, onClick }) {
-  return (
-    <div 
-      className="flex select-none items-center gap-3.5 cursor-pointer px-3 transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden"
-      onClick={onClick}
-      title={isCollapsed ? "Развернуть меню" : "Свернуть меню"}
-    >
-      <img
-        src="/logo.png"
-        alt="AmyMusic Logo"
-        className="h-12 w-12 shrink-0 rounded-2xl object-cover shadow-xl transition-transform hover:scale-105"
-      />
-      <div className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[100px] opacity-100"}`}>
-        <div className="leading-tight whitespace-nowrap">
-          <p className="text-[18px] font-black tracking-wide text-[#9E7DFF]">Amy</p>
-          <p className="text-[18px] font-black tracking-wide text-[#9E7DFF]">Music</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function SidebarItem({ item, isActive, isCollapsed, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={[
-        "group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[26px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden",
+        "group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[26px] text-sm transition-all duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden",
         isActive ? "font-medium text-[#8341EF]" : "text-white/50 hover:text-white/80"
       ].join(" ")}
       title={isCollapsed ? item.label : undefined}
@@ -111,7 +94,7 @@ function SidebarItem({ item, isActive, isCollapsed, onClick }) {
           WebkitMaskPosition: "center"
         }}
       />
-      <span className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"}`}>
+      <span className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100"}`}>
         <span className="text-[14.9px] whitespace-nowrap">{item.label}</span>
       </span>
     </button>
@@ -474,7 +457,15 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
   const { playHistory, totalListenedSeconds } = useAudioPlayer();
   const [settings, setSettings] = useState(() => getProfileSettings());
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const isCollapsed = !isHovered;
+  const [pinnedPlaylists, setPinnedPlaylists] = useState(() => getPinnedPlaylists());
+
+  useEffect(() => {
+    const update = () => setPinnedPlaylists(getPinnedPlaylists());
+    window.addEventListener("amymusic:pinned-updated", update);
+    return () => window.removeEventListener("amymusic:pinned-updated", update);
+  }, []);
 
   const hours = Math.floor(totalListenedSeconds / 3600);
   const minutes = Math.floor((totalListenedSeconds % 3600) / 60);
@@ -519,10 +510,43 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
 
   return (
     <>
-      <aside className={`hidden md:flex shrink-0 flex-col justify-between py-1 font-medium transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "w-[72px]" : "w-[240px]"}`}>
-        <div className="w-full">
-          <Logo isCollapsed={isCollapsed} onClick={() => setIsCollapsed(!isCollapsed)} />
-          <nav className="mt-6 flex w-full flex-col gap-1">
+      <aside
+        className={`hidden md:flex shrink-0 flex-col justify-center py-4 font-medium transition-all duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] relative z-20 ${isCollapsed ? "w-[72px] bg-transparent" : "w-[200px] bg-black/80 backdrop-blur-md rounded-r-2xl"}`}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <nav className="flex flex-col gap-1 w-full">
+            {/* Pinned playlists */}
+            {pinnedPlaylists.length > 0 && (
+              <div className={`flex flex-col gap-1 w-full mb-2 pb-2 border-b border-white/[0.06] transition-all duration-300`}>
+                {pinnedPlaylists.map((pl) => (
+                  <button
+                    key={pl.id}
+                    type="button"
+                    onClick={() => {
+                      if (pl.type === "artist" && pl.artistData) {
+                        // Open artist view
+                        window.dispatchEvent(new CustomEvent("amymusic:open-pinned-artist", { detail: pl.artistData }));
+                      } else {
+                        setActiveTab("collection");
+                        window.dispatchEvent(new CustomEvent("amymusic:open-pinned-playlist", { detail: pl.id }));
+                      }
+                    }}
+                    title={pl.title}
+                    className="group flex w-full items-center gap-3.5 rounded-full py-1.5 px-[22px] text-sm transition-all duration-300 overflow-hidden hover:bg-white/5"
+                  >
+                    <img
+                      src={pl.cover || "/logo.png"}
+                      alt={pl.title}
+                      className={`h-7 w-7 shrink-0 object-cover shadow-md transition group-hover:scale-105 ${pl.type === "artist" ? "rounded-full" : "rounded-lg"}`}
+                    />
+                    <span className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] ${isCollapsed ? "max-w-0 opacity-0" : "max-w-[120px] opacity-100"}`}>
+                      <span className="text-[13px] font-semibold text-white/70 whitespace-nowrap truncate block">{pl.title}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
             {initialNavigation.map((item) => (
               <SidebarItem
                 key={item.id}
@@ -533,9 +557,8 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
               />
             ))}
           </nav>
-        </div>
 
-        <div className="mb-4 w-full space-y-2">
+        <div className="absolute bottom-0 left-0 right-0 mb-4 w-full space-y-2 overflow-hidden">
           {!isDesktop && (
             <a
               href="/api/download-app"
@@ -1061,6 +1084,15 @@ function SearchPanel({ onOpenArtist }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
+  const recentTracksScrollRef = useRef(null);
+  const searchTracksScrollRef = useRef(null);
+  const searchArtistsScrollRef = useRef(null);
+  const searchAlbumsScrollRef = useRef(null);
+  useHorizontalScroll(recentTracksScrollRef, [playHistory]);
+  useHorizontalScroll(searchTracksScrollRef, [tracks]);
+  useHorizontalScroll(searchArtistsScrollRef, [artists]);
+  useHorizontalScroll(searchAlbumsScrollRef, [albums]);
+
   useEffect(() => {
     let timer;
     if (isFocused) {
@@ -1422,17 +1454,7 @@ function SearchPanel({ onOpenArtist }) {
           {/* Recent Tracks Carousel (Only when Idle) */}
           {!hasSearched && playHistory && playHistory.length > 0 && (
             <div className="mt-8 w-full px-4 md:px-8 animate-slide-up-fade">
-              <div 
-                className="flex gap-4 overflow-x-auto no-scrollbar pb-6 snap-x"
-                onWheel={(e) => {
-                  if (e.deltaY !== 0) {
-                    e.currentTarget.scrollBy({
-                      left: e.deltaY > 0 ? 300 : -300,
-                      behavior: 'smooth'
-                    });
-                  }
-                }}
-              >
+              <div ref={recentTracksScrollRef} className="flex gap-4 overflow-x-auto no-scrollbar pb-6 snap-x">
                 {playHistory.slice(0, 15).map((track, i) => (
                   <button
                     key={`${track.id}-${i}`}
@@ -1470,19 +1492,9 @@ function SearchPanel({ onOpenArtist }) {
               {tracks.length > 0 && (
                 <section>
                   <h2 className="text-2xl font-black text-white mb-6">Треки</h2>
-                  <div 
-                    className="flex gap-4 overflow-x-auto no-scrollbar pb-4 snap-x"
-                    onWheel={(e) => {
-                      if (e.deltaY !== 0) {
-                        e.currentTarget.scrollBy({
-                          left: e.deltaY > 0 ? 300 : -300,
-                          behavior: 'smooth'
-                        });
-                      }
-                    }}
-                  >
+                  <div ref={searchTracksScrollRef} className="flex gap-4 overflow-x-auto no-scrollbar pb-4 snap-x">
                     {tracks.slice(0, 10).map(track => (
-                      <div key={track.id} onClick={() => playTrack(track, tracks)} className="group snap-start shrink-0 w-[160px] flex flex-col gap-3 cursor-pointer">
+                      <div key={track.id} onClick={() => playTrack(track, tracks)} onContextMenu={(e) => openContextMenu(e, track)} className="group snap-start shrink-0 w-[160px] flex flex-col gap-3 cursor-pointer">
                         <div className="w-[160px] h-[160px] relative rounded-2xl overflow-hidden shadow-lg">
                           <img src={track.cover} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -1505,17 +1517,7 @@ function SearchPanel({ onOpenArtist }) {
               {artists.length > 0 && (
                 <section>
                   <h2 className="text-2xl font-black text-white mb-6">Артисты</h2>
-                  <div 
-                    className="flex gap-4 overflow-x-auto no-scrollbar pb-4 snap-x"
-                    onWheel={(e) => {
-                      if (e.deltaY !== 0) {
-                        e.currentTarget.scrollBy({
-                          left: e.deltaY > 0 ? 300 : -300,
-                          behavior: 'smooth'
-                        });
-                      }
-                    }}
-                  >
+                  <div ref={searchTracksScrollRef} className="flex gap-4 overflow-x-auto no-scrollbar pb-4 snap-x">
                     {artists.slice(0, 8).map(artist => (
                       <div key={artist.id || artist.username} onClick={() => openArtist(artist)} className="group snap-start shrink-0 w-[140px] flex flex-col items-center gap-3 cursor-pointer text-center">
                         <div className="w-[140px] h-[140px] relative rounded-full overflow-hidden shadow-lg">
@@ -1558,7 +1560,7 @@ function SearchPanel({ onOpenArtist }) {
           {activeSearchTab === "tracks" && (
              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 mt-4">
                {tracks.map((track) => (
-                 <div key={track.id} onClick={() => playTrack(track, tracks)} className="group flex items-center gap-4 rounded-xl p-3 text-left transition hover:bg-white/5 active:bg-white/10 active:scale-[0.99] cursor-pointer">
+                 <div key={track.id} onClick={() => playTrack(track, tracks)} onContextMenu={(e) => openContextMenu(e, track)} className="group flex items-center gap-4 rounded-xl p-3 text-left transition hover:bg-white/5 active:bg-white/10 active:scale-[0.99] cursor-pointer">
                     <div className="flex h-12 w-12 shrink-0 relative">
                       <img src={track.cover} className="h-12 w-12 rounded-md object-cover shadow-md" />
                     </div>
@@ -2710,8 +2712,74 @@ export function applyAppearanceSettings(appearance = {}) {
   root.style.setProperty("--player-radius", playerRoundingMap[appearance.playerRounding] || "24px");
 }
 
+function WindowControls() {
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [appVersion, setAppVersion] = useState("0.1.0");
+  
+  useEffect(() => {
+    setIsDesktop(typeof window !== "undefined" && !!window.__TAURI_INTERNALS__);
+    if (typeof window !== "undefined" && window.amyMusicDesktop?.getAppVersion) {
+      window.amyMusicDesktop.getAppVersion().then((v) => {
+        if (v) setAppVersion(v);
+      }).catch(() => {});
+    }
+  }, []);
+
+  if (!isDesktop) {
+    return (
+      <div 
+        className="absolute left-0 right-0 top-0 h-[36px] bg-transparent z-[9999]" 
+        style={{ WebkitAppRegion: "drag" }}
+      />
+    );
+  }
+
+  return (
+    <div 
+      className="absolute left-0 right-0 top-0 h-[36px] bg-transparent z-[9999] flex items-center justify-between" 
+      style={{ WebkitAppRegion: "drag" }}
+    >
+      <div className="flex h-full items-center pl-3 gap-2 pointer-events-none select-none">
+        <img
+          src="/logo.png"
+          alt="AmyMusic Logo"
+          className="h-5 w-5 rounded-md object-cover opacity-90"
+        />
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[12.5px] font-bold tracking-wide text-white/90">AmyMusic</span>
+          <span className="text-[10px] font-medium text-white/40">v{appVersion}</span>
+        </div>
+      </div>
+
+      <div className="flex h-full" style={{ WebkitAppRegion: "no-drag" }}>
+        <button 
+          onClick={() => window.amyMusicDesktop?.minimizeWindow()}
+          className="grid h-full w-[46px] place-items-center opacity-40 hover:opacity-100 hover:bg-white/10 transition"
+          title="Свернуть"
+        >
+          <svg className="w-2.5 h-2.5 fill-white" viewBox="0 0 10 10"><path d="M1 4.5h8v1H1z"/></svg>
+        </button>
+        <button 
+          onClick={() => window.amyMusicDesktop?.maximizeWindow()}
+          className="grid h-full w-[46px] place-items-center opacity-40 hover:opacity-100 hover:bg-white/10 transition"
+          title="Развернуть"
+        >
+          <svg className="w-2.5 h-2.5 fill-transparent stroke-white" strokeWidth="1" viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" /></svg>
+        </button>
+        <button 
+          onClick={() => window.amyMusicDesktop?.closeWindow()}
+          className="grid h-full w-[46px] place-items-center opacity-40 hover:opacity-100 hover:bg-red-500 transition"
+          title="Закрыть"
+        >
+          <svg className="w-2.5 h-2.5 fill-transparent stroke-white" strokeWidth="1.2" viewBox="0 0 10 10"><path d="M1 1l8 8m0-8L1 9" strokeLinecap="round" /></svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen } = useAudioPlayer();
+  const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, contextMenuState, closeContextMenu, openContextMenu } = useAudioPlayer();
   const [activeTab, setActiveTab] = useState("wave");
   const [previousTab, setPreviousTab] = useState("wave");
   const [activeArtist, setActiveArtist] = useState(null);
@@ -2886,17 +2954,14 @@ export default function App() {
             }}
           />
         )}
+        <WindowControls />
       </>
     );
   }
 
   return (
     <main className="relative flex h-screen w-screen select-none gap-4 max-md:gap-0 overflow-hidden bg-black p-3 max-md:p-0 pt-[36px] max-md:pt-0 text-white max-md:flex-col">
-      {/* Draggable Title Bar Overlay */}
-      <div 
-        className="absolute left-0 right-0 top-0 h-[36px] bg-transparent" 
-        style={{ WebkitAppRegion: "drag" }}
-      />
+      <WindowControls />
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={selectTab}
@@ -2936,6 +3001,14 @@ export default function App() {
       )}
       {isEqualizerOpen && (
         <EqualizerModal onClose={() => setIsEqualizerOpen(false)} />
+      )}
+      {contextMenuState && (
+        <TrackContextMenu
+          track={contextMenuState.track}
+          x={contextMenuState.x}
+          y={contextMenuState.y}
+          onClose={closeContextMenu}
+        />
       )}
 
     </main>

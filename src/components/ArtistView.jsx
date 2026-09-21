@@ -12,6 +12,7 @@ import {
 } from "../services/soundCloudApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { HorizontalScrollSection } from "./HorizontalScrollSection";
+import { useHorizontalScroll } from "../utils/useHorizontalScroll";
 import { TrackMenuButton } from "./TrackContextMenu";
 
 function formatCount(value) {
@@ -516,6 +517,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
   const [isAlbumLoading, setIsAlbumLoading] = useState(false);
   const [isTracksViewOpen, setIsTracksViewOpen] = useState(false);
   const popularScrollRef = useRef(null);
+  useHorizontalScroll(popularScrollRef, [tracks]);
 
   const scrollPopLeft = () => {
     if (popularScrollRef.current) {
@@ -837,14 +839,6 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
                         ref={popularScrollRef}
                         className="flex md:hidden overflow-x-auto gap-3 snap-x snap-mandatory scrollbar-hide w-full pb-2"
                         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-                        onWheel={(e) => {
-                          if (e.deltaY !== 0) {
-                            e.currentTarget.scrollBy({
-                              left: e.deltaY > 0 ? 300 : -300,
-                              behavior: 'smooth'
-                            });
-                          }
-                        }}
                       >
                         {popTrackChunks.map((chunk, chunkIdx) => (
                           <div key={chunkIdx} className="w-full shrink-0 snap-start flex flex-col gap-1">

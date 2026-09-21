@@ -394,7 +394,7 @@ export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist }
                 {playHistory.map((track, i) => (
                   <div 
                     key={`${track.id}-${i}`} 
-                    className="w-full flex items-center gap-4 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition text-left group"
+                    onContextMenu={(e) => openContextMenu(e, track)} className="w-full flex items-center gap-4 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition text-left group"
                   >
                     {/* Cover (clickable to play) */}
                     <button 
@@ -460,7 +460,7 @@ export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist }
               onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollBy({ left: e.deltaY > 0 ? 300 : -300, behavior: "smooth" }); }}>
               {forYouTracks.map((track, i) => (
                 <button key={`${track.id}-${i}`} type="button" onClick={() => playTrack(track, forYouTracks)}
-                  className="group w-[140px] shrink-0 text-left snap-start transition-transform duration-300 hover:scale-[1.02]">
+                  onContextMenu={(e) => openContextMenu(e, track)} className="group w-[140px] shrink-0 text-left snap-start transition-transform duration-300 hover:scale-[1.02]">
                   <div className="relative aspect-square overflow-hidden rounded-[16px] bg-white/[0.04] shadow-md group-hover:shadow-xl transition-shadow duration-300">
                     <img src={track.cover} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
                     <div className="absolute inset-0 bg-black/0 transition duration-300 group-hover:bg-black/30 pointer-events-none" />

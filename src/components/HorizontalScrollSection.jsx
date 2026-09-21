@@ -1,7 +1,12 @@
 import React, { useRef } from "react";
+import { useHorizontalScroll } from "../utils/useHorizontalScroll";
 
 export function HorizontalScrollSection({ title, children }) {
   const scrollRef = useRef(null);
+
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeftPos = useRef(0);
 
   const scrollLeft = () => {
     if (scrollRef.current) {
@@ -14,6 +19,41 @@ export function HorizontalScrollSection({ title, children }) {
       scrollRef.current.scrollBy({ left: 400, behavior: "smooth" });
     }
   };
+
+  const handleMouseDown = (e) => {
+    if (e.button !== 0) return;
+    isDragging.current = true;
+    startX.current = e.pageX - scrollRef.current.offsetLeft;
+    scrollLeftPos.current = scrollRef.current.scrollLeft;
+    scrollRef.current.style.cursor = 'grabbing';
+    scrollRef.current.style.scrollBehavior = 'auto'; // Remove smooth scroll for instant drag
+  };
+
+  const handleMouseLeave = () => {
+    isDragging.current = false;
+    if (scrollRef.current) {
+      scrollRef.current.style.cursor = 'grab';
+      scrollRef.current.style.scrollBehavior = 'smooth';
+    }
+  };
+
+  const handleMouseUp = () => {
+    isDragging.current = false;
+    if (scrollRef.current) {
+      scrollRef.current.style.cursor = 'grab';
+      scrollRef.current.style.scrollBehavior = 'smooth';
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging.current) return;
+    e.preventDefault(); // Prevent text selection
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX.current) * 1.5;
+    scrollRef.current.scrollLeft = scrollLeftPos.current - walk;
+  };
+
+  useHorizontalScroll(scrollRef);
 
   return (
     <div className="mt-8">
@@ -38,16 +78,12 @@ export function HorizontalScrollSection({ title, children }) {
       </div>
       <div
         ref={scrollRef}
-        className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x"
+        className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x cursor-grab"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        onWheel={(e) => {
-          if (e.deltaY !== 0) {
-            e.currentTarget.scrollBy({
-              left: e.deltaY > 0 ? 300 : -300,
-              behavior: 'smooth'
-            });
-          }
-        }}
+        onMouseDown={handleMouseDown}
+        onMouseLeave={handleMouseLeave}
+        onMouseUp={handleMouseUp}
+        onMouseMove={handleMouseMove}
       >
         {children}
       </div>

@@ -72,8 +72,8 @@ function getSoundCloudApiBase() {
     return "https://api-v2.soundcloud.com";
   }
 
-  // On Capacitor (Android/iOS), there's no dev server proxy — go direct
-  if (window.Capacitor?.isNativePlatform?.() || window.location?.protocol === "capacitor:") {
+  // On Capacitor (Android/iOS) or Tauri, there's no dev server proxy — go direct
+  if (window.Capacitor?.isNativePlatform?.() || window.location?.protocol === "capacitor:" || window.__TAURI__) {
     return "https://api-v2.soundcloud.com";
   }
 

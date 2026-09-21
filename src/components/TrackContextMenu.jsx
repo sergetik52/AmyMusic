@@ -275,8 +275,7 @@ export function TrackContextMenu({
 }
 
 export function TrackMenuButton({ track }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [coords, setCoords] = useState({ x: 0, y: 0 });
+  const { openContextMenu } = useAudioPlayer();
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -284,15 +283,12 @@ export function TrackMenuButton({ track }) {
     if (!parent) return;
 
     const handleContextMenu = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setCoords({ x: e.clientX + 10, y: e.clientY + 10 });
-      setIsOpen(true);
+      openContextMenu(e, track);
     };
 
     parent.addEventListener('contextmenu', handleContextMenu);
     return () => parent.removeEventListener('contextmenu', handleContextMenu);
-  }, []);
+  }, [openContextMenu, track]);
 
   return (
     <div className="relative" ref={containerRef}>
@@ -300,24 +296,13 @@ export function TrackMenuButton({ track }) {
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          const rect = e.currentTarget.getBoundingClientRect();
-          setCoords({ x: rect.right, y: rect.bottom });
-          setIsOpen(!isOpen);
+          openContextMenu(e, track);
         }}
         className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 text-white/50 hover:text-white transition active:scale-95"
         aria-label="Меню трека"
       >
         <img src="/menu/menu-item.svg" alt="Menu" className="h-5 w-5 brightness-200 opacity-60 hover:opacity-100 transition" />
       </button>
-
-      {isOpen && (
-        <TrackContextMenu
-          track={track}
-          x={coords.x}
-          y={coords.y}
-          onClose={() => setIsOpen(false)}
-        />
-      )}
     </div>
   );
 }

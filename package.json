@@ -1,58 +1,21 @@
 {
   "name": "amymusic1",
   "private": true,
-  "version": "0.1.62",
+  "version": "0.2.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "electron:dev": "set AMYMUSIC_DEV=1&& electron .",
-    "package:windows": "npm run build && electron-builder --win --x64",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
     "release": "node scripts/release.cjs",
     "cap:sync": "npm run build && npx cap sync android",
     "android:open": "npx cap open android",
     "android:build": "npm run build && npx cap sync android",
     "android:apk": "npm run android:build && scripts\\build_android.bat",
     "android:run": "npm run build && scripts\\run_android.bat"
-  },
-  "build": {
-    "appId": "com.amymusic.desktop",
-    "productName": "AmyMusic",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "package.json"
-    ],
-    "publish": {
-      "provider": "github",
-      "owner": "sergetik52",
-      "repo": "AmyMusic"
-    },
-    "win": {
-      "icon": "build/icon.png",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "artifactName": "AmyMusic-${version}-Setup.${ext}"
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": false,
-      "deleteAppDataOnUninstall": false,
-      "runAfterFinish": true
-    },
-    "npmRebuild": false
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
@@ -61,22 +24,27 @@
     "@capacitor/core": "^7.4.4",
     "@capacitor/splash-screen": "^7.0.2",
     "@capacitor/status-bar": "^7.0.2",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-autostart": "^2.5.1",
+    "@tauri-apps/plugin-fs": "^2.5.2",
+    "@tauri-apps/plugin-global-shortcut": "^2.3.2",
+    "@tauri-apps/plugin-http": "^2.6.1",
+    "@tauri-apps/plugin-os": "^2.3.2",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-shell": "^2.3.6",
     "@vitejs/plugin-react": "^4.3.4",
-    "discord-rpc": "^4.0.1",
     "framer-motion": "^13.1.0",
     "hls.js": "^1.7.0",
-    "https-proxy-agent": "^9.1.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "ssh2": "^1.17.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.5"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.5",
     "autoprefixer": "^10.4.20",
-    "electron": "^32.3.3",
-    "electron-builder": "^25.1.8",
+    "https-proxy-agent": "^9.1.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17"
   }

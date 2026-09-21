@@ -566,6 +566,7 @@ export function AudioProvider({ children }) {
   const [currentIndex, setCurrentIndex] = useState(() => storedAudioState.currentIndex || 0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [contextMenuState, setContextMenuState] = useState(null); // { track, x, y }
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolumeState] = useState(() => storedAudioState.volume ?? 0.74);
@@ -1692,6 +1693,7 @@ export function AudioProvider({ children }) {
 
     setIsLoading(true);
     setError("");
+
     try {
       logDebug("audio", "loadTrack:start", {
         id: track.id,
@@ -1900,10 +1902,13 @@ export function AudioProvider({ children }) {
       return;
     }
 
-    // Only load or play when explicitly requested via user action or pending navigation
     const isManualOrPending = manualActionRef.current || pendingAutoplayRef.current;
     if (!isManualOrPending) {
       return;
+    }
+
+    if (String(nextTrack.id) !== String(loadedTrackIdRef.current)) {
+      setCurrentTime(0);
     }
 
     const shouldPlay = pendingAutoplayRef.current || isPlayingRef.current;
@@ -1976,6 +1981,10 @@ export function AudioProvider({ children }) {
         track,
         ...history.filter((item) => String(item.id) !== String(track.id))
       ].slice(0, 100));
+
+      if (String(track.id) !== String(loadedTrackIdRef.current)) {
+        setCurrentTime(0);
+      }
 
       try {
         const didLoad = await loadTrack(track, true, true);
@@ -2365,6 +2374,16 @@ export function AudioProvider({ children }) {
     showNotification("Плейлист удален", "info");
   }, [showNotification]);
 
+  const openContextMenu = useCallback((e, track) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenuState({ track, x: e.clientX + 10, y: e.clientY + 10 });
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenuState(null);
+  }, []);
+
   const openTrackWave = useCallback(async (track) => {
     const normalized = normalizeStoredTrack(track);
     if (!normalized) return;
@@ -2493,38 +2512,7 @@ export function AudioProvider({ children }) {
     }
   }, [currentTime, duration]);
 
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.mediaSession) return undefined;
 
-    const mediaSession = navigator.mediaSession;
-    setMediaSessionAction(mediaSession, "play", play);
-    setMediaSessionAction(mediaSession, "pause", pause);
-    setMediaSessionAction(mediaSession, "previoustrack", previous);
-    setMediaSessionAction(mediaSession, "nexttrack", next);
-    setMediaSessionAction(mediaSession, "stop", pause);
-    setMediaSessionAction(mediaSession, "seekbackward", (details = {}) => {
-      seek((audioRef.current?.currentTime || currentTime || 0) - (details.seekOffset || 10));
-    });
-    setMediaSessionAction(mediaSession, "seekforward", (details = {}) => {
-      seek((audioRef.current?.currentTime || currentTime || 0) + (details.seekOffset || 10));
-    });
-    setMediaSessionAction(mediaSession, "seekto", (details = {}) => {
-      if (!Number.isFinite(details.seekTime)) return;
-      const audio = audioRef.current;
-      if (details.fastSeek && typeof audio?.fastSeek === "function") {
-        audio.fastSeek(details.seekTime);
-        setCurrentTime(audio.currentTime || details.seekTime);
-        return;
-      }
-      seek(details.seekTime);
-    });
-
-    return () => {
-      ["play", "pause", "previoustrack", "nexttrack", "stop", "seekbackward", "seekforward", "seekto"].forEach((action) => {
-        setMediaSessionAction(mediaSession, action, null);
-      });
-    };
-  }, [currentTime, next, pause, play, previous, seek]);
 
   const mergeServerData = useCallback((serverData) => {
     if (!serverData) return;
@@ -2573,27 +2561,48 @@ export function AudioProvider({ children }) {
         ? startTimestamp + Math.floor(currentTrack.duration * 1000)
         : undefined;
 
+      // Use real cover URL — Discord supports external HTTPS URLs for images
+      const coverUrl = currentTrack.cover || currentTrack.artistAvatar || null;
+
       const payload = {
         details: currentTrack.title || "Unknown Track",
         state: currentTrack.artist || "Unknown Artist",
-        largeImageKey: currentTrack.cover || currentTrack.artistAvatar || "amymusic",
-        smallImageKey: "soundcloud",
-        smallImageText: "SoundCloud",
+        largeImageKey: coverUrl || "amymusic",
+        largeImageText: "AmyMusic",
+        smallImageKey: "amymusic",
+        smallImageText: "AmyMusic",
         startTimestamp,
-        endTimestamp
+        endTimestamp,
+        buttons: [
+          { label: "AmyMusic на GitHub", url: "https://github.com/sergetik52/AmyMusic" }
+        ]
       };
 
       if (typeof window !== "undefined" && window.amyMusicDesktop?.setDiscordActivity) {
         window.amyMusicDesktop.setDiscordActivity(payload);
+      }
+      if (typeof window !== "undefined" && window.amyMusicDesktop?.updateSmtc) {
+        window.amyMusicDesktop.updateSmtc({
+          title: currentTrack.title || null,
+          artist: currentTrack.artist || null,
+          album: currentTrack.album || null,
+          cover_url: currentTrack.cover || null,
+          duration: currentTrack.duration || null,
+          position: currentTime || null,
+          is_playing: isPlaying,
+        }).catch(() => {});
       }
       updateDiscordStatus(currentTrack, isPlaying, currentTime);
     } else {
       if (typeof window !== "undefined" && window.amyMusicDesktop?.setDiscordActivity) {
         window.amyMusicDesktop.setDiscordActivity(null);
       }
+      if (typeof window !== "undefined" && window.amyMusicDesktop?.clearSmtc) {
+        window.amyMusicDesktop.clearSmtc().catch(() => {});
+      }
       clearDiscordStatus();
     }
-  }, [isPlaying, currentTrack, currentTime, profileSettings?.discordRpcEnabled]);
+  }, [isPlaying, currentTrack?.id, profileSettings?.discordRpcEnabled]);
 
   const controls = useMemo(
     () => [
@@ -2713,6 +2722,9 @@ export function AudioProvider({ children }) {
       deleteUserPlaylist,
       showNotification,
       openTrackWave,
+      contextMenuState,
+      openContextMenu,
+      closeContextMenu,
       playNext,
       addToQueueEnd,
       removeFromQueue,
@@ -2778,6 +2790,9 @@ export function AudioProvider({ children }) {
       volume,
       showNotification,
       openTrackWave,
+      contextMenuState,
+      openContextMenu,
+      closeContextMenu,
       playNext,
       addToQueueEnd,
       removeFromQueue,

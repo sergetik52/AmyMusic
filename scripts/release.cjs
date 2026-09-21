@@ -157,23 +157,34 @@ async function main() {
     fs.writeFileSync(backendPkgPath, JSON.stringify(backendPkg, null, 2) + '\n', 'utf8');
   }
 
-  // 1. Build production web bundle
-  console.log('\n📦 Step 1/5: Building production web frontend...');
-  run('npm run build');
-
-  // 2. Build Windows Electron Setup installer
-  console.log('\n💻 Step 2/5: Packaging Windows Setup installer (.exe)...');
+  // 1 & 2. Build production web bundle & Tauri Desktop App (.exe)
+  console.log('\n📦 Step 1-2/5: Building production web frontend & Tauri Windows Setup installer (.exe)...');
   try {
     execSync('taskkill /F /IM AmyMusic.exe /T 2>nul', { stdio: 'ignore' });
   } catch {}
-  run('npx electron-builder --win --x64');
-
-  const fileName = `AmyMusic-${newVersion}-Setup.exe`;
-  const setupFilePath = path.join(rootDir, 'release', fileName);
-
-  if (!fs.existsSync(setupFilePath)) {
-    throw new Error(`Compiled installer not found at ${setupFilePath}`);
+  
+  // Update tauri.conf.json version
+  const tauriConfPath = path.join(rootDir, 'src-tauri', 'tauri.conf.json');
+  if (fs.existsSync(tauriConfPath)) {
+    const tauriConf = JSON.parse(fs.readFileSync(tauriConfPath, 'utf8'));
+    tauriConf.version = newVersion;
+    fs.writeFileSync(tauriConfPath, JSON.stringify(tauriConf, null, 2) + '\n', 'utf8');
   }
+
+  run('npm run tauri:build');
+
+  const nsisDir = path.join(rootDir, 'src-tauri', 'target', 'release', 'bundle', 'nsis');
+  if (!fs.existsSync(nsisDir)) {
+    throw new Error(`Compiled installer not found at ${nsisDir}`);
+  }
+  
+  const setupFile = fs.readdirSync(nsisDir).find(f => f.endsWith('.exe') && !f.endsWith('-uninstaller.exe'));
+  if (!setupFile) {
+    throw new Error(`Compiled installer .exe not found in ${nsisDir}`);
+  }
+  
+  const setupFilePath = path.join(nsisDir, setupFile);
+  const fileName = `AmyMusic-${newVersion}-Setup.exe`;
 
   // Copy installer to local downloads/
   const downloadsDir = path.join(rootDir, 'downloads');
@@ -193,8 +204,8 @@ async function main() {
     console.log('\n🐙 Step 3/5: Skipping GitHub upload (no token provided)...');
   }
 
-  // 4. Commit and push git tag
-  console.log('\n🏷️ Step 4/5: Pushing Git commit & release tag...');
+  // 4. Local auto-commit and tag
+  console.log('\n🏷️ Step 4/5: Creating local Git commit & release tag (skipping GitHub push)...');
   try {
     run('git add .');
     try {
@@ -207,18 +218,8 @@ async function main() {
     } catch (e) {
       console.log(`Tag v${newVersion} already exists locally.`);
     }
-    try {
-      run('git push origin main');
-    } catch (e) {
-      console.log('Main push completed or skipped.');
-    }
-    try {
-      run(`git push origin refs/tags/v${newVersion}`);
-    } catch (e) {
-      console.log(`Tag v${newVersion} push skipped or already exists on GitHub.`);
-    }
   } catch (gitErr) {
-    console.log('⚠️ Git push skipped or git not in PATH.');
+    console.log('⚠️ Git commit skipped or git not in PATH.');
   }
 
   // 5. Deploy web & backend to amymusic.ru server (Skipped - no server)

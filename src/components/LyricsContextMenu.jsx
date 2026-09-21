@@ -12,7 +12,10 @@ export function LyricsContextMenu({
   onHideText,
   activeDisplayMode,
   onShowText,
-  onReloadLyrics
+  onReloadLyrics,
+  hasLyrics,
+  isLoading,
+  isKaraokeAvailable
 }) {
   const menuRef = useRef(null);
   const [actualSize, setActualSize] = useState({ width: 280, height: 350 });
@@ -139,8 +142,32 @@ export function LyricsContextMenu({
 
       <div className="h-px w-full bg-white/5 mb-4" />
 
-      {/* 3. Settings List */}
       <div className="flex flex-col gap-3 px-1 text-[13px] font-semibold mb-4">
+        {/* Source Mode */}
+        {(() => {
+          const canSwitchSource = settings.preferredSource === "genius" || isKaraokeAvailable;
+          return (hasLyrics || isLoading) && canSwitchSource && (
+              <div className="flex items-center justify-between">
+                <span className="text-white/40">Источник</span>
+                {isLoading ? (
+                  <span className="text-white/60">Загрузка...</span>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      const sources = ["auto", "genius"];
+                      const nextSource = sources[(sources.indexOf(settings.preferredSource || "auto") + 1) % sources.length];
+                      onUpdateSettings({ preferredSource: nextSource });
+                    }}
+                    className="text-white hover:text-white/80 transition"
+                  >
+                    {(settings.preferredSource === "auto" || !settings.preferredSource) && "Авто"}
+                    {settings.preferredSource === "genius" && "С разбором"}
+                  </button>
+                )}
+              </div>
+            );
+        })()}
+
         {/* Sync Mode */}
         <div className="flex items-center justify-between">
           <span className="text-white/40">Синхронизация</span>

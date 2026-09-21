@@ -225,10 +225,10 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   const [profileSettings, setProfileSettings] = useState(getProfileSettings());
   const [lyricsContextMenu, setLyricsContextMenu] = useState(null);
   const [lyricsUserOffset, setLyricsUserOffset] = useState(0);
-  const [expandedAnnotationLine, setExpandedAnnotationLine] = useState(null);
+  const [expandedAnnotationId, setExpandedAnnotationId] = useState(null);
 
-  const toggleAnnotationLine = (lineIndex) => {
-    setExpandedAnnotationLine(prev => prev === lineIndex ? null : lineIndex);
+  const toggleAnnotationId = (annId) => {
+    setExpandedAnnotationId(prev => prev === annId ? null : annId);
   };
 
   const handleUpdateLyricsOffset = (val) => {
@@ -250,10 +250,11 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
 
   const handleReloadLyrics = () => {
     if (!currentTrack) return;
-    clearLyricsCacheForTrack(currentTrack);
+    const prefSource = profileSettings?.lyricsSettings?.preferredSource || "auto";
+    clearLyricsCacheForTrack(currentTrack, prefSource);
     setLyricsContextMenu(null);
     setLyricsState({ status: "loading", lines: [], error: "" });
-    getCachedLyricsForTrack(currentTrack, duration)
+    getCachedLyricsForTrack(currentTrack, duration, null, prefSource)
       .then((nextLyricsState) => {
         setLyricsState(nextLyricsState);
       });
@@ -437,12 +438,19 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     return () => clearTimeout(timer);
   }, []);
 
+  const prevTrackIdRef = useRef(currentTrack?.id);
+  const skipNextTransitionRef = useRef(false);
+
   useEffect(() => {
     let isCancelled = false;
-    lyricRefs.current = [];
-    setLyricsOffset(0);
-
     const trackId = currentTrack?.id;
+    
+    if (prevTrackIdRef.current !== trackId) {
+      lyricRefs.current = [];
+      setLyricsOffset(0);
+      prevTrackIdRef.current = trackId;
+    }
+
     if (!trackId || trackId === "empty") {
       setLyricsUserOffset(0);
       setLyricsState({ status: "empty", lines: [], error: "" });
@@ -458,9 +466,12 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
 
     setLyricsState({ status: "loading", lines: [], error: "" });
 
-    getCachedLyricsForTrack(currentTrack, duration)
+    getCachedLyricsForTrack(currentTrack, duration, null, profileSettings?.lyricsSettings?.preferredSource || "auto")
       .then((nextLyricsState) => {
         if (!isCancelled) {
+          if (nextLyricsState.status === "synced") {
+             skipNextTransitionRef.current = true;
+          }
           setLyricsState(nextLyricsState);
         }
       });
@@ -468,7 +479,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     return () => {
       isCancelled = true;
     };
-  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artist]);
+  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artist, profileSettings?.lyricsSettings?.preferredSource]);
 
   const touchStartY = useRef(0);
   const touchStartOffset = useRef(0);
@@ -490,6 +501,16 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
       if (!stage || !anchor) return;
       const nextOffset = stage.clientHeight / 2 - anchor.offsetTop - anchor.offsetHeight / 2;
       setLyricsOffset(nextOffset);
+      
+      // If we just loaded new lyrics, allow one frame for the instant offset to apply, 
+      // then re-enable transitions for subsequent scrolling.
+      if (skipNextTransitionRef.current) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            skipNextTransitionRef.current = false;
+          });
+        });
+      }
     };
 
     recalculateOffset();
@@ -540,8 +561,8 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
       setIsMoreOpen(false);
       return;
     }
-    if (expandedAnnotationLine !== null) {
-      setExpandedAnnotationLine(null);
+    if (expandedAnnotationId !== null) {
+      setExpandedAnnotationId(null);
       return;
     }
 
@@ -792,14 +813,14 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   const renderLyricsContent = (isMobileLyrics = false) => {
     if (lyricsState.status === "loading") {
       return (
-        <div className="grid h-full place-items-center text-sm font-bold text-white/40 animate-pulse">
+        <div key="lyrics-loading" className="grid h-full place-items-center text-sm font-bold text-white/40 animate-pulse">
           Загрузка текста...
         </div>
       );
     }
     if (!lyricsState.lines || lyricsState.lines.length === 0) {
       return (
-        <div className="grid h-full place-items-center text-sm font-bold text-white/40 text-center px-4">
+        <div key="lyrics-empty" className="grid h-full place-items-center text-sm font-bold text-white/40 text-center px-4">
           {lyricsState.status === "instrumental" ? "♫ Инструментальный трек" : "Текст песни не найден"}
         </div>
       );
@@ -808,28 +829,29 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
       const plainSizes = { sm: "text-[14px]", base: "text-[18px]", lg: "text-[24px]", xl: "text-[32px]" };
       return (
         <div 
-          className="scrollbar-none h-full w-full overflow-y-auto px-4 py-6" 
+          key="lyrics-plain"
+          className="scrollbar-none h-full w-full overflow-y-auto px-4 py-6 select-text" 
           onWheel={(e) => e.stopPropagation()}
           onContextMenu={(e) => {
             e.preventDefault();
             setLyricsContextMenu({ x: e.clientX, y: e.clientY });
           }}
         >
-          <div key={lyricsSettings.displayMode} className={`animate-in fade-in zoom-in-[0.98] duration-500 mx-auto flex max-w-[760px] flex-col gap-4 ${lyricsSettings.displayMode === "text-only" ? "text-center" : "text-left"} font-medium leading-normal text-white/80 ${plainSizes[lyricsSettings.textSize] || "text-[24px]"}`}>
+          <div key={`plain-${lyricsSettings.displayMode}`} className={`animate-in fade-in zoom-in-[0.98] duration-500 mx-auto flex max-w-[760px] flex-col gap-4 ${lyricsSettings.displayMode === "text-only" ? "text-center" : "text-left"} font-medium leading-normal text-white/80 ${plainSizes[lyricsSettings.textSize] || "text-[24px]"}`}>
             {lyricsState.lines.map((line, index) => {
               const isSectionHeader = /^\[.*\]$/.test(line.text.replace(/<[^>]+>/g, '').trim());
               if (isSectionHeader) {
-                return <div key={`${index}-${line.text}`} className="h-8" />;
+                return <div key={`${index}-${line.text}`} className="h-8 select-none" />;
               }
               const annIds = getAnnotationIds(line.text);
               const hasAnnotation = annIds.length > 0 && lyricsState.annotations && annIds.some(id => lyricsState.annotations[id]);
-              const isExpanded = expandedAnnotationLine === index;
+              const isExpanded = expandedAnnotationId && annIds.includes(expandedAnnotationId);
 
               return (
                 <div key={`${index}-${line.text}`}>
                   <p
                     className={hasAnnotation ? "cursor-pointer group" : ""}
-                    onClick={hasAnnotation ? (e) => { e.stopPropagation(); toggleAnnotationLine(index); } : undefined}
+                    onClick={hasAnnotation ? (e) => { e.stopPropagation(); toggleAnnotationId(annIds[0]); } : undefined}
                   >
                     {renderCleanText(line.text)}
                     {hasAnnotation && (
@@ -856,6 +878,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     }
     return (
       <div
+        key="lyrics-synced"
         ref={lyricsStageRef}
         data-lyrics-container="true"
         data-no-swipe="true"
@@ -884,7 +907,10 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                   lyricsSettings.textSize === "lg" ? "text-[36px]" : "text-[46px]"
                 }`
           }
-          style={{ transform: `translateY(${lyricsOffset}px)` }}
+          style={{ 
+            transform: `translateY(${lyricsOffset}px)`,
+            transitionDuration: skipNextTransitionRef.current ? "0ms" : undefined
+          }}
         >
           {lyricsState.lines.length > 0 && (() => {
             const introDist = isBeforeFirstLyric ? 0 : Math.abs(-1 - activeLyricIndex);
@@ -1550,11 +1576,12 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
         e.preventDefault();
         setLyricsContextMenu({ x: e.clientX, y: e.clientY });
       }}
-      className={`fixed inset-0 z-50 flex select-none text-white bg-[#090909] transition-opacity duration-300 ease-out ${
+      className={`fixed inset-0 z-50 flex select-none text-white bg-[#090909] transition-opacity duration-300 ease-out [&_*::selection]:bg-[var(--selection-bg)] [&_*::selection]:text-white ${
         isVisible && !isClosing ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
       style={{
-        "--player-accent": `color-mix(in srgb, ${trackPalette.line} 50%, #4a4a4a)`
+        "--player-accent": `color-mix(in srgb, ${trackPalette.line} 50%, #4a4a4a)`,
+        "--selection-bg": `color-mix(in srgb, ${trackPalette.line} 50%, rgba(255,255,255,0.2))`
       }}
     >
       {/* Blurred Cover background matching ArtistView banner */}
@@ -1792,6 +1819,9 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
         <LyricsContextMenu
           x={lyricsContextMenu.x}
           y={lyricsContextMenu.y}
+          hasLyrics={lyricsState.status !== "empty" && lyricsState.lines?.length > 0}
+          isLoading={lyricsState.status === "loading"}
+          isKaraokeAvailable={lyricsState.status === "synced"}
           onClose={() => setLyricsContextMenu(null)}
           settings={lyricsSettings}
           onUpdateSettings={(newSettings) => {
@@ -1805,7 +1835,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           onShowText={() => {
             setSidePanel("lyrics");
             setShowLyrics(true);
-            setLyricsContextMenu(null);
           }}
           onHideText={() => {
             setShowLyrics(false);

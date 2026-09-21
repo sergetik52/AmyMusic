@@ -453,7 +453,10 @@ export default defineConfig(({ mode }) => {
     base: "./",
     server: {
       port: 5173,
-      strictPort: true
+      strictPort: true,
+      watch: {
+        ignored: ["**/src-tauri/**"]
+      }
     },
     plugins: [react(), createSoundCloudProxyPlugin(env), createYandexProxyPlugin(), createGeniusProxyPlugin(), createApiProxyPlugin()]
   };

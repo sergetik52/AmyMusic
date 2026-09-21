@@ -131,7 +131,9 @@ async function requestLRCLIB(endpoint, params, signal) {
   });
 
   const res = await fetch(url.toString(), {
-    headers: { "LrcLib-Client": "Amymusic (https://github.com/sergetik52/AmyMusic)" },
+    headers: {
+      "LrcLib-Client": "Amymusic (https://github.com/sergetik52/AmyMusic)"
+    },
     signal
   });
 
@@ -379,7 +381,7 @@ async function fetchFromGenius(title, signature, duration, signal) {
 // ------------------------------------------------
 // Main Aggregator Fetch
 // ------------------------------------------------
-export async function fetchLyricsForTrack(track, signal) {
+export async function fetchLyricsForTrack(track, signal, preferredSource = "auto") {
   const signature = getLyricsSignature(track);
   const duration = Math.round(track?.duration || signature.duration || 0);
   const title = signature.trackName;
@@ -389,28 +391,46 @@ export async function fetchLyricsForTrack(track, signal) {
     return { status: "empty", source: "LRCLIB", lines: [] };
   }
 
-  // 1. Try Netease (often has perfect synced lyrics for everything)
+  if (preferredSource === "genius") {
+    const geniusResult = await fetchFromGenius(title, signature, duration, signal);
+    if (geniusResult && geniusResult.status !== "empty") {
+      console.log(`[Lyrics Aggregator] Found plain lyrics on Genius (requested Genius)`);
+      return geniusResult;
+    }
+    return { status: "empty", source: "Genius", lines: [] };
+  } else if (preferredSource === "karaoke") {
+    const neteaseResult = await fetchFromNetease(title, artist, duration, signal);
+    if (neteaseResult && neteaseResult.status === "synced") {
+      console.log("[Lyrics Aggregator] Found synced lyrics on NetEase (requested Karaoke)");
+      return neteaseResult;
+    }
+    const lrclibResult = await fetchFromLRCLIB(title, artist, duration, signature, signal);
+    if (lrclibResult && lrclibResult.status === "synced") {
+      console.log(`[Lyrics Aggregator] Found synced lyrics on LRCLIB (requested Karaoke)`);
+      return lrclibResult;
+    }
+    return { status: "empty", source: "Karaoke", lines: [] };
+  }
+
+  // Auto behavior or fallback if requested source not found
   const neteaseResult = await fetchFromNetease(title, artist, duration, signal);
   if (neteaseResult && neteaseResult.status === "synced") {
       console.log("[Lyrics Aggregator] Found synced lyrics on NetEase");
       return neteaseResult;
   }
 
-  // 2. Try LRCLIB for synced lyrics
   const lrclibResult = await fetchFromLRCLIB(title, artist, duration, signature, signal);
   if (lrclibResult && lrclibResult.status === "synced") {
       console.log(`[Lyrics Aggregator] Found synced lyrics on LRCLIB`);
       return lrclibResult;
   }
 
-  // 3. Fallback to Genius if no synced lyrics found
   const geniusResult = await fetchFromGenius(title, signature, duration, signal);
   if (geniusResult && geniusResult.status !== "empty") {
       console.log(`[Lyrics Aggregator] Found plain lyrics on Genius`);
       return geniusResult;
   }
 
-  // 4. Return best available plain lyrics if Genius failed
   if (lrclibResult && lrclibResult.status !== "empty") {
       console.log(`[Lyrics Aggregator] Found plain lyrics on LRCLIB`);
       return lrclibResult;
@@ -436,12 +456,12 @@ export function getActiveLyricIndex(lines, currentTime) {
 
 const lyricsRequestCache = new Map();
 
-export function getLyricsCacheKey(track) {
+export function getLyricsCacheKey(track, preferredSource = "auto") {
   if (!track) return "";
   const idStr = track.id ? String(track.id) : "";
   const normTitle = normalizeComparable(track.title || "");
   const normArtist = normalizeComparable(track.artist || "");
-  return [idStr, normTitle, normArtist].filter(Boolean).join("|");
+  return [idStr, normTitle, normArtist, preferredSource].filter(Boolean).join("|");
 }
 
 function loadLyricsFromLocalStorage(key) {
@@ -467,9 +487,9 @@ function saveLyricsToLocalStorage(key, lyricsObj) {
     }
 }
 
-export function clearLyricsCacheForTrack(track) {
+export function clearLyricsCacheForTrack(track, preferredSource = "auto") {
   if (!track) return;
-  const key = getLyricsCacheKey(track);
+  const key = getLyricsCacheKey(track, preferredSource);
   lyricsRequestCache.delete(key);
   if (typeof window !== "undefined") {
     try {
@@ -478,12 +498,12 @@ export function clearLyricsCacheForTrack(track) {
   }
 }
 
-export function getCachedLyricsForTrack(track, duration, signal) {
+export function getCachedLyricsForTrack(track, duration, signal, preferredSource = "auto") {
   if (!track || !track.id || track.id === "empty") {
     return Promise.resolve({ status: "empty", lines: [], error: "" });
   }
 
-  const key = getLyricsCacheKey(track);
+  const key = getLyricsCacheKey(track, preferredSource);
 
   // 1. Check RAM Cache
   if (lyricsRequestCache.has(key)) {
@@ -504,7 +524,8 @@ export function getCachedLyricsForTrack(track, duration, signal) {
       ...track,
       duration: track.duration || duration
     },
-    signal
+    signal,
+    preferredSource
   )
     .then((lyrics) => {
       const result = {
