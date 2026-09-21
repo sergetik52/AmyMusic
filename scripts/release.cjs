@@ -221,12 +221,12 @@ async function main() {
     console.log('⚠️ Git push skipped or git not in PATH.');
   }
 
-  // 5. Deploy web & backend to amymusic.ru server
-  console.log('\n🌐 Step 5/5: Deploying to amymusic.ru production server...');
-  run('node deploy.cjs');
+  // 5. Deploy web & backend to amymusic.ru server (Skipped - no server)
+  console.log('\n🌐 Step 5/5: Skipping deploy to amymusic.ru (no server)...');
+  // run('node deploy.cjs');
 
   console.log('\n\x1b[32m=========================================\x1b[0m');
-  console.log(`\x1b[1m\x1b[32m  🎉 RELEASE v${newVersion} DEPLOYED SUCCESSFULLY!  \x1b[0m`);
+  console.log(`\x1b[1m\x1b[32m  🎉 RELEASE v${newVersion} COMPLETED SUCCESSFULLY!  \x1b[0m`);
   console.log('\x1b[32m=========================================\x1b[0m');
 }
 

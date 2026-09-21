@@ -23,6 +23,10 @@ Production build:
 npm run build
 ```
 
+## Download
+
+You can download the latest Windows Setup installer from the [Releases](https://github.com/sergetik52/AmyMusic/releases) page.
+
 ## App Layout
 
 The root app is in `src/App.jsx`.
