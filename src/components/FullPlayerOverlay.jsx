@@ -767,22 +767,22 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
               }}
               onClick={() => playTrack(track, queue)}
               className={[
-                "group flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition cursor-grab active:cursor-grabbing",
+                "group flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition cursor-grab active:cursor-grabbing select-none",
                 isCurrent ? "bg-white/[0.10]" : "hover:bg-white/[0.055]",
                 isDragging ? "opacity-30 scale-95" : "opacity-100",
                 isDragOver ? "border-2 border-[#8341EF]" : "border border-transparent"
               ].join(" ")}
             >
-              <div className="flex items-center gap-2 shrink-0">
-                <svg className="h-4 w-4 fill-white/20 group-hover:fill-white/60 transition" viewBox="0 0 24 24">
+              <div className="flex items-center gap-2 shrink-0 pointer-events-none">
+                <svg className="h-4 w-4 fill-white/20 group-hover:fill-white/60 transition pointer-events-none" viewBox="0 0 24 24">
                   <path d="M9 18h6v-2H9v2zm0-5h6v-2H9v2zm0-7v2h6V6H9z" />
                 </svg>
-                <span className="w-5 text-right text-xs font-black text-white/25">{index + 1}</span>
+                <span className="w-5 text-right text-xs font-black text-white/25 pointer-events-none">{index + 1}</span>
               </div>
-              <img src={track.cover} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-black text-white">{track.title}</span>
-                <span className="block truncate text-xs font-semibold text-white/40">{track.artist}</span>
+              <img src={track.cover || "/logo.png"} alt="" draggable={false} className="h-12 w-12 shrink-0 rounded-xl object-cover pointer-events-none" />
+              <span className="min-w-0 flex-1 pointer-events-none">
+                <span className="block truncate text-sm font-black text-white pointer-events-none">{track.title}</span>
+                <span className="block truncate text-xs font-semibold text-white/40 pointer-events-none">{track.artist}</span>
               </span>
               {isCurrent && (
                 <span className="rounded-full bg-[var(--player-accent)] px-2 py-1 text-[10px] font-black text-white">

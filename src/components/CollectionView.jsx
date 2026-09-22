@@ -632,7 +632,7 @@ function PlaylistView({
                 }
               }}
               className={[
-                "group flex items-center gap-3 rounded-[var(--cover-radius,12px)] p-2 max-md:px-2 max-md:py-2.5 max-md:rounded-none max-md:w-full transition hover:bg-white/[0.04] cursor-pointer",
+                "group flex items-center gap-3 rounded-[var(--cover-radius,12px)] p-2 max-md:px-2 max-md:py-2.5 max-md:rounded-none max-md:w-full transition hover:bg-white/[0.04] cursor-pointer select-none",
                 isEditable ? "cursor-grab active:cursor-grabbing" : "",
                 isDragging ? "opacity-30 scale-95" : "opacity-100",
                 isDragOver ? "border-2 border-white/50" : "border border-transparent",
@@ -640,39 +640,39 @@ function PlaylistView({
               ].join(" ")}
               style={{ WebkitAppRegion: "no-drag" }}
             >
-              <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
+              <div className="flex min-w-0 flex-1 items-center gap-3 text-left pointer-events-none">
                 {isEditable ? (
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <svg className="h-4 w-4 fill-white/20 group-hover:fill-white/60 transition" viewBox="0 0 24 24">
+                  <div className="flex items-center gap-1.5 shrink-0 cursor-grab active:cursor-grabbing p-1" title="Перетащить">
+                    <svg className="h-4 w-4 fill-white/20 group-hover:fill-white/60 transition pointer-events-none" viewBox="0 0 24 24">
                       <path d="M9 18h6v-2H9v2zm0-5h6v-2H9v2zm0-7v2h6V6H9z" />
                     </svg>
-                    <span className="w-5 text-right text-xs font-black text-white/25">{index + 1}</span>
+                    <span className="w-5 text-right text-xs font-black text-white/25 pointer-events-none">{index + 1}</span>
                   </div>
                 ) : (
-                  <span className="w-7 text-right text-xs font-black text-white/25">{index + 1}</span>
+                  <span className="w-7 text-right text-xs font-black text-white/25 pointer-events-none">{index + 1}</span>
                 )}
 
-                <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-white/5">
-                  <img src={track.cover || "/logo.png"} alt="" className="h-full w-full object-cover" />
+                <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-white/5 pointer-events-none">
+                  <img src={track.cover || "/logo.png"} alt="" draggable={false} className="h-full w-full object-cover pointer-events-none" />
                   <div
                     className={[
-                      "absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity",
+                      "absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity pointer-events-none",
                       isCurrent ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                     ].join(" ")}
                   >
                     {isCurrent && isPlaying ? (
-                      <svg className="h-5 w-5 fill-white" viewBox="0 0 24 24">
+                      <svg className="h-5 w-5 fill-white pointer-events-none" viewBox="0 0 24 24">
                         <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                       </svg>
                     ) : (
-                      <svg className="h-5 w-5 fill-white ml-0.5" viewBox="0 0 24 24">
+                      <svg className="h-5 w-5 fill-white ml-0.5 pointer-events-none" viewBox="0 0 24 24">
                         <path d="M8 5v14l11-7z" />
                       </svg>
                     )}
                   </div>
                 </div>
 
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 pointer-events-auto">
                   <p className="truncate text-sm font-bold text-white">{track.title}</p>
                   <TrackArtistLinks track={track} onOpenArtist={onOpenArtist} />
                 </div>

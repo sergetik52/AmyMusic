@@ -2103,19 +2103,23 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                               : "hover:bg-white/5"
                         } ${isDragging ? "opacity-30 scale-95" : ""}`}
                       >
-                        <button
-                          type="button"
+                        <div className="flex items-center gap-2 shrink-0 text-white/25 group-hover:text-white/60 transition cursor-grab active:cursor-grabbing p-1">
+                          <svg className="h-4 w-4 fill-current pointer-events-none" viewBox="0 0 24 24">
+                            <path d="M9 18h6v-2H9v2zm0-5h6v-2H9v2zm0-7v2h6V6H9z" />
+                          </svg>
+                        </div>
+                        <div
                           onClick={() => { playTrack(track, queue); }}
-                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left cursor-pointer select-none"
                         >
-                          <img src={track.cover} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover shadow-sm" />
-                          <div className="min-w-0 flex-1">
+                          <img src={track.cover || "/logo.png"} alt="" draggable={false} className="h-10 w-10 shrink-0 rounded-lg object-cover shadow-sm pointer-events-none" />
+                          <div className="min-w-0 flex-1 pointer-events-none select-none">
                             <p className="truncate text-sm font-bold text-white">
                               {track.title}
                             </p>
                             <p className="truncate text-xs font-semibold text-white/40">{track.artist}</p>
                           </div>
-                        </button>
+                        </div>
                         
                         <div className="flex items-center gap-2 opacity-0 transition group-hover:opacity-100">
                           <TrackMenuButton track={track} />
