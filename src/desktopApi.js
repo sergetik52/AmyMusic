@@ -56,6 +56,7 @@ export function initDesktopApi() {
     },
     minimizeWindow: async () => invoke('minimize_window'),
     maximizeWindow: async () => invoke('maximize_window'),
+    toggleFullscreen: async () => invoke('toggle_fullscreen'),
     closeWindow: async () => invoke('close_window'),
     setTrayEnabled: async (enabled) => {
       // Tray is handled in Rust, this might require a custom command or just ignore if it's always on
@@ -184,5 +185,26 @@ export function initDesktopApi() {
       window.dispatchEvent(new CustomEvent('amymusic:hotkey', { detail: event.payload }));
     }
   }).catch((err) => console.warn('Failed to listen for smtc-button', err));
+
+  // Disable default browser/WebView context menu (Назад, Обновить, Печать etc.)
+  window.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+  });
+
+  // F11 Fullscreen toggle
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'F11') {
+      e.preventDefault();
+      if (isTauri()) {
+        invoke('toggle_fullscreen').catch(() => {});
+      } else {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    }
+  });
 }
 

@@ -32,6 +32,14 @@ fn close_window(app: AppHandle) {
     }
 }
 
+#[command]
+fn toggle_fullscreen(app: AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let is_fullscreen = win.is_fullscreen().unwrap_or(false);
+        let _ = win.set_fullscreen(!is_fullscreen);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -78,6 +86,7 @@ pub fn run() {
             network::proxy_fetch,
             minimize_window,
             maximize_window,
+            toggle_fullscreen,
             close_window,
             smtc::update_smtc,
             smtc::clear_smtc
