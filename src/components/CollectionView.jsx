@@ -372,6 +372,7 @@ function PlaylistView({
   onDelete,
   onOpenTrackWave
 }) {
+  const tracks = playlist?.tracks || [];
   const { reorderPlaylistTracks, currentTrack, isPlaying, togglePlay } = useAudioPlayer();
   const [title, setTitle] = useState(playlist.title);
   const [cover, setCover] = useState(playlist.cover);
