@@ -1595,103 +1595,6 @@ export function AudioProvider({ children }) {
     setCurrentIndex((index) => (index - 1 + queue.length) % queue.length);
   }, [queue.length]);
 
-  useEffect(() => {
-    let unsubscribeHotkey;
-    if (typeof window !== "undefined" && window.amyMusicDesktop?.onHotkey) {
-      unsubscribeHotkey = window.amyMusicDesktop.onHotkey((action) => {
-        logDebug("audio", "Global hotkey triggered", action);
-        switch (action) {
-          case "playPause":
-            togglePlay();
-            break;
-          case "play":
-            play();
-            break;
-          case "pause":
-            pause();
-            break;
-          case "nextTrack":
-            next();
-            break;
-          case "prevTrack":
-            previous();
-            break;
-          case "toggleLike":
-            const track = currentTrackRef.current;
-            if (track && track.id !== "empty") {
-              setLikedTrackIds((ids) => {
-                const nextIds = new Set(ids);
-                if (nextIds.has(String(track.id))) {
-                  nextIds.delete(String(track.id));
-                  setLikedTracks((tracks) => tracks.filter((item) => String(item.id) !== String(track.id)));
-                } else {
-                  nextIds.add(String(track.id));
-                  setLikedTracks((tracks) => {
-                    if (!tracks.some((item) => String(item.id) === String(track.id))) {
-                      return [track, ...tracks];
-                    }
-                    return tracks;
-                  });
-                }
-                return nextIds;
-              });
-            }
-            break;
-          case "volumeUp":
-            setVolume(Math.min(1, volumeRef.current + 0.1));
-            break;
-          case "volumeDown":
-            setVolume(Math.max(0, volumeRef.current - 0.1));
-            break;
-          default:
-            break;
-        }
-      });
-    }
-
-    if (typeof window === "undefined" || !("mediaSession" in navigator)) return () => {
-      if (unsubscribeHotkey) unsubscribeHotkey();
-    };
-
-    const actionHandlers = [
-      ["play", async () => {
-        play();
-      }],
-      ["pause", () => {
-        pause();
-      }],
-      ["previoustrack", () => {
-        previous();
-      }],
-      ["nexttrack", () => {
-        next();
-      }],
-      ["seekto", (details) => {
-        if (details.seekTime !== undefined && audioRef.current && Number.isFinite(details.seekTime)) {
-          audioRef.current.currentTime = details.seekTime;
-          setCurrentTime(details.seekTime);
-        }
-      }],
-      ["seekforward", () => {
-        next();
-      }],
-      ["seekbackward", () => {
-        previous();
-      }]
-    ];
-
-    for (const [action, handler] of actionHandlers) {
-      try {
-        navigator.mediaSession.setActionHandler(action, handler);
-      } catch (e) {
-        // Ignore unsupported action types
-      }
-    }
-    
-    return () => {
-      if (unsubscribeHotkey) unsubscribeHotkey();
-    };
-  }, [next, previous, play, pause, togglePlay]);
 
   const loadTrack = useCallback(async (track, shouldPlay = false, isManual = false) => {
     const audio = audioRef.current;
@@ -1959,6 +1862,104 @@ export function AudioProvider({ children }) {
       play();
     }
   }, [pause, play]);
+
+  useEffect(() => {
+    let unsubscribeHotkey;
+    if (typeof window !== "undefined" && window.amyMusicDesktop?.onHotkey) {
+      unsubscribeHotkey = window.amyMusicDesktop.onHotkey((action) => {
+        logDebug("audio", "Global hotkey triggered", action);
+        switch (action) {
+          case "playPause":
+            togglePlay();
+            break;
+          case "play":
+            play();
+            break;
+          case "pause":
+            pause();
+            break;
+          case "nextTrack":
+            next();
+            break;
+          case "prevTrack":
+            previous();
+            break;
+          case "toggleLike":
+            const track = currentTrackRef.current;
+            if (track && track.id !== "empty") {
+              setLikedTrackIds((ids) => {
+                const nextIds = new Set(ids);
+                if (nextIds.has(String(track.id))) {
+                  nextIds.delete(String(track.id));
+                  setLikedTracks((tracks) => tracks.filter((item) => String(item.id) !== String(track.id)));
+                } else {
+                  nextIds.add(String(track.id));
+                  setLikedTracks((tracks) => {
+                    if (!tracks.some((item) => String(item.id) === String(track.id))) {
+                      return [track, ...tracks];
+                    }
+                    return tracks;
+                  });
+                }
+                return nextIds;
+              });
+            }
+            break;
+          case "volumeUp":
+            setVolume(Math.min(1, volumeRef.current + 0.1));
+            break;
+          case "volumeDown":
+            setVolume(Math.max(0, volumeRef.current - 0.1));
+            break;
+          default:
+            break;
+        }
+      });
+    }
+
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return () => {
+      if (unsubscribeHotkey) unsubscribeHotkey();
+    };
+
+    const actionHandlers = [
+      ["play", async () => {
+        play();
+      }],
+      ["pause", () => {
+        pause();
+      }],
+      ["previoustrack", () => {
+        previous();
+      }],
+      ["nexttrack", () => {
+        next();
+      }],
+      ["seekto", (details) => {
+        if (details.seekTime !== undefined && audioRef.current && Number.isFinite(details.seekTime)) {
+          audioRef.current.currentTime = details.seekTime;
+          setCurrentTime(details.seekTime);
+        }
+      }],
+      ["seekforward", () => {
+        next();
+      }],
+      ["seekbackward", () => {
+        previous();
+      }]
+    ];
+
+    for (const [action, handler] of actionHandlers) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch (e) {
+        // Ignore unsupported action types
+      }
+    }
+
+    return () => {
+      if (unsubscribeHotkey) unsubscribeHotkey();
+    };
+  }, [next, previous, play, pause, togglePlay]);
 
   const playTrack = useCallback(
     async (track, nextQueue = queue) => {
