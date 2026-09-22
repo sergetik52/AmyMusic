@@ -7,6 +7,12 @@ import { LyricsContextMenu } from "./LyricsContextMenu";
 import { getProfileSettings, saveProfileSettings, subscribeProfileSettings } from "../services/profileSettings";
 import { getYandexCachedArtistAvatar, fetchYandexArtistAvatar } from "../services/yandexMusicApi";
 
+const BLANK_DRAG_IMAGE = typeof window !== "undefined" ? (() => {
+  const img = new Image();
+  img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  return img;
+})() : null;
+
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
   const minutes = Math.floor(seconds / 60);
@@ -318,6 +324,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
 
   const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
   const [dragOverQueueIndex, setDragOverQueueIndex] = useState(null);
+  const [queueDragPos, setQueueDragPos] = useState(null);
   const [touchDragIndex, setTouchDragIndex] = useState(null);
   const [touchOverIndex, setTouchOverIndex] = useState(null);
 
@@ -739,14 +746,23 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
               key={`${track.id}-${index}`}
               draggable
               onDragStart={(e) => {
-                e.dataTransfer.setData("text/plain", String(index));
-                e.dataTransfer.effectAllowed = "move";
+                if (e.dataTransfer && BLANK_DRAG_IMAGE) {
+                  try { e.dataTransfer.setDragImage(BLANK_DRAG_IMAGE, 0, 0); } catch {}
+                  e.dataTransfer.setData("text/plain", String(index));
+                  e.dataTransfer.effectAllowed = "move";
+                }
                 setDraggedQueueIndex(index);
+                if (e.clientX !== 0 || e.clientY !== 0) {
+                  setQueueDragPos({ x: e.clientX, y: e.clientY });
+                }
               }}
               onDragOver={(e) => {
                 e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
+                if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
                 setDragOverQueueIndex(index);
+                if (e.clientX !== 0 || e.clientY !== 0) {
+                  setQueueDragPos({ x: e.clientX, y: e.clientY });
+                }
               }}
               onDragLeave={() => setDragOverQueueIndex(null)}
               onDrop={(e) => {
@@ -760,10 +776,12 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                 }
                 setDraggedQueueIndex(null);
                 setDragOverQueueIndex(null);
+                setQueueDragPos(null);
               }}
               onDragEnd={() => {
                 setDraggedQueueIndex(null);
                 setDragOverQueueIndex(null);
+                setQueueDragPos(null);
               }}
               onClick={() => playTrack(track, queue)}
               className={[
@@ -1486,14 +1504,23 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                           data-queue-index={index}
                           draggable
                           onDragStart={(e) => {
-                            e.dataTransfer.setData("text/plain", String(index));
-                            e.dataTransfer.effectAllowed = "move";
+                            if (e.dataTransfer && BLANK_DRAG_IMAGE) {
+                              try { e.dataTransfer.setDragImage(BLANK_DRAG_IMAGE, 0, 0); } catch {}
+                              e.dataTransfer.setData("text/plain", String(index));
+                              e.dataTransfer.effectAllowed = "move";
+                            }
                             setDraggedQueueIndex(index);
+                            if (e.clientX !== 0 || e.clientY !== 0) {
+                              setQueueDragPos({ x: e.clientX, y: e.clientY });
+                            }
                           }}
                           onDragOver={(e) => {
                             e.preventDefault();
-                            e.dataTransfer.dropEffect = "move";
+                            if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
                             setDragOverQueueIndex(index);
+                            if (e.clientX !== 0 || e.clientY !== 0) {
+                              setQueueDragPos({ x: e.clientX, y: e.clientY });
+                            }
                           }}
                           onDragLeave={() => setDragOverQueueIndex(null)}
                           onDrop={(e) => {
@@ -1507,10 +1534,12 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                             }
                             setDraggedQueueIndex(null);
                             setDragOverQueueIndex(null);
+                            setQueueDragPos(null);
                           }}
                           onDragEnd={() => {
                             setDraggedQueueIndex(null);
                             setDragOverQueueIndex(null);
+                            setQueueDragPos(null);
                           }}
                           className={[
                             "group flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition select-none",
@@ -1854,6 +1883,19 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           }}
           onReloadLyrics={handleReloadLyrics}
         />
+      )}
+
+      {draggedQueueIndex !== null && queueDragPos && queue[draggedQueueIndex] && (
+        <div
+          className="fixed z-[9999] pointer-events-none -translate-x-1/2 -translate-y-1/2 flex items-center gap-3 rounded-2xl bg-[#1c1c1e]/95 border border-white/20 p-2.5 shadow-2xl backdrop-blur-2xl ring-1 ring-white/10 scale-105"
+          style={{ left: queueDragPos.x, top: queueDragPos.y }}
+        >
+          <img src={queue[draggedQueueIndex].cover || "/logo.png"} alt="" className="h-9 w-9 rounded-lg object-cover shadow-md" />
+          <div className="flex flex-col max-w-[160px]">
+            <span className="text-xs font-bold text-white truncate">{queue[draggedQueueIndex].title}</span>
+            <span className="text-[10px] font-medium text-white/60 truncate">{queue[draggedQueueIndex].artist}</span>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -2,6 +2,12 @@ import { initDesktopApi } from "./desktopApi.js";
 initDesktopApi();
 import { useHorizontalScroll } from "./utils/useHorizontalScroll";
 
+const BLANK_DRAG_IMAGE = typeof window !== "undefined" ? (() => {
+  const img = new Image();
+  img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  return img;
+})() : null;
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Component } from "react";
@@ -1972,6 +1978,7 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
   const volumeTimerRef = useRef(null);
   const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
   const [dragOverQueueIndex, setDragOverQueueIndex] = useState(null);
+  const [queueDragPos, setQueueDragPos] = useState(null);
   const volumePercent = Math.round(effectiveVolume * 100);
 
   const handleVolumeMouseEnter = () => {
@@ -1999,52 +2006,6 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
   useEffect(() => {
     applyAppearanceSettings(profileSettings?.appearance);
   }, [profileSettings?.appearance]);
-
-  const isQueuePointerDraggingRef = useRef(false);
-
-  const handleQueuePointerDown = (e, vIndex, startIdx) => {
-    if (e.button !== 0) return;
-    isQueuePointerDraggingRef.current = true;
-    setDraggedQueueIndex(vIndex);
-    setDragOverQueueIndex(vIndex);
-
-    const handlePointerMove = (moveEvent) => {
-      if (!isQueuePointerDraggingRef.current) return;
-      const elem = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
-      const row = elem?.closest("[data-queue-vindex]");
-      if (row) {
-        const targetVIdx = parseInt(row.getAttribute("data-queue-vindex"), 10);
-        if (!isNaN(targetVIdx)) {
-          setDragOverQueueIndex(targetVIdx);
-        }
-      }
-    };
-
-    const handlePointerUp = (upEvent) => {
-      if (!isQueuePointerDraggingRef.current) return;
-      isQueuePointerDraggingRef.current = false;
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-
-      const elem = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
-      const row = elem?.closest("[data-queue-vindex]");
-      let targetVIdx = dragOverQueueIndex;
-      if (row) {
-        const parsed = parseInt(row.getAttribute("data-queue-vindex"), 10);
-        if (!isNaN(parsed)) targetVIdx = parsed;
-      }
-
-      if (targetVIdx !== null && targetVIdx !== undefined && !isNaN(targetVIdx) && vIndex !== targetVIdx) {
-        reorderQueue(startIdx + vIndex, startIdx + targetVIdx);
-      }
-
-      setDraggedQueueIndex(null);
-      setDragOverQueueIndex(null);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-  };
 
   return (
     <div className="flex w-auto items-center justify-end gap-2 max-sm:gap-1 shrink-0 max-md:hidden relative z-50">
@@ -2086,7 +2047,7 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                 }}
                 onDragOver={(e) => {
                   e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
+                  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
                   const container = e.currentTarget;
                   const rect = container.getBoundingClientRect();
                   const offsetY = e.clientY - rect.top;
@@ -2116,14 +2077,23 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                         data-queue-vindex={vIndex}
                         draggable
                         onDragStart={(e) => {
-                          e.dataTransfer.setData("text/plain", String(vIndex));
-                          e.dataTransfer.effectAllowed = "move";
+                          if (e.dataTransfer && BLANK_DRAG_IMAGE) {
+                            try { e.dataTransfer.setDragImage(BLANK_DRAG_IMAGE, 0, 0); } catch {}
+                            e.dataTransfer.setData("text/plain", String(vIndex));
+                            e.dataTransfer.effectAllowed = "move";
+                          }
                           setDraggedQueueIndex(vIndex);
+                          if (e.clientX !== 0 || e.clientY !== 0) {
+                            setQueueDragPos({ x: e.clientX, y: e.clientY });
+                          }
                         }}
                         onDragOver={(e) => {
                           e.preventDefault();
-                          e.dataTransfer.dropEffect = "move";
+                          if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
                           setDragOverQueueIndex(vIndex);
+                          if (e.clientX !== 0 || e.clientY !== 0) {
+                            setQueueDragPos({ x: e.clientX, y: e.clientY });
+                          }
                         }}
                         onDragLeave={() => setDragOverQueueIndex(null)}
                         onDrop={(e) => {
@@ -2134,6 +2104,7 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                             : rawData !== "" ? parseInt(rawData, 10) : NaN;
                           setDraggedQueueIndex(null);
                           setDragOverQueueIndex(null);
+                          setQueueDragPos(null);
                           if (!isNaN(fromVIdx) && fromVIdx >= 0 && fromVIdx !== vIndex) {
                             reorderQueue(startIdx + fromVIdx, startIdx + vIndex);
                           }
@@ -2141,19 +2112,19 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                         onDragEnd={() => {
                           setDraggedQueueIndex(null);
                           setDragOverQueueIndex(null);
+                          setQueueDragPos(null);
                         }}
                         className={`group flex items-center justify-between rounded-xl p-2 transition duration-150 select-none cursor-pointer ${
                           isDragging
-                            ? "opacity-30 scale-[0.98] border-2 border-dashed border-white/50"
+                            ? "opacity-25 scale-[0.98] border-2 border-dashed border-white/30"
                             : isDragOver && !isDragging
-                              ? "bg-white/10 border-2 border-emerald-400 shadow-xl scale-[1.01]"
+                              ? "bg-emerald-500/10 border-2 border-emerald-400 shadow-xl scale-[1.01]"
                               : isCurrent
                                 ? "bg-white/10 border border-transparent"
                                 : "hover:bg-white/5 border border-transparent"
                         }`}
                       >
                         <div 
-                          onPointerDown={(e) => handleQueuePointerDown(e, vIndex, startIdx)}
                           className="flex items-center gap-2 shrink-0 text-white/30 group-hover:text-white/80 transition cursor-grab active:cursor-grabbing p-1.5 -m-1 hover:bg-white/10 rounded-lg"
                           title="Зажмите и потяните для перемещения"
                         >
@@ -2215,6 +2186,19 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                   });
                 })()}
               </div>
+
+              {draggedQueueIndex !== null && queueDragPos && queue[Math.max(0, currentIndex) + draggedQueueIndex] && (
+                <div
+                  className="fixed z-[9999] pointer-events-none -translate-x-1/2 -translate-y-1/2 flex items-center gap-3 rounded-2xl bg-[#1c1c1e]/95 border border-white/20 p-2.5 shadow-2xl backdrop-blur-2xl ring-1 ring-white/10 scale-105"
+                  style={{ left: queueDragPos.x, top: queueDragPos.y }}
+                >
+                  <img src={queue[Math.max(0, currentIndex) + draggedQueueIndex].cover || "/logo.png"} alt="" className="h-9 w-9 rounded-lg object-cover shadow-md" />
+                  <div className="flex flex-col max-w-[160px]">
+                    <span className="text-xs font-bold text-white truncate">{queue[Math.max(0, currentIndex) + draggedQueueIndex].title}</span>
+                    <span className="text-[10px] font-medium text-white/60 truncate">{queue[Math.max(0, currentIndex) + draggedQueueIndex].artist}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
       </div>

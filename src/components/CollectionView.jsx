@@ -7,6 +7,12 @@ import { HorizontalScrollSection } from "./HorizontalScrollSection";
 import { useHorizontalScroll } from "../utils/useHorizontalScroll";
 import { TrackMenuButton } from "./TrackContextMenu";
 
+const BLANK_DRAG_IMAGE = typeof window !== "undefined" ? (() => {
+  const img = new Image();
+  img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  return img;
+})() : null;
+
 // ─── Pinned Playlists helpers (localStorage) ──────────────────────────────────
 const PINNED_KEY = "amymusic_pinned_playlists";
 
@@ -381,52 +387,8 @@ function PlaylistView({
   const [isCoverExpanded, setIsCoverExpanded] = useState(false);
   const [draggedTrackIndex, setDraggedTrackIndex] = useState(null);
   const [dragOverTrackIndex, setDragOverTrackIndex] = useState(null);
+  const [dragPos, setDragPos] = useState(null);
   const fileInputRef = useRef(null);
-  const isPointerDraggingRef = useRef(false);
-
-  const handlePointerDown = (e, index) => {
-    if (!isEditable || e.button !== 0) return;
-    isPointerDraggingRef.current = true;
-    setDraggedTrackIndex(index);
-    setDragOverTrackIndex(index);
-
-    const handlePointerMove = (moveEvent) => {
-      if (!isPointerDraggingRef.current) return;
-      const elem = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
-      const row = elem?.closest("[data-track-index]");
-      if (row) {
-        const targetIdx = parseInt(row.getAttribute("data-track-index"), 10);
-        if (!isNaN(targetIdx)) {
-          setDragOverTrackIndex(targetIdx);
-        }
-      }
-    };
-
-    const handlePointerUp = (upEvent) => {
-      if (!isPointerDraggingRef.current) return;
-      isPointerDraggingRef.current = false;
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-
-      const elem = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
-      const row = elem?.closest("[data-track-index]");
-      let targetIdx = dragOverTrackIndex;
-      if (row) {
-        const parsed = parseInt(row.getAttribute("data-track-index"), 10);
-        if (!isNaN(parsed)) targetIdx = parsed;
-      }
-
-      if (targetIdx !== null && targetIdx !== undefined && !isNaN(targetIdx) && index !== targetIdx) {
-        reorderPlaylistTracks(playlist.id, index, targetIdx);
-      }
-
-      setDraggedTrackIndex(null);
-      setDragOverTrackIndex(null);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-  };
 
   const saveChanges = () => {
     onUpdate?.(playlist.id, { title, cover });
@@ -641,15 +603,24 @@ function PlaylistView({
               draggable={isEditable}
               onDragStart={(e) => {
                 if (!isEditable) return;
-                e.dataTransfer.setData("text/plain", String(index));
-                e.dataTransfer.effectAllowed = "move";
+                if (e.dataTransfer && BLANK_DRAG_IMAGE) {
+                  try { e.dataTransfer.setDragImage(BLANK_DRAG_IMAGE, 0, 0); } catch {}
+                  e.dataTransfer.setData("text/plain", String(index));
+                  e.dataTransfer.effectAllowed = "move";
+                }
                 setDraggedTrackIndex(index);
+                if (e.clientX !== 0 || e.clientY !== 0) {
+                  setDragPos({ x: e.clientX, y: e.clientY });
+                }
               }}
               onDragOver={(e) => {
                 if (!isEditable) return;
                 e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
+                if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
                 setDragOverTrackIndex(index);
+                if (e.clientX !== 0 || e.clientY !== 0) {
+                  setDragPos({ x: e.clientX, y: e.clientY });
+                }
               }}
               onDragLeave={() => setDragOverTrackIndex(null)}
               onDrop={(e) => {
@@ -664,10 +635,12 @@ function PlaylistView({
                 }
                 setDraggedTrackIndex(null);
                 setDragOverTrackIndex(null);
+                setDragPos(null);
               }}
               onDragEnd={() => {
                 setDraggedTrackIndex(null);
                 setDragOverTrackIndex(null);
+                setDragPos(null);
               }}
               onClick={(e) => {
                 if (e.target.closest("button") || e.target.closest("a") || e.target.closest("[data-drag-handle]")) return;
@@ -679,8 +652,8 @@ function PlaylistView({
               }}
               className={[
                 "group flex items-center gap-3 rounded-[var(--cover-radius,12px)] p-2 max-md:px-2 max-md:py-2.5 max-md:rounded-none max-md:w-full transition duration-150 select-none cursor-pointer",
-                isDragging ? "opacity-30 scale-[0.98] border-2 border-dashed border-white/40" : "",
-                isDragOver && !isDragging ? "bg-white/10 border-2 border-emerald-400 shadow-xl scale-[1.01]" : "border border-transparent hover:bg-white/[0.04]",
+                isDragging ? "opacity-25 scale-[0.98] border-2 border-dashed border-white/30" : "",
+                isDragOver && !isDragging ? "bg-emerald-500/10 border-2 border-emerald-400 shadow-xl scale-[1.01]" : "border border-transparent hover:bg-white/[0.04]",
                 isCurrent ? "bg-white/[0.08]" : ""
               ].join(" ")}
               style={{ WebkitAppRegion: "no-drag" }}
@@ -689,7 +662,6 @@ function PlaylistView({
                 {isEditable ? (
                   <div
                     data-drag-handle
-                    onPointerDown={(e) => handlePointerDown(e, index)}
                     className="flex items-center gap-1.5 shrink-0 cursor-grab active:cursor-grabbing p-2 -m-1 hover:bg-white/10 rounded-lg transition pointer-events-auto"
                     title="Зажмите и потяните для перемещения"
                   >
@@ -752,6 +724,19 @@ function PlaylistView({
           <p className="text-sm font-bold text-white/30">В этом плейлисте нет треков</p>
         )}
       </div>
+
+      {draggedTrackIndex !== null && dragPos && tracks[draggedTrackIndex] && (
+        <div
+          className="fixed z-[9999] pointer-events-none -translate-x-1/2 -translate-y-1/2 flex items-center gap-3 rounded-2xl bg-[#1c1c1e]/95 border border-white/20 p-2.5 shadow-2xl backdrop-blur-2xl ring-1 ring-white/10 scale-105"
+          style={{ left: dragPos.x, top: dragPos.y }}
+        >
+          <img src={tracks[draggedTrackIndex].cover || "/logo.png"} alt="" className="h-9 w-9 rounded-lg object-cover shadow-md" />
+          <div className="flex flex-col max-w-[160px]">
+            <span className="text-xs font-bold text-white truncate">{tracks[draggedTrackIndex].title}</span>
+            <span className="text-[10px] font-medium text-white/60 truncate">{tracks[draggedTrackIndex].artist}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
