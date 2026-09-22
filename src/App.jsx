@@ -9,6 +9,7 @@ const BLANK_DRAG_IMAGE = typeof window !== "undefined" ? (() => {
 })() : null;
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { Component } from "react";
 import { WaveView } from "./components/WaveView";
@@ -2017,7 +2018,8 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
           onClick={() => setIsQueueOpen((value) => !value)}
           active={isQueueOpen}
         />
-        <div className={`fixed inset-0 z-[150] flex justify-end transition-all duration-300 ${isQueueOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+        {createPortal(
+          <div className={`fixed inset-0 z-[99999] flex justify-end transition-all duration-300 ${isQueueOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
             <div 
               className={`absolute inset-0 bg-black/40 transition-all duration-300 ease-out ${isQueueOpen ? 'backdrop-blur-md opacity-100' : 'backdrop-blur-none opacity-0'}`}
               onClick={() => setIsQueueOpen(false)}
@@ -2200,7 +2202,9 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                 </div>
               )}
             </div>
-          </div>
+          </div>,
+          document.body
+        )}
       </div>
       <PlayerIconButton
         icon="/equalizer.svg"
