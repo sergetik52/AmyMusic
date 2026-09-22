@@ -168,39 +168,57 @@ function WaveVolumeControl({ effectiveVolume, setVolume }) {
       onMouseLeave={handleMouseLeave}
     >
       <div
-        className={`volume-popover absolute bottom-12 left-1/2 z-30 flex h-[238px] w-12 -translate-x-1/2 items-center justify-center rounded-[var(--cover-radius,16px)] border border-white/10 bg-[#171717]/95 py-3 shadow-2xl backdrop-blur-md transition-all duration-200 ${
-          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        className={`absolute bottom-12 left-1/2 z-30 flex flex-col items-center gap-2.5 -translate-x-1/2 rounded-3xl border border-white/10 bg-[#0c0c0e]/95 p-3.5 shadow-2xl backdrop-blur-2xl transition-all duration-200 ease-[cubic-bezier(.2,.9,.3,1)] ${
+          isOpen ? "opacity-100 scale-100 translate-y-0 pointer-events-auto" : "opacity-0 scale-95 translate-y-2 pointer-events-none"
         }`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <div
-          className="volume-live-fill pointer-events-none absolute left-1/2 w-[9px] -translate-x-1/2 rounded-full bg-[var(--player-accent-muted)]"
-          style={{
-            height: `${Math.max(12, effectiveVolume * 221)}px`,
-            bottom: "8px"
-          }}
-        />
-        <div
-          className="volume-live-thumb pointer-events-none absolute left-1/2 h-[19px] w-[19px] -translate-x-1/2 rounded-full bg-[var(--player-accent)]"
-          style={{
-            bottom: `${8 + effectiveVolume * (221 - 19)}px`
-          }}
-        />
-        <img
-          src="/volume-input.svg"
-          alt=""
-          className="pointer-events-none absolute h-[221px] w-[19px] select-none opacity-70"
-        />
-        <input
-          type="range"
-          min="0"
-          max="100"
-          value={volumePercent}
-          onChange={(event) => setVolume(Number(event.target.value) / 100)}
-          aria-label="Громкость"
-          className="volume-slider"
-        />
+        {/* Arrow Tip */}
+        <div className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-b border-r border-white/10 bg-[#0c0c0e]" />
+
+        {/* Volume Badge */}
+        <span className={`text-[10px] font-mono font-bold tabular-nums transition ${
+          effectiveVolume > 0 ? "text-white/80" : "text-white/30"
+        }`}>
+          {effectiveVolume > 0 ? `${volumePercent}%` : "MUTE"}
+        </span>
+
+        {/* Slider Track (Equalizer Style) */}
+        <div className="relative flex h-36 w-6 items-center justify-center rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition shadow-inner">
+          {/* Glowing Vertical Tube */}
+          <div
+            className="pointer-events-none absolute bottom-1.5 w-1.5 rounded-full bg-gradient-to-t from-white/20 via-white/70 to-white shadow-[0_0_10px_rgba(255,255,255,0.4)] transition-all duration-75"
+            style={{
+              height: `${Math.max(6, effectiveVolume * 132)}px`
+            }}
+          />
+
+          {/* Rotated Input Slider */}
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={volumePercent}
+            onChange={(event) => setVolume(Number(event.target.value) / 100)}
+            aria-label="Громкость"
+            className="h-32 w-32 -rotate-90 appearance-none bg-transparent cursor-pointer touch-none focus:outline-none [&::-webkit-slider-runnable-track]:h-[3px] [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/10 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition [&::-webkit-slider-thumb]:hover:scale-125 [&::-webkit-slider-thumb]:mt-[-5.25px]"
+          />
+        </div>
+
+        {/* Quick Mute toggle button inside popover */}
+        <button
+          type="button"
+          onClick={() => setVolume(effectiveVolume > 0 ? 0 : 0.7)}
+          className="grid h-6 w-6 place-items-center rounded-full text-white/40 hover:bg-white/10 hover:text-white transition active:scale-95"
+          title={effectiveVolume > 0 ? "Выключить звук" : "Включить звук"}
+        >
+          <img
+            src={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"}
+            alt=""
+            className="h-3.5 w-3.5 opacity-70 hover:opacity-100"
+          />
+        </button>
       </div>
       <button
         type="button"
