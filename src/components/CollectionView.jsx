@@ -377,8 +377,10 @@ function PlaylistView({
   const [cover, setCover] = useState(playlist.cover);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDeletePromptOpen, setIsDeletePromptOpen] = useState(false);
+  const [isCoverExpanded, setIsCoverExpanded] = useState(false);
   const [draggedTrackIndex, setDraggedTrackIndex] = useState(null);
   const [dragOverTrackIndex, setDragOverTrackIndex] = useState(null);
+  const fileInputRef = useRef(null);
   const isPointerDraggingRef = useRef(false);
 
   const handlePointerDown = (e, index) => {
