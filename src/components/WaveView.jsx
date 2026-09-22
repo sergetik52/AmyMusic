@@ -168,14 +168,14 @@ function WaveVolumeControl({ effectiveVolume, setVolume }) {
       onMouseLeave={handleMouseLeave}
     >
       <div
-        className={`absolute bottom-12 left-1/2 z-30 flex flex-col items-center gap-2.5 -translate-x-1/2 rounded-3xl border border-white/10 bg-[#0c0c0e]/95 p-3.5 shadow-2xl backdrop-blur-2xl transition-all duration-200 ease-[cubic-bezier(.2,.9,.3,1)] ${
+        className={`absolute bottom-12 left-1/2 z-30 flex w-10 flex-col items-center gap-2.5 -translate-x-1/2 rounded-2xl bg-[#0c0c0e]/95 py-3 shadow-2xl backdrop-blur-2xl transition-all duration-200 ease-[cubic-bezier(.2,.9,.3,1)] ${
           isOpen ? "opacity-100 scale-100 translate-y-0 pointer-events-auto" : "opacity-0 scale-95 translate-y-2 pointer-events-none"
         }`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
         {/* Arrow Tip */}
-        <div className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-b border-r border-white/10 bg-[#0c0c0e]" />
+        <div className="absolute -bottom-1 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 bg-[#0c0c0e]" />
 
         {/* Volume Badge */}
         <span className={`text-[10px] font-mono font-bold tabular-nums transition ${
@@ -184,17 +184,28 @@ function WaveVolumeControl({ effectiveVolume, setVolume }) {
           {effectiveVolume > 0 ? `${volumePercent}%` : "MUTE"}
         </span>
 
-        {/* Slider Track (Equalizer Style) */}
-        <div className="relative flex h-36 w-6 items-center justify-center rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition shadow-inner">
-          {/* Glowing Vertical Tube */}
+        {/* Track container */}
+        <div className="relative flex h-36 w-full items-center justify-center">
+          {/* Background Track Line */}
+          <div className="pointer-events-none absolute left-1/2 top-0 h-full w-[3px] -translate-x-1/2 rounded-full bg-white/10" />
+
+          {/* Vertical Fill Line */}
           <div
-            className="pointer-events-none absolute bottom-1.5 w-1.5 rounded-full bg-gradient-to-t from-white/20 via-white/70 to-white shadow-[0_0_10px_rgba(255,255,255,0.4)] transition-all duration-75"
+            className="pointer-events-none absolute left-1/2 bottom-0 w-[3px] -translate-x-1/2 rounded-full bg-gradient-to-t from-white/30 via-white/70 to-white shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-75"
             style={{
-              height: `${Math.max(6, effectiveVolume * 132)}px`
+              height: `${effectiveVolume * 100}%`
             }}
           />
 
-          {/* Rotated Input Slider */}
+          {/* Visual Thumb Dot (Perfectly centered on vertical line) */}
+          <div
+            className="pointer-events-none absolute left-1/2 h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-white shadow-md transition-all duration-75"
+            style={{
+              bottom: `calc(${effectiveVolume * 100}% - 7px)`
+            }}
+          />
+
+          {/* Rotated Input Slider Overlay */}
           <input
             type="range"
             min="0"
@@ -202,23 +213,9 @@ function WaveVolumeControl({ effectiveVolume, setVolume }) {
             value={volumePercent}
             onChange={(event) => setVolume(Number(event.target.value) / 100)}
             aria-label="Громкость"
-            className="h-32 w-32 -rotate-90 appearance-none bg-transparent cursor-pointer touch-none focus:outline-none [&::-webkit-slider-runnable-track]:h-[3px] [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/10 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition [&::-webkit-slider-thumb]:hover:scale-125 [&::-webkit-slider-thumb]:mt-[-5.25px]"
+            className="absolute left-1/2 top-1/2 h-36 w-36 -translate-x-1/2 -translate-y-1/2 -rotate-90 appearance-none bg-transparent cursor-pointer touch-none focus:outline-none [&::-webkit-slider-runnable-track]:h-full [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:opacity-0"
           />
         </div>
-
-        {/* Quick Mute toggle button inside popover */}
-        <button
-          type="button"
-          onClick={() => setVolume(effectiveVolume > 0 ? 0 : 0.7)}
-          className="grid h-6 w-6 place-items-center rounded-full text-white/40 hover:bg-white/10 hover:text-white transition active:scale-95"
-          title={effectiveVolume > 0 ? "Выключить звук" : "Включить звук"}
-        >
-          <img
-            src={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"}
-            alt=""
-            className="h-3.5 w-3.5 opacity-70 hover:opacity-100"
-          />
-        </button>
       </div>
       <button
         type="button"
