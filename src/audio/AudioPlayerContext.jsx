@@ -2027,16 +2027,16 @@ export function AudioProvider({ children }) {
   }, []);
 
   const toggleMute = useCallback(() => {
-    if (isMuted || volumeState === 0) {
+    if (isMuted || volume === 0) {
       setIsMuted(false);
       const target = lastVolumeRef.current || 0.7;
       setVolumeState(target);
     } else {
-      if (volumeState > 0) lastVolumeRef.current = volumeState;
+      if (volume > 0) lastVolumeRef.current = volume;
       setIsMuted(true);
       setVolumeState(0);
     }
-  }, [isMuted, volumeState]);
+  }, [isMuted, volume]);
 
   const toggleShuffle = useCallback(() => {
     setIsShuffle((value) => {
