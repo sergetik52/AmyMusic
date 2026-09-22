@@ -189,22 +189,28 @@ export function initDesktopApi() {
   // Disable default browser/WebView context menu (Назад, Обновить, Печать etc.)
   window.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-  });
+  }, true);
 
-  // F11 Fullscreen toggle
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'F11') {
+  // F11 Fullscreen toggle (using capture phase to prevent WebView2 built-in F11 jitter)
+  const handleF11Key = (e) => {
+    if (e.key === 'F11' || e.keyCode === 122) {
       e.preventDefault();
-      if (isTauri()) {
-        invoke('toggle_fullscreen').catch(() => {});
-      } else {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
+      e.stopPropagation();
+      if (e.type === 'keydown') {
+        if (isTauri()) {
+          invoke('toggle_fullscreen').catch(() => {});
         } else {
-          document.exitFullscreen().catch(() => {});
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          } else {
+            document.exitFullscreen().catch(() => {});
+          }
         }
       }
     }
-  });
+  };
+
+  window.addEventListener('keydown', handleF11Key, true);
+  window.addEventListener('keyup', handleF11Key, true);
 }
 
