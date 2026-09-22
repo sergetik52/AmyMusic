@@ -2000,6 +2000,52 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
     applyAppearanceSettings(profileSettings?.appearance);
   }, [profileSettings?.appearance]);
 
+  const isQueuePointerDraggingRef = useRef(false);
+
+  const handleQueuePointerDown = (e, vIndex, startIdx) => {
+    if (e.button !== 0) return;
+    isQueuePointerDraggingRef.current = true;
+    setDraggedQueueIndex(vIndex);
+    setDragOverQueueIndex(vIndex);
+
+    const handlePointerMove = (moveEvent) => {
+      if (!isQueuePointerDraggingRef.current) return;
+      const elem = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const row = elem?.closest("[data-queue-vindex]");
+      if (row) {
+        const targetVIdx = parseInt(row.getAttribute("data-queue-vindex"), 10);
+        if (!isNaN(targetVIdx)) {
+          setDragOverQueueIndex(targetVIdx);
+        }
+      }
+    };
+
+    const handlePointerUp = (upEvent) => {
+      if (!isQueuePointerDraggingRef.current) return;
+      isQueuePointerDraggingRef.current = false;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+
+      const elem = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
+      const row = elem?.closest("[data-queue-vindex]");
+      let targetVIdx = dragOverQueueIndex;
+      if (row) {
+        const parsed = parseInt(row.getAttribute("data-queue-vindex"), 10);
+        if (!isNaN(parsed)) targetVIdx = parsed;
+      }
+
+      if (targetVIdx !== null && targetVIdx !== undefined && !isNaN(targetVIdx) && vIndex !== targetVIdx) {
+        reorderQueue(startIdx + vIndex, startIdx + targetVIdx);
+      }
+
+      setDraggedQueueIndex(null);
+      setDragOverQueueIndex(null);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
   return (
     <div className="flex w-auto items-center justify-end gap-2 max-sm:gap-1 shrink-0 max-md:hidden relative z-50">
       <PlayerIconButton icon="/lyrics.svg" label="Караоке" onClick={onToggleKaraoke} active={isKaraokeOpen} />
@@ -2039,8 +2085,8 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                   }
                 }}
                 onDragOver={(e) => {
-                  if (draggedQueueIndex === null) return;
                   e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
                   const container = e.currentTarget;
                   const rect = container.getBoundingClientRect();
                   const offsetY = e.clientY - rect.top;
@@ -2067,6 +2113,7 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                     const itemNode = (
                       <div
                         key={`${track.id}-${actualIndex}`}
+                        data-queue-vindex={vIndex}
                         draggable
                         onDragStart={(e) => {
                           e.dataTransfer.setData("text/plain", String(vIndex));
@@ -2095,15 +2142,21 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                           setDraggedQueueIndex(null);
                           setDragOverQueueIndex(null);
                         }}
-                        className={`group flex items-center justify-between rounded-xl p-2 transition cursor-grab active:cursor-grabbing ${
-                          isCurrent
-                            ? "bg-white/10"
-                            : isDragOver
-                              ? "bg-white/10 border border-white/30"
-                              : "hover:bg-white/5"
-                        } ${isDragging ? "opacity-30 scale-95" : ""}`}
+                        className={`group flex items-center justify-between rounded-xl p-2 transition duration-150 select-none cursor-pointer ${
+                          isDragging
+                            ? "opacity-30 scale-[0.98] border-2 border-dashed border-white/50"
+                            : isDragOver && !isDragging
+                              ? "bg-white/10 border-2 border-emerald-400 shadow-xl scale-[1.01]"
+                              : isCurrent
+                                ? "bg-white/10 border border-transparent"
+                                : "hover:bg-white/5 border border-transparent"
+                        }`}
                       >
-                        <div className="flex items-center gap-2 shrink-0 text-white/25 group-hover:text-white/60 transition cursor-grab active:cursor-grabbing p-1">
+                        <div 
+                          onPointerDown={(e) => handleQueuePointerDown(e, vIndex, startIdx)}
+                          className="flex items-center gap-2 shrink-0 text-white/30 group-hover:text-white/80 transition cursor-grab active:cursor-grabbing p-1.5 -m-1 hover:bg-white/10 rounded-lg"
+                          title="Зажмите и потяните для перемещения"
+                        >
                           <svg className="h-4 w-4 fill-current pointer-events-none" viewBox="0 0 24 24">
                             <path d="M9 18h6v-2H9v2zm0-5h6v-2H9v2zm0-7v2h6V6H9z" />
                           </svg>
