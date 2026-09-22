@@ -1972,7 +1972,7 @@ function PlayerSeekBar() {
 }
 
 function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
-  const { currentTrack, currentIndex, effectiveVolume, playTrack, queue, reorderQueue, removeFromQueue, setVolume, isEqualizerOpen, setIsEqualizerOpen } = useAudioPlayer();
+  const { currentTrack, currentIndex, effectiveVolume, playTrack, queue, reorderQueue, removeFromQueue, setVolume, toggleMute, isEqualizerOpen, setIsEqualizerOpen } = useAudioPlayer();
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isVolumeOpen, setIsVolumeOpen] = useState(false);
   const volumeTimerRef = useRef(null);
@@ -2237,7 +2237,7 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
 
             {/* Vertical Fill Line */}
             <div
-              className="pointer-events-none absolute left-1/2 bottom-0 w-[3px] -translate-x-1/2 rounded-full bg-gradient-to-t from-white/30 via-white/70 to-white shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-75"
+              className="pointer-events-none absolute left-1/2 bottom-0 w-[3px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.6)]"
               style={{
                 height: `${effectiveVolume * 100}%`
               }}
@@ -2245,7 +2245,7 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
 
             {/* Visual Thumb Dot (Perfectly centered on vertical line) */}
             <div
-              className="pointer-events-none absolute left-1/2 h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-white shadow-md transition-all duration-75"
+              className="pointer-events-none absolute left-1/2 h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-white shadow-md"
               style={{
                 bottom: `calc(${effectiveVolume * 100}% - 7px)`
               }}
@@ -2267,7 +2267,7 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
         <button
           type="button"
           aria-label="Громкость"
-          onClick={() => setVolume(effectiveVolume > 0 ? 0 : 0.7)}
+          onClick={toggleMute}
           className={`grid h-9 w-9 place-items-center rounded-full transition active:scale-95 ${
             isVolumeOpen ? "bg-white/10 opacity-100" : "opacity-60 hover:bg-white/10 hover:opacity-100"
           }`}

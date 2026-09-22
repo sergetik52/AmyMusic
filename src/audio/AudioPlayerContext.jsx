@@ -2015,17 +2015,28 @@ export function AudioProvider({ children }) {
     setCurrentTime(audio.currentTime);
   }, [duration]);
 
+  const lastVolumeRef = useRef(volume > 0 ? volume : 0.7);
+
   const setVolume = useCallback((nextVolume) => {
     const normalized = clampVolume(nextVolume);
-    setVolumeState(normalized);
     if (normalized > 0) {
+      lastVolumeRef.current = normalized;
       setIsMuted(false);
     }
+    setVolumeState(normalized);
   }, []);
 
   const toggleMute = useCallback(() => {
-    setIsMuted((value) => !value);
-  }, []);
+    if (isMuted || volumeState === 0) {
+      setIsMuted(false);
+      const target = lastVolumeRef.current || 0.7;
+      setVolumeState(target);
+    } else {
+      if (volumeState > 0) lastVolumeRef.current = volumeState;
+      setIsMuted(true);
+      setVolumeState(0);
+    }
+  }, [isMuted, volumeState]);
 
   const toggleShuffle = useCallback(() => {
     setIsShuffle((value) => {
@@ -2729,6 +2740,7 @@ export function AudioProvider({ children }) {
       clearHistory,
       toggleSubscribedArtist,
       setVolume,
+      toggleMute,
       createUserPlaylist,
       addTrackToUserPlaylist,
       updateUserPlaylist,

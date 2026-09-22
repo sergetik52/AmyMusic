@@ -140,6 +140,7 @@ function WaveSeekBar({ currentTime, duration, progress, seek }) {
 }
 
 function WaveVolumeControl({ effectiveVolume, setVolume }) {
+  const { toggleMute } = useAudioPlayer();
   const [isOpen, setIsOpen] = useState(false);
   const timerRef = useRef(null);
   const volumePercent = Math.round(effectiveVolume * 100);
@@ -191,7 +192,7 @@ function WaveVolumeControl({ effectiveVolume, setVolume }) {
 
           {/* Vertical Fill Line */}
           <div
-            className="pointer-events-none absolute left-1/2 bottom-0 w-[3px] -translate-x-1/2 rounded-full bg-gradient-to-t from-white/30 via-white/70 to-white shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-75"
+            className="pointer-events-none absolute left-1/2 bottom-0 w-[3px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.6)]"
             style={{
               height: `${effectiveVolume * 100}%`
             }}
@@ -199,7 +200,7 @@ function WaveVolumeControl({ effectiveVolume, setVolume }) {
 
           {/* Visual Thumb Dot (Perfectly centered on vertical line) */}
           <div
-            className="pointer-events-none absolute left-1/2 h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-white shadow-md transition-all duration-75"
+            className="pointer-events-none absolute left-1/2 h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-white shadow-md"
             style={{
               bottom: `calc(${effectiveVolume * 100}% - 7px)`
             }}
@@ -220,7 +221,7 @@ function WaveVolumeControl({ effectiveVolume, setVolume }) {
       <button
         type="button"
         aria-label="Громкость"
-        onClick={() => setVolume(effectiveVolume > 0 ? 0 : 0.7)}
+        onClick={toggleMute}
         className={`grid h-11 w-11 place-items-center rounded-full transition active:scale-95 ${
           isOpen ? "bg-white/10 opacity-100" : "opacity-60 hover:bg-white/10 hover:opacity-100"
         }`}
