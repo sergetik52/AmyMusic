@@ -185,32 +185,36 @@ export function initDesktopApi() {
       window.dispatchEvent(new CustomEvent('amymusic:hotkey', { detail: event.payload }));
     }
   }).catch((err) => console.warn('Failed to listen for smtc-button', err));
+}
 
+// Global window event listeners (active in all environments)
+if (typeof window !== "undefined") {
   // Disable default browser/WebView context menu (Назад, Обновить, Печать etc.)
   window.addEventListener('contextmenu', (e) => {
     e.preventDefault();
   }, true);
 
-  // F11 Fullscreen toggle (using capture phase to prevent WebView2 built-in F11 jitter)
-  const handleF11Key = (e) => {
+  // F11 Fullscreen toggle
+  window.addEventListener('keydown', async (e) => {
     if (e.key === 'F11' || e.keyCode === 122) {
       e.preventDefault();
-      e.stopPropagation();
-      if (e.type === 'keydown') {
+      try {
         if (isTauri()) {
-          invoke('toggle_fullscreen').catch(() => {});
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+          const win = getCurrentWindow();
+          const isFullscreen = await win.isFullscreen();
+          await win.setFullscreen(!isFullscreen);
         } else {
           if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(() => {});
+            await document.documentElement.requestFullscreen();
           } else {
-            document.exitFullscreen().catch(() => {});
+            await document.exitFullscreen();
           }
         }
+      } catch (_) {
+        invoke('toggle_fullscreen').catch(() => {});
       }
     }
-  };
-
-  window.addEventListener('keydown', handleF11Key, true);
-  window.addEventListener('keyup', handleF11Key, true);
+  }, true);
 }
 
