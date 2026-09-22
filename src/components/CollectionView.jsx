@@ -377,11 +377,53 @@ function PlaylistView({
   const [cover, setCover] = useState(playlist.cover);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDeletePromptOpen, setIsDeletePromptOpen] = useState(false);
-  const [isCoverExpanded, setIsCoverExpanded] = useState(false);
   const [draggedTrackIndex, setDraggedTrackIndex] = useState(null);
   const [dragOverTrackIndex, setDragOverTrackIndex] = useState(null);
-  const fileInputRef = React.useRef(null);
-  const tracks = playlist.tracks || [];
+  const isPointerDraggingRef = useRef(false);
+
+  const handlePointerDown = (e, index) => {
+    if (!isEditable || e.button !== 0) return;
+    isPointerDraggingRef.current = true;
+    setDraggedTrackIndex(index);
+    setDragOverTrackIndex(index);
+
+    const handlePointerMove = (moveEvent) => {
+      if (!isPointerDraggingRef.current) return;
+      const elem = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const row = elem?.closest("[data-track-index]");
+      if (row) {
+        const targetIdx = parseInt(row.getAttribute("data-track-index"), 10);
+        if (!isNaN(targetIdx)) {
+          setDragOverTrackIndex(targetIdx);
+        }
+      }
+    };
+
+    const handlePointerUp = (upEvent) => {
+      if (!isPointerDraggingRef.current) return;
+      isPointerDraggingRef.current = false;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+
+      const elem = document.elementFromPoint(upEvent.clientX, upEvent.clientY);
+      const row = elem?.closest("[data-track-index]");
+      let targetIdx = dragOverTrackIndex;
+      if (row) {
+        const parsed = parseInt(row.getAttribute("data-track-index"), 10);
+        if (!isNaN(parsed)) targetIdx = parsed;
+      }
+
+      if (targetIdx !== null && targetIdx !== undefined && !isNaN(targetIdx) && index !== targetIdx) {
+        reorderPlaylistTracks(playlist.id, index, targetIdx);
+      }
+
+      setDraggedTrackIndex(null);
+      setDragOverTrackIndex(null);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
 
   const saveChanges = () => {
     onUpdate?.(playlist.id, { title, cover });
@@ -413,7 +455,7 @@ function PlaylistView({
         }
       }}
       onDragOver={(e) => {
-        if (draggedTrackIndex === null) return;
+        if (!isEditable) return;
         e.preventDefault();
         const container = e.currentTarget;
         const rect = container.getBoundingClientRect();
@@ -477,7 +519,7 @@ function PlaylistView({
           >
             <svg className="h-6 w-6 fill-current rotate-90" viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"></path></svg>
           </button>
-  
+
           <div className="flex flex-col sm:flex-row sm:items-end gap-7 max-md:items-center">
             <div 
               className="group relative flex h-48 w-48 max-md:h-36 max-md:w-36 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-2xl transition hover:border-white/20"
@@ -580,7 +622,7 @@ function PlaylistView({
         </div>
       </div>
 
-      <div className="space-y-1 p-7 max-md:px-2 max-md:py-2 max-md:w-full">
+      <div className="space-y-1.5 p-7 max-md:px-2 max-md:py-2 max-md:w-full">
         {isLoading && (
           <p className="mb-4 text-sm font-bold text-white/35">Догружаю треки...</p>
         )}
@@ -592,6 +634,7 @@ function PlaylistView({
           return (
             <div
               key={track.id}
+              data-track-index={index}
               draggable={isEditable}
               onDragStart={(e) => {
                 if (!isEditable) return;
@@ -624,7 +667,7 @@ function PlaylistView({
                 setDragOverTrackIndex(null);
               }}
               onClick={(e) => {
-                if (e.target.closest("button") || e.target.closest("a")) return;
+                if (e.target.closest("button") || e.target.closest("a") || e.target.closest("[data-drag-handle]")) return;
                 if (isCurrent) {
                   togglePlay();
                 } else {
@@ -632,21 +675,25 @@ function PlaylistView({
                 }
               }}
               className={[
-                "group flex items-center gap-3 rounded-[var(--cover-radius,12px)] p-2 max-md:px-2 max-md:py-2.5 max-md:rounded-none max-md:w-full transition hover:bg-white/[0.04] cursor-pointer select-none",
-                isEditable ? "cursor-grab active:cursor-grabbing" : "",
-                isDragging ? "opacity-30 scale-95" : "opacity-100",
-                isDragOver ? "border-2 border-white/50" : "border border-transparent",
+                "group flex items-center gap-3 rounded-[var(--cover-radius,12px)] p-2 max-md:px-2 max-md:py-2.5 max-md:rounded-none max-md:w-full transition duration-150 select-none cursor-pointer",
+                isDragging ? "opacity-30 scale-[0.98] border-2 border-dashed border-white/40" : "",
+                isDragOver && !isDragging ? "bg-white/10 border-2 border-emerald-400 shadow-xl scale-[1.01]" : "border border-transparent hover:bg-white/[0.04]",
                 isCurrent ? "bg-white/[0.08]" : ""
               ].join(" ")}
               style={{ WebkitAppRegion: "no-drag" }}
             >
               <div className="flex min-w-0 flex-1 items-center gap-3 text-left pointer-events-none">
                 {isEditable ? (
-                  <div className="flex items-center gap-1.5 shrink-0 cursor-grab active:cursor-grabbing p-1" title="Перетащить">
-                    <svg className="h-4 w-4 fill-white/20 group-hover:fill-white/60 transition pointer-events-none" viewBox="0 0 24 24">
+                  <div
+                    data-drag-handle
+                    onPointerDown={(e) => handlePointerDown(e, index)}
+                    className="flex items-center gap-1.5 shrink-0 cursor-grab active:cursor-grabbing p-2 -m-1 hover:bg-white/10 rounded-lg transition pointer-events-auto"
+                    title="Зажмите и потяните для перемещения"
+                  >
+                    <svg className="h-4 w-4 fill-white/40 group-hover:fill-white/80 transition pointer-events-none" viewBox="0 0 24 24">
                       <path d="M9 18h6v-2H9v2zm0-5h6v-2H9v2zm0-7v2h6V6H9z" />
                     </svg>
-                    <span className="w-5 text-right text-xs font-black text-white/25 pointer-events-none">{index + 1}</span>
+                    <span className="w-5 text-right text-xs font-black text-white/30 pointer-events-none">{index + 1}</span>
                   </div>
                 ) : (
                   <span className="w-7 text-right text-xs font-black text-white/25 pointer-events-none">{index + 1}</span>
