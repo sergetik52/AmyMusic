@@ -1557,7 +1557,13 @@ export function AudioProvider({ children }) {
   }, [currentTime, duration]);
 
   const next = useCallback(() => {
-    if (queue.length <= 1) return;
+    if (queue.length <= 1) {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        setCurrentTime(0);
+      }
+      return;
+    }
     manualActionRef.current = true;
     pendingAutoplayRef.current = true;
     setCurrentIndex((index) => {
@@ -1572,7 +1578,18 @@ export function AudioProvider({ children }) {
   }, [queue.length, repeatMode]);
 
   const previous = useCallback(() => {
-    if (queue.length <= 1) return;
+    if (audioRef.current && audioRef.current.currentTime > 3) {
+      audioRef.current.currentTime = 0;
+      setCurrentTime(0);
+      return;
+    }
+    if (queue.length <= 1) {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        setCurrentTime(0);
+      }
+      return;
+    }
     manualActionRef.current = true;
     pendingAutoplayRef.current = true;
     setCurrentIndex((index) => (index - 1 + queue.length) % queue.length);
@@ -1585,12 +1602,13 @@ export function AudioProvider({ children }) {
         logDebug("audio", "Global hotkey triggered", action);
         switch (action) {
           case "playPause":
-            if (audioRef.current?.paused === false) {
-              audioRef.current.pause();
-              setIsPlaying(false);
-            } else {
-              audioRef.current?.play().then(() => setIsPlaying(true)).catch(console.warn);
-            }
+            togglePlay();
+            break;
+          case "play":
+            play();
+            break;
+          case "pause":
+            pause();
             break;
           case "nextTrack":
             next();
@@ -1637,20 +1655,10 @@ export function AudioProvider({ children }) {
 
     const actionHandlers = [
       ["play", async () => {
-        if (audioRef.current) {
-          try {
-            await audioRef.current.play();
-            setIsPlaying(true);
-          } catch (e) {
-            logWarn("audio", "mediaSession play failed", e);
-          }
-        }
+        play();
       }],
       ["pause", () => {
-        if (audioRef.current) {
-          audioRef.current.pause();
-          setIsPlaying(false);
-        }
+        pause();
       }],
       ["previoustrack", () => {
         previous();
@@ -1683,7 +1691,7 @@ export function AudioProvider({ children }) {
     return () => {
       if (unsubscribeHotkey) unsubscribeHotkey();
     };
-  }, [next, previous]);
+  }, [next, previous, play, pause, togglePlay]);
 
   const loadTrack = useCallback(async (track, shouldPlay = false, isManual = false) => {
     const audio = audioRef.current;
@@ -2450,67 +2458,6 @@ export function AudioProvider({ children }) {
 
   const isCurrentLiked = likedTrackIds.has(currentTrack.id);
   const isCurrentDisliked = dislikedTrackIds.has(currentTrack.id);
-
-  useEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      typeof navigator === "undefined" ||
-      !navigator.mediaSession ||
-      !window.MediaMetadata
-    ) {
-      return;
-    }
-
-    if (!currentTrack?.id || currentTrack.id === "empty") {
-      navigator.mediaSession.metadata = null;
-      navigator.mediaSession.playbackState = "none";
-      return;
-    }
-
-    const artworkUrl = getMediaArtworkUrl(currentTrack.cover);
-    navigator.mediaSession.metadata = new window.MediaMetadata({
-      title: currentTrack.title || "AmyMusic",
-      artist: currentTrack.artist || "AmyMusic",
-      album: currentTrack.mood || "AmyMusic",
-      artwork: [
-        { src: artworkUrl, sizes: "96x96", type: "image/png" },
-        { src: artworkUrl, sizes: "256x256", type: "image/png" },
-        { src: artworkUrl, sizes: "512x512", type: "image/png" }
-      ]
-    });
-  }, [currentTrack.artist, currentTrack.cover, currentTrack.id, currentTrack.mood, currentTrack.title]);
-
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.mediaSession) return;
-
-    navigator.mediaSession.playbackState = currentTrack?.id === "empty"
-      ? "none"
-      : isPlaying
-        ? "playing"
-        : "paused";
-  }, [currentTrack?.id, isPlaying]);
-
-  useEffect(() => {
-    if (
-      typeof navigator === "undefined" ||
-      !navigator.mediaSession ||
-      typeof navigator.mediaSession.setPositionState !== "function" ||
-      !Number.isFinite(duration) ||
-      duration <= 0
-    ) {
-      return;
-    }
-
-    try {
-      navigator.mediaSession.setPositionState({
-        duration,
-        playbackRate: audioRef.current?.playbackRate || 1,
-        position: Math.min(Math.max(currentTime || 0, 0), duration)
-      });
-    } catch (error) {
-      logDebug("audio", "media session position update failed", error);
-    }
-  }, [currentTime, duration]);
 
 
 

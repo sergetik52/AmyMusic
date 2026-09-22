@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use tauri::command;
+use tauri::{command, AppHandle};
 
 #[derive(Deserialize, Clone)]
 pub struct SmtcInfo {
@@ -15,23 +15,56 @@ pub struct SmtcInfo {
 #[cfg(target_os = "windows")]
 mod windows_smtc {
     use super::SmtcInfo;
+    use std::sync::OnceLock;
+    use tauri::{AppHandle, Emitter};
+    use windows::Foundation::TypedEventHandler;
     use windows::Media::{
         MediaPlaybackStatus, MediaPlaybackType, SystemMediaTransportControls,
-        SystemMediaTransportControlsDisplayUpdater,
+        SystemMediaTransportControlsButton, SystemMediaTransportControlsButtonPressedEventArgs,
     };
 
-    fn get_smtc() -> Option<SystemMediaTransportControls> {
-        // For a non-UWP app, we use the MediaPlayer approach which is supported on Win 10+
+    static SMTC_INIT: OnceLock<()> = OnceLock::new();
+
+    fn get_smtc(app: &AppHandle) -> Option<SystemMediaTransportControls> {
         use windows::Media::Playback::MediaPlayer;
-        static PLAYER: std::sync::OnceLock<MediaPlayer> = std::sync::OnceLock::new();
+        static PLAYER: OnceLock<MediaPlayer> = OnceLock::new();
         let player = PLAYER.get_or_init(|| {
             MediaPlayer::new().expect("Failed to create MediaPlayer")
         });
-        player.SystemMediaTransportControls().ok()
+
+        let smtc = player.SystemMediaTransportControls().ok()?;
+
+        SMTC_INIT.get_or_init(|| {
+            let app_handle = app.clone();
+            let _ = smtc.ButtonPressed(&TypedEventHandler::new(
+                move |_sender, args: windows::core::Ref<'_, SystemMediaTransportControlsButtonPressedEventArgs>| {
+                    if let Some(args) = args.as_ref() {
+                        if let Ok(button) = args.Button() {
+                            let action = match button {
+                                SystemMediaTransportControlsButton::Play => "playPause",
+                                SystemMediaTransportControlsButton::Pause => "playPause",
+                                SystemMediaTransportControlsButton::Next => "nextTrack",
+                                SystemMediaTransportControlsButton::Previous => "prevTrack",
+                                SystemMediaTransportControlsButton::Stop => "pause",
+                                SystemMediaTransportControlsButton::ChannelUp => "nextTrack",
+                                SystemMediaTransportControlsButton::ChannelDown => "prevTrack",
+                                _ => "",
+                            };
+                            if !action.is_empty() {
+                                let _ = app_handle.emit("smtc-button", action);
+                            }
+                        }
+                    }
+                    Ok(())
+                },
+            ));
+        });
+
+        Some(smtc)
     }
 
-    pub fn update_smtc(info: &SmtcInfo) {
-        let Some(smtc) = get_smtc() else { return };
+    pub fn update_smtc(app: &AppHandle, info: &SmtcInfo) {
+        let Some(smtc) = get_smtc(app) else { return };
 
         let _ = smtc.SetIsEnabled(true);
         let _ = smtc.SetIsPlayEnabled(true);
@@ -67,21 +100,22 @@ mod windows_smtc {
         }
     }
 
-    pub fn clear_smtc() {
-        let Some(smtc) = get_smtc() else { return };
+    pub fn clear_smtc(app: &AppHandle) {
+        let Some(smtc) = get_smtc(app) else { return };
         let _ = smtc.SetPlaybackStatus(MediaPlaybackStatus::Stopped);
         let _ = smtc.SetIsEnabled(false);
     }
 }
 
 #[command]
-pub fn update_smtc(info: SmtcInfo) {
+pub fn update_smtc(app: AppHandle, info: SmtcInfo) {
     #[cfg(target_os = "windows")]
-    windows_smtc::update_smtc(&info);
+    windows_smtc::update_smtc(&app, &info);
 }
 
 #[command]
-pub fn clear_smtc() {
+pub fn clear_smtc(app: AppHandle) {
     #[cfg(target_os = "windows")]
-    windows_smtc::clear_smtc();
+    windows_smtc::clear_smtc(&app);
 }
+

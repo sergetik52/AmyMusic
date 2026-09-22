@@ -256,7 +256,13 @@ async function fetchFromNetease(title, artist, duration, signal) {
 // ------------------------------------------------
 export function getGeniusApiBase() {
   if (typeof window === "undefined") return "https://genius.com";
-  if (window.Capacitor?.isNativePlatform?.() || window.location?.protocol === "capacitor:") {
+  if (
+    window.Capacitor?.isNativePlatform?.() ||
+    window.location?.protocol === "capacitor:" ||
+    window.__TAURI__ ||
+    window.__TAURI_INTERNALS__ ||
+    window.amyMusicDesktop
+  ) {
     return "https://genius.com";
   }
   const proxyPort = new URLSearchParams(window.location.search).get("amymusicProxyPort");

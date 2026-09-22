@@ -73,7 +73,13 @@ function getSoundCloudApiBase() {
   }
 
   // On Capacitor (Android/iOS) or Tauri, there's no dev server proxy — go direct
-  if (window.Capacitor?.isNativePlatform?.() || window.location?.protocol === "capacitor:" || window.__TAURI__) {
+  if (
+    window.Capacitor?.isNativePlatform?.() ||
+    window.location?.protocol === "capacitor:" ||
+    window.__TAURI__ ||
+    window.__TAURI_INTERNALS__ ||
+    window.amyMusicDesktop
+  ) {
     return "https://api-v2.soundcloud.com";
   }
 

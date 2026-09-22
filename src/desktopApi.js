@@ -12,7 +12,13 @@ export function initDesktopApi() {
   // Polyfill fetch for APIs that require CORS bypass
   const originalFetch = window.fetch;
   window.fetch = async (input, init) => {
-    const urlStr = typeof input === 'string' ? input : (input?.url || '');
+    let urlStr = typeof input === 'string' ? input : (input?.url || '');
+    if (urlStr.startsWith('/proxy/genius')) {
+      urlStr = urlStr.replace('/proxy/genius', 'https://genius.com');
+    }
+    if (urlStr.startsWith('/api/soundcloud')) {
+      urlStr = urlStr.replace('/api/soundcloud', 'https://api-v2.soundcloud.com');
+    }
     if (urlStr.includes('api-v2.soundcloud.com') || 
         urlStr.includes('music.yandex.ru') || 
         urlStr.includes('api.music.yandex.net') || 
@@ -137,4 +143,12 @@ export function initDesktopApi() {
       return () => window.removeEventListener('amymusic:hotkey', handler);
     }
   };
+
+  // Listen for SMTC media key buttons from Tauri Rust side
+  listen('smtc-button', (event) => {
+    if (event.payload) {
+      window.dispatchEvent(new CustomEvent('amymusic:hotkey', { detail: event.payload }));
+    }
+  }).catch((err) => console.warn('Failed to listen for smtc-button', err));
 }
+
