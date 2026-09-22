@@ -527,21 +527,18 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
       >
         <nav className="flex flex-col gap-1 w-full">
           {sidebarMode === "static" && (
-            <div className={`flex items-center mb-2 px-3 ${isCollapsed ? "justify-center" : "justify-between"}`}>
-              {!isCollapsed && (
-                <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest px-2">Меню</span>
-              )}
-              <button
-                type="button"
-                onClick={() => setIsStaticExpanded((prev) => !prev)}
-                className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition cursor-pointer"
-                title={isCollapsed ? "Развернуть панель" : "Свернуть панель"}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-300 ${!isCollapsed ? "rotate-180" : ""}`}>
+            <button
+              type="button"
+              onClick={() => setIsStaticExpanded((prev) => !prev)}
+              className="group flex w-full items-center gap-3.5 rounded-full py-2 px-[26px] text-sm text-white/40 hover:text-white transition-all duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] overflow-hidden cursor-pointer mb-1"
+              title={isCollapsed ? "Развернуть панель" : "Свернуть панель"}
+            >
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center transition-transform group-hover:scale-110">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-300 ${!isCollapsed ? "rotate-180" : ""}`}>
                   <path d="m13 17 5-5-5-5M6 17l5-5-5-5"/>
                 </svg>
-              </button>
-            </div>
+              </div>
+            </button>
           )}
             {/* Pinned playlists */}
             {pinnedPlaylists.length > 0 && (
