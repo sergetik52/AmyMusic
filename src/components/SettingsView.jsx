@@ -324,11 +324,11 @@ export function SettingsView({ profileData, onProfileSave }) {
     }
 
     let combo = [];
-    if (e.ctrlKey || e.metaKey) combo.push("CommandOrControl");
+    if (e.ctrlKey || e.metaKey) combo.push("Ctrl");
     if (e.altKey) combo.push("Alt");
     if (e.shiftKey) combo.push("Shift");
     
-    // Process key name for Electron using e.code to bypass Russian layout
+    // Process key name for bypass of Russian layout
     let keyName = e.key;
     if (e.code.startsWith("Key")) {
       keyName = e.code.replace("Key", ""); // "KeyA" -> "A"
@@ -340,6 +340,9 @@ export function SettingsView({ profileData, onProfileSave }) {
     else if (e.code === "ArrowDown") keyName = "Down";
     else if (e.code === "ArrowLeft") keyName = "Left";
     else if (e.code === "ArrowRight") keyName = "Right";
+    else if (e.code === "MediaPlayPause") keyName = "MediaPlayPause";
+    else if (e.code === "MediaTrackNext") keyName = "MediaTrackNext";
+    else if (e.code === "MediaTrackPrevious") keyName = "MediaTrackPrevious";
     else {
       // Fallback to capitalizing first letter
       keyName = keyName.charAt(0).toUpperCase() + keyName.slice(1);
@@ -370,7 +373,7 @@ export function SettingsView({ profileData, onProfileSave }) {
       updateField("globalBinds", nextBinds);
       if (window.amyMusicDesktop?.registerHotkey) {
         window.amyMusicDesktop.unregisterAllHotkeys().then(() => {
-          if (settings.bindsEnabled) {
+          if (settings.bindsEnabled !== false) {
             Object.entries(nextBinds).forEach(([act, cb]) => {
               if (cb) window.amyMusicDesktop.registerHotkey(act, cb);
             });

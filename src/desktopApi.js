@@ -120,22 +120,56 @@ export function initDesktopApi() {
     },
     
     registerHotkey: async (action, combo) => {
-      // In Tauri v2, global shortcuts are registered using register(shortcut, handler)
+      if (!combo || typeof combo !== 'string') return false;
+      
+      const normalizeShortcut = (str) => {
+        return str.trim()
+          .replace(/\bCommandOrControl\b/gi, 'CmdOrCtrl')
+          .replace(/\bControl\b/gi, 'Ctrl')
+          .replace(/\bCommand\b/gi, 'Cmd')
+          .replace(/\bOption\b/gi, 'Alt')
+          .replace(/\bMediaNextTrack\b/gi, 'MediaTrackNext')
+          .replace(/\bMediaPreviousTrack\b/gi, 'MediaTrackPrevious')
+          .replace(/\bMediaPrevTrack\b/gi, 'MediaTrackPrevious')
+          .replace(/\bArrowUp\b/gi, 'Up')
+          .replace(/\bArrowDown\b/gi, 'Down')
+          .replace(/\bArrowLeft\b/gi, 'Left')
+          .replace(/\bArrowRight\b/gi, 'Right');
+      };
+
+      const normalized = normalizeShortcut(combo);
+      if (!normalized) return false;
+
       try {
-        // We need to map Electron combo to Tauri combo if necessary, but usually they are similar
-        await register(combo, (shortcut) => {
-           // We dispatch a custom event on window since the old app expects IPC events
-           window.dispatchEvent(new CustomEvent('amymusic:hotkey', { detail: action }));
+        console.log(`[Hotkey] Registering "${action}" -> "${normalized}" (raw: "${combo}")`);
+        
+        try {
+          const { isRegistered, unregister } = await import('@tauri-apps/plugin-global-shortcut');
+          if (await isRegistered(normalized)) {
+            await unregister(normalized);
+          }
+        } catch (_) {}
+
+        await register(normalized, (event) => {
+          if (!event || event.state === 'Pressed' || typeof event.state === 'undefined') {
+            console.log(`[Hotkey] Triggered "${action}" via "${normalized}"`);
+            window.dispatchEvent(new CustomEvent('amymusic:hotkey', { detail: action }));
+          }
         });
         return true;
-      } catch(e) {
-        console.warn("Failed to register hotkey", combo, e);
+      } catch (e) {
+        console.warn(`[Hotkey] Failed to register "${action}" ("${combo}" -> "${normalized}"):`, e);
         return false;
       }
     },
     unregisterAllHotkeys: async () => {
-      await unregisterAll();
-      return true;
+      try {
+        await unregisterAll();
+        return true;
+      } catch (e) {
+        console.warn('[Hotkey] Failed to unregister all shortcuts:', e);
+        return false;
+      }
     },
     onHotkey: (callback) => {
       const handler = (e) => callback(e.detail);
