@@ -740,17 +740,23 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData("text/plain", String(index));
+                e.dataTransfer.effectAllowed = "move";
                 setDraggedQueueIndex(index);
               }}
               onDragOver={(e) => {
                 e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
                 setDragOverQueueIndex(index);
               }}
               onDragLeave={() => setDragOverQueueIndex(null)}
               onDrop={(e) => {
                 e.preventDefault();
-                if (draggedQueueIndex !== null && draggedQueueIndex !== index) {
-                  reorderQueue(draggedQueueIndex, index);
+                const rawData = e.dataTransfer.getData("text/plain");
+                const fromIdx = draggedQueueIndex !== null && draggedQueueIndex !== undefined
+                  ? draggedQueueIndex
+                  : rawData !== "" ? parseInt(rawData, 10) : NaN;
+                if (!isNaN(fromIdx) && fromIdx >= 0 && fromIdx !== index) {
+                  reorderQueue(fromIdx, index);
                 }
                 setDraggedQueueIndex(null);
                 setDragOverQueueIndex(null);
@@ -1481,17 +1487,23 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                           draggable
                           onDragStart={(e) => {
                             e.dataTransfer.setData("text/plain", String(index));
+                            e.dataTransfer.effectAllowed = "move";
                             setDraggedQueueIndex(index);
                           }}
                           onDragOver={(e) => {
                             e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
                             setDragOverQueueIndex(index);
                           }}
                           onDragLeave={() => setDragOverQueueIndex(null)}
                           onDrop={(e) => {
                             e.preventDefault();
-                            if (draggedQueueIndex !== null && draggedQueueIndex !== index) {
-                              reorderQueue(draggedQueueIndex, index);
+                            const rawData = e.dataTransfer.getData("text/plain");
+                            const fromIdx = draggedQueueIndex !== null && draggedQueueIndex !== undefined
+                              ? draggedQueueIndex
+                              : rawData !== "" ? parseInt(rawData, 10) : NaN;
+                            if (!isNaN(fromIdx) && fromIdx >= 0 && fromIdx !== index) {
+                              reorderQueue(fromIdx, index);
                             }
                             setDraggedQueueIndex(null);
                             setDragOverQueueIndex(null);

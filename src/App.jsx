@@ -2070,19 +2070,24 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                         draggable
                         onDragStart={(e) => {
                           e.dataTransfer.setData("text/plain", String(vIndex));
+                          e.dataTransfer.effectAllowed = "move";
                           setDraggedQueueIndex(vIndex);
                         }}
                         onDragOver={(e) => {
                           e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
                           setDragOverQueueIndex(vIndex);
                         }}
                         onDragLeave={() => setDragOverQueueIndex(null)}
                         onDrop={(e) => {
                           e.preventDefault();
-                          const fromVIdx = draggedQueueIndex;
+                          const rawData = e.dataTransfer.getData("text/plain");
+                          const fromVIdx = draggedQueueIndex !== null && draggedQueueIndex !== undefined
+                            ? draggedQueueIndex
+                            : rawData !== "" ? parseInt(rawData, 10) : NaN;
                           setDraggedQueueIndex(null);
                           setDragOverQueueIndex(null);
-                          if (fromVIdx !== null && fromVIdx !== vIndex) {
+                          if (!isNaN(fromVIdx) && fromVIdx >= 0 && fromVIdx !== vIndex) {
                             reorderQueue(startIdx + fromVIdx, startIdx + vIndex);
                           }
                         }}

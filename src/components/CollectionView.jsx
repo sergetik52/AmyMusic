@@ -596,19 +596,25 @@ function PlaylistView({
               onDragStart={(e) => {
                 if (!isEditable) return;
                 e.dataTransfer.setData("text/plain", String(index));
+                e.dataTransfer.effectAllowed = "move";
                 setDraggedTrackIndex(index);
               }}
               onDragOver={(e) => {
                 if (!isEditable) return;
                 e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
                 setDragOverTrackIndex(index);
               }}
               onDragLeave={() => setDragOverTrackIndex(null)}
               onDrop={(e) => {
                 if (!isEditable) return;
                 e.preventDefault();
-                if (draggedTrackIndex !== null && draggedTrackIndex !== index) {
-                  reorderPlaylistTracks(playlist.id, draggedTrackIndex, index);
+                const rawData = e.dataTransfer.getData("text/plain");
+                const fromIdx = draggedTrackIndex !== null && draggedTrackIndex !== undefined
+                  ? draggedTrackIndex
+                  : rawData !== "" ? parseInt(rawData, 10) : NaN;
+                if (!isNaN(fromIdx) && fromIdx >= 0 && fromIdx !== index) {
+                  reorderPlaylistTracks(playlist.id, fromIdx, index);
                 }
                 setDraggedTrackIndex(null);
                 setDragOverTrackIndex(null);
@@ -1022,7 +1028,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
     return (
       <PlaylistView
         playlist={resolvedActivePlaylist}
-        isEditable={resolvedActivePlaylist.kind === "user-playlist"}
+        isEditable={resolvedActivePlaylist.kind === "user-playlist" || Boolean(String(resolvedActivePlaylist.id).startsWith("local-"))}
         isLoading={isPlaylistLoading}
         likedTrackIds={likedTrackIds}
         onBack={() => setActivePlaylist(null)}
