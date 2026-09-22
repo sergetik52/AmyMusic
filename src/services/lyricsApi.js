@@ -269,119 +269,176 @@ export function getGeniusApiBase() {
   return (proxyPort ? `http://127.0.0.1:${proxyPort}/proxy/genius` : "") || "/proxy/genius";
 }
 
+export function splitArtistNames(artist = "") {
+  if (!artist) return [];
+  const rawList = String(artist)
+    .split(/\s*(?:,|&|\/|\+|\b[xX]\b|×|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|при\s+уч(?:\.|астии)?|\bуч\.?|;)\s*/i)
+    .map((name) => name.trim())
+    .filter(Boolean);
+
+  const uniqueList = [];
+  const seen = new Set();
+  for (const name of rawList) {
+    const key = name.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueList.push(name);
+    }
+  }
+  return uniqueList;
+}
+
 async function fetchFromGenius(title, signature, duration, signal) {
   if (!title) return null;
-  const mainToken = signature.searchArtistToken || signature.fullArtistName;
-  const q = mainToken ? `${mainToken} ${title}` : title;
-  
-  try {
-    const baseUrl = getGeniusApiBase();
-    const searchUrl = `${baseUrl}/api/search/multi?per_page=5&q=${encodeURIComponent(q)}`;
-    const searchRes = await fetch(searchUrl, { signal }).then(r => r.json());
-    
-    const songSection = searchRes?.response?.sections?.find(s => s.type === "song");
-    const hits = songSection?.hits || [];
-    if (!hits.length) return null;
-    
-    const bestHit = hits[0];
-    const geniusUrl = bestHit.result?.url;
-    const songId = bestHit.result?.id;
-    if (!geniusUrl) return null;
-    
-    // Replace genius.com with our proxy base
-    const proxiedUrl = geniusUrl.replace(/^https?:\/\/genius\.com/, baseUrl);
-    const html = await fetch(proxiedUrl, { signal }).then(r => r.text());
 
-    // Parse HTML properly since regex fails on nested tags
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
-    const containerNodes = doc.querySelectorAll('[data-lyrics-container="true"]');
-    
-    if (!containerNodes || !containerNodes.length) return null;
-    
-    // Collect annotation IDs from <a> href links
-    const annotationIds = new Set();
-    
-    let plainLyrics = Array.from(containerNodes).map(node => {
-        // Remove junk elements like '122 Contributors'
-        node.querySelectorAll('[data-exclude-from-selection="true"]').forEach(el => el.remove());
-        
-        // Preserve annotations by replacing <a> tags with custom <annotation> tags
-        node.querySelectorAll('a').forEach(a => {
-            const href = a.getAttribute('href');
-            const match = href && href.match(/^\/([0-9]+)\//);
-            if (match) {
+  // Build ordered list of search queries according to specified requirements:
+  // 1. First: Check all specified artists simultaneously
+  // 2. Second: Check each artist one by one in sequence
+  // 3. Fallback: Search with title alone
+  const queryCandidates = [];
+  const seenQueries = new Set();
+
+  const addQuery = (artistPart) => {
+    const q = artistPart ? `${artistPart} ${title}`.trim() : title.trim();
+    const key = q.toLowerCase();
+    if (q && !seenQueries.has(key)) {
+      seenQueries.add(key);
+      queryCandidates.push(q);
+    }
+  };
+
+  const fullArtist = signature.fullArtistName || "";
+  const mainToken = signature.searchArtistToken || "";
+  const individualArtists = splitArtistNames(fullArtist);
+
+  // 1. All artists together
+  if (fullArtist) addQuery(fullArtist);
+  if (mainToken) addQuery(mainToken);
+
+  // 2. Individual artists one by one
+  for (const art of individualArtists) {
+    addQuery(art);
+    const token = getSearchArtistToken(art);
+    if (token) addQuery(token);
+  }
+
+  // 3. Fallback
+  addQuery("");
+
+  const baseUrl = getGeniusApiBase();
+
+  for (const q of queryCandidates) {
+    try {
+      const searchUrl = `${baseUrl}/api/search/multi?per_page=5&q=${encodeURIComponent(q)}`;
+      const searchRes = await fetch(searchUrl, { signal }).then((r) => r.json());
+
+      const songSection = searchRes?.response?.sections?.find((s) => s.type === "song");
+      const hits = songSection?.hits || [];
+      if (!hits.length) continue;
+
+      for (const hit of hits.slice(0, 3)) {
+        const geniusUrl = hit.result?.url;
+        const songId = hit.result?.id;
+        if (!geniusUrl) continue;
+
+        const proxiedUrl = geniusUrl.replace(/^https?:\/\/genius\.com/, baseUrl);
+        const html = await fetch(proxiedUrl, { signal }).then((r) => r.text());
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+        const containerNodes = doc.querySelectorAll('[data-lyrics-container="true"]');
+
+        if (!containerNodes || !containerNodes.length) continue;
+
+        const annotationIds = new Set();
+
+        let plainLyrics = Array.from(containerNodes)
+          .map((node) => {
+            node.querySelectorAll('[data-exclude-from-selection="true"]').forEach((el) => el.remove());
+            node.querySelectorAll("a").forEach((a) => {
+              const href = a.getAttribute("href");
+              const match = href && href.match(/^\/([0-9]+)\//);
+              if (match) {
                 const id = match[1];
                 annotationIds.add(id);
                 let innerHtml = a.innerHTML;
-                // If annotation spans across <br>, split the annotation so it remains valid per-line
                 innerHtml = innerHtml.replace(/<br\s*\/?>/gi, `</annotation><br><annotation id="${id}">`);
                 a.outerHTML = `<annotation id="${id}">${innerHtml}</annotation>`;
-            }
-        });
-        
-        let inner = node.innerHTML;
-        // Remove literal formatting newlines from HTML before converting <br>
-        inner = inner.replace(/\r?\n/g, '');
-        // Convert <br> to newline
-        inner = inner.replace(/<br\s*\/?>/gi, '\n');
-        // Strip remaining HTML tags EXCEPT <annotation>
-        inner = inner.replace(/<(?!\/?annotation\b)[^>]+>/gi, '');
-        return inner;
-    }).join('\n');
-      
-    plainLyrics = plainLyrics
-      .replace(/&#x27;/g, "'")
-      .replace(/&amp;/g, "&")
-      .replace(/&quot;/g, '"')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&[a-z]+;/g, ''); // catch any other remaining entities just in case
+              }
+            });
 
-    // Fetch annotations content via /api/referents
-    let annotations = {};
-    if (songId && annotationIds.size > 0) {
-      try {
-        const refUrl = `${baseUrl}/api/referents?song_id=${songId}&per_page=50&text_format=html`;
-        const refRes = await fetch(refUrl, { signal }).then(r => r.json());
-        const referents = refRes?.response?.referents || [];
-        for (const ref of referents) {
-          const refId = String(ref.id);
-          if (ref.annotations && ref.annotations.length > 0) {
-            const ann = ref.annotations[0];
-            let bodyHtml = ann.body?.html || "";
-            // Strip HTML tags from annotation body, keep just text with line breaks
-            bodyHtml = bodyHtml.replace(/<br\s*\/?>/gi, '\n');
-            bodyHtml = bodyHtml.replace(/<\/p>\s*<p[^>]*>/gi, '\n\n');
-            bodyHtml = bodyHtml.replace(/<[^>]+>/g, '');
-            bodyHtml = bodyHtml.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#x27;/g, "'").replace(/&quot;/g, '"');
-            bodyHtml = bodyHtml.replace(/\n{2,}/g, '\n').trim();
-            if (bodyHtml) {
-              annotations[refId] = bodyHtml;
+            let inner = node.innerHTML;
+            inner = inner.replace(/\r?\n/g, "");
+            inner = inner.replace(/<br\s*\/?>/gi, "\n");
+            inner = inner.replace(/<(?!\/?annotation\b)[^>]+>/gi, "");
+            return inner;
+          })
+          .join("\n");
+
+        plainLyrics = plainLyrics
+          .replace(/&#x27;/g, "'")
+          .replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"')
+          .replace(/&nbsp;/g, " ")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&[a-z]+;/g, "")
+          .trim();
+
+        if (!plainLyrics) continue;
+
+        let annotations = {};
+        if (songId && annotationIds.size > 0) {
+          try {
+            const refUrl = `${baseUrl}/api/referents?song_id=${songId}&per_page=50&text_format=html`;
+            const refRes = await fetch(refUrl, { signal }).then((r) => r.json());
+            const referents = refRes?.response?.referents || [];
+            for (const ref of referents) {
+              const refId = String(ref.id);
+              if (ref.annotations && ref.annotations.length > 0) {
+                const ann = ref.annotations[0];
+                let bodyHtml = ann.body?.html || "";
+                bodyHtml = bodyHtml.replace(/<br\s*\/?>/gi, "\n");
+                bodyHtml = bodyHtml.replace(/<\/p>\s*<p[^>]*>/gi, "\n\n");
+                bodyHtml = bodyHtml.replace(/<[^>]+>/g, "");
+                bodyHtml = bodyHtml
+                  .replace(/&amp;/g, "&")
+                  .replace(/&lt;/g, "<")
+                  .replace(/&gt;/g, ">")
+                  .replace(/&#x27;/g, "'")
+                  .replace(/&quot;/g, '"');
+                bodyHtml = bodyHtml.replace(/\n{2,}/g, "\n").trim();
+                if (bodyHtml) {
+                  annotations[refId] = bodyHtml;
+                }
+              }
             }
+          } catch (annErr) {
+            console.warn("Failed to fetch Genius annotations", annErr);
           }
         }
-        console.log(`[Lyrics] Fetched ${Object.keys(annotations).length} Genius annotations`);
-      } catch (annErr) {
-        console.warn("Failed to fetch Genius annotations", annErr);
-      }
-    }
 
-    return normalizeLyricsRecord({
-      id: `genius_${bestHit.result.id}`,
-      syncedLyrics: "",
-      plainLyrics,
-      trackName: bestHit.result.title,
-      artistName: bestHit.result.primary_artist?.name || artist,
-      duration: duration,
-      annotations
-    }, duration, "Genius");
-    
-  } catch (e) {
-    console.warn("Genius fetch failed", e);
-    return null;
+        console.log(`[Lyrics Aggregator] Found Genius lyrics using query "${q}" for "${hit.result?.title}"`);
+        return normalizeLyricsRecord(
+          {
+            id: `genius_${hit.result.id}`,
+            syncedLyrics: "",
+            plainLyrics,
+            trackName: hit.result.title,
+            artistName: hit.result.primary_artist?.name || fullArtist,
+            duration: duration,
+            annotations
+          },
+          duration,
+          "Genius"
+        );
+      }
+    } catch (e) {
+      console.warn(`Genius fetch failed for query "${q}"`, e);
+    }
   }
+
+  return null;
 }
 
 // ------------------------------------------------
