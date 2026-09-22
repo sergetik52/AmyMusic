@@ -439,7 +439,7 @@ export function SettingsView({ profileData, onProfileSave }) {
         <div className="w-full max-w-[1200px]">
           {/* Top Nav */}
           <div className="flex gap-10 mb-8 border-b border-[#2a2a2a] overflow-x-auto no-scrollbar">
-            {["profile", "general", "integrations"].map((tab) => (
+            {["profile", "general", "customization", "integrations"].map((tab) => (
               <div
                 key={tab}
                 onClick={() => { setActiveTab(tab); setActiveSubTab(tab === "general" ? "main" : "proxy"); }}
@@ -447,7 +447,7 @@ export function SettingsView({ profileData, onProfileSave }) {
                   activeTab === tab ? "text-white" : "text-white/50 hover:text-[#ccc]"
                 }`}
               >
-                {tab === "profile" ? "Профиль" : tab === "general" ? "Общие" : "Интеграции"}
+                {tab === "profile" ? "Профиль" : tab === "general" ? "Общие" : tab === "customization" ? "Кастомизация" : "Интеграции"}
                 {activeTab === tab && (
                   <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-white pointer-events-none" />
                 )}
@@ -744,6 +744,55 @@ export function SettingsView({ profileData, onProfileSave }) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Tab Content: Кастомизация */}
+        {activeTab === "customization" && (
+          <div className="animate-[fadeIn_0.3s_ease-out] max-w-3xl">
+            <div className="text-2xl font-bold mt-2.5">Кастомизация</div>
+            <div className="text-sm text-white/50 mt-1 mb-8">Настройте внешний вид и элементы интерфейса</div>
+
+            <div className="mb-8">
+              <div className="text-base font-semibold mb-2">Панель навигации</div>
+              <div className="text-sm text-white/50 mb-5">Выберите режим работы бокового меню навигации</div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <SettingsCard
+                  icon={
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                      <rect width="18" height="18" x="3" y="3" rx="2" />
+                      <path d="M9 3v18" />
+                      <path d="m14 9 3 3-3 3" />
+                    </svg>
+                  }
+                  title="Динамическая"
+                  desc="Панель раскрывается при наведении мыши (как сейчас)"
+                  active={(settings.customization?.sidebarMode || "dynamic") === "dynamic"}
+                  onClick={() => {
+                    const currentCust = settings.customization || {};
+                    updateField("customization", { ...currentCust, sidebarMode: "dynamic" });
+                  }}
+                />
+
+                <SettingsCard
+                  icon={
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                      <rect width="18" height="18" x="3" y="3" rx="2" />
+                      <path d="M9 3v18" />
+                      <path d="M14 12h4" />
+                    </svg>
+                  }
+                  title="Статическая"
+                  desc="Панель фиксируется, ее можно открывать и закрывать кнопкой"
+                  active={settings.customization?.sidebarMode === "static"}
+                  onClick={() => {
+                    const currentCust = settings.customization || {};
+                    updateField("customization", { ...currentCust, sidebarMode: "static" });
+                  }}
+                />
+              </div>
+            </div>
           </div>
         )}
 

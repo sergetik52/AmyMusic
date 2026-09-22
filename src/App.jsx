@@ -465,7 +465,10 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
   const [settings, setSettings] = useState(() => getProfileSettings());
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const isCollapsed = !isHovered;
+  const [isStaticExpanded, setIsStaticExpanded] = useState(false);
+
+  const sidebarMode = settings.customization?.sidebarMode || "dynamic";
+  const isCollapsed = sidebarMode === "static" ? !isStaticExpanded : !isHovered;
   const [pinnedPlaylists, setPinnedPlaylists] = useState(() => getPinnedPlaylists());
 
   useEffect(() => {
@@ -519,10 +522,27 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
     <>
       <aside
         className={`hidden md:flex shrink-0 flex-col justify-center py-4 font-medium transition-all duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] relative z-20 ${isCollapsed ? "w-[72px] bg-transparent" : "w-[200px] bg-black/80 backdrop-blur-md rounded-r-2xl"}`}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => { if (sidebarMode === "dynamic") setIsHovered(true); }}
+        onMouseLeave={() => { if (sidebarMode === "dynamic") setIsHovered(false); }}
       >
         <nav className="flex flex-col gap-1 w-full">
+          {sidebarMode === "static" && (
+            <div className={`flex items-center mb-2 px-3 ${isCollapsed ? "justify-center" : "justify-between"}`}>
+              {!isCollapsed && (
+                <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest px-2">Меню</span>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsStaticExpanded((prev) => !prev)}
+                className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                title={isCollapsed ? "Развернуть панель" : "Свернуть панель"}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-300 ${!isCollapsed ? "rotate-180" : ""}`}>
+                  <path d="m13 17 5-5-5-5M6 17l5-5-5-5"/>
+                </svg>
+              </button>
+            </div>
+          )}
             {/* Pinned playlists */}
             {pinnedPlaylists.length > 0 && (
               <div className={`flex flex-col gap-1 w-full mb-2 pb-2 border-b border-white/[0.06] transition-all duration-300`}>

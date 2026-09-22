@@ -15,6 +15,9 @@ export const defaultProfileSettings = {
     coverRounding: "rounded", // "rounded", "extra", "circle"
     cardHoverEffect: "glow" // "glow", "zoom", "flat"
   },
+  customization: {
+    sidebarMode: "dynamic" // "dynamic" (как сейчас), "static" (можно закрывать и открывать)
+  },
   displayName: "Local",
   avatarUrl: "",
   soundCloudClientId: "",
@@ -62,7 +65,11 @@ export function getProfileSettings() {
   const stored = readJson(window.localStorage.getItem(PROFILE_SETTINGS_KEY));
   return {
     ...defaultProfileSettings,
-    ...(stored && typeof stored === "object" ? stored : {})
+    ...(stored && typeof stored === "object" ? stored : {}),
+    customization: {
+      ...defaultProfileSettings.customization,
+      ...(stored?.customization || {})
+    }
   };
 }
 
@@ -72,6 +79,10 @@ export function saveProfileSettings(settings, silent = false) {
   const normalized = {
     ...defaultProfileSettings,
     ...settings,
+    customization: {
+      ...defaultProfileSettings.customization,
+      ...(settings?.customization || {})
+    },
     displayName: String(settings?.displayName || defaultProfileSettings.displayName).trim() || defaultProfileSettings.displayName,
     avatarUrl: String(settings?.avatarUrl || "").trim(),
     soundCloudClientId: String(settings?.soundCloudClientId || "").trim(),
