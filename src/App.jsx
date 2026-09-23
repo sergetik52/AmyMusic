@@ -2782,7 +2782,7 @@ function WaveformPlayer({ onOpenFull }) {
         if (event.key === "ArrowRight") seek(Math.min(duration, currentTime + 5));
       }}
     >
-      <div className={`absolute inset-0 flex items-center gap-[3px] px-2 ${isPlaying ? "waveform-playing" : ""}`} aria-hidden="true">
+      <div className="absolute inset-x-0 bottom-0 flex h-1/2 items-end gap-[3px] overflow-hidden px-2" aria-hidden="true">
         {bars.map((height, index) => (
           <span
             key={`${currentTrack?.id || "empty"}-${index}`}
