@@ -2848,7 +2848,7 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
 
       <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100">
         <div className="pointer-events-auto flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
-          <button type="button" className={`wave-control ${isShuffle ? "wave-control-active" : ""}`} onClick={toggleShuffle} aria-label="Перемешать треки" aria-pressed={isShuffle} title="Перемешать треки">
+          <button type="button" className={`wave-control wave-toggle ${isShuffle ? "wave-control-active" : ""}`} onClick={toggleShuffle} aria-label="Перемешать треки" aria-pressed={isShuffle} title="Перемешать треки">
             <img src="/shuffle.svg" alt="" />
           </button>
           <button type="button" className="wave-control" onClick={previous} aria-label="Предыдущий трек" title="Предыдущий трек">
@@ -2866,7 +2866,7 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
           <button type="button" className="wave-control" onClick={next} aria-label="Следующий трек" title="Следующий трек">
             <img src="/next.svg" alt="" />
           </button>
-          <button type="button" className={`wave-control ${repeatMode !== "off" ? "wave-control-active" : ""}`} onClick={cycleRepeatMode} aria-label="Повтор трека или плейлиста" aria-pressed={repeatMode !== "off"} title="Повтор">
+          <button type="button" className={`wave-control wave-toggle ${repeatMode !== "off" ? "wave-control-active" : ""}`} onClick={cycleRepeatMode} aria-label="Повтор трека или плейлиста" aria-pressed={repeatMode !== "off"} title="Повтор">
             <img src="/repeat.svg" alt="" />
             {repeatMode === "one" && <span className="wave-control-badge">1</span>}
           </button>
