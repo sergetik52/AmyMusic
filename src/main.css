@@ -227,7 +227,6 @@ button {
 
 .wave-toggle.wave-control-active {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.14);
 }
 
 .wave-control-badge {
