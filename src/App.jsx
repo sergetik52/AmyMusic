@@ -2741,6 +2741,7 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
   const progress = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0;
   const playedBars = Math.round(progress * bars.length);
   const trackArtists = useMemo(() => getTrackArtists(currentTrack), [currentTrack]);
+  const controlsVisibility = isPlaying ? "opacity-0 group-hover/wave:opacity-100" : "opacity-100";
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -2846,7 +2847,7 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
         </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100">
+      <div className={`pointer-events-none absolute inset-0 z-30 flex items-center justify-center transition-opacity duration-200 ${controlsVisibility}`}>
         <div className="pointer-events-auto flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
           <button type="button" className={`wave-control wave-toggle ${isShuffle ? "wave-control-active" : ""}`} onClick={toggleShuffle} aria-label="Перемешать треки" aria-pressed={isShuffle} title="Перемешать треки">
             <img src="/shuffle.svg" alt="" />
@@ -2874,7 +2875,7 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
       </div>
 
       <div className="absolute right-3 top-1/2 z-40 -translate-y-1/2" onClick={(event) => event.stopPropagation()}>
-        <button type="button" className="wave-control opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100" onClick={() => setShowVolume((open) => !open)} aria-label="Громкость" title="Громкость">
+        <button type="button" className={`wave-control transition-opacity duration-200 ${controlsVisibility}`} onClick={() => setShowVolume((open) => !open)} aria-label="Громкость" title="Громкость">
           <img src={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"} alt="" />
         </button>
         <div className={`absolute right-full top-1/2 mr-2 flex h-9 origin-right -translate-y-1/2 items-center gap-2 overflow-hidden rounded-full bg-black/80 px-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl transition-all duration-200 ${showVolume ? "pointer-events-auto w-40 translate-x-0 opacity-100" : "pointer-events-none w-0 translate-x-1 opacity-0"}`}>
