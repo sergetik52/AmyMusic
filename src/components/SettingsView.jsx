@@ -868,7 +868,7 @@ export function SettingsView({ profileData, onProfileSave }) {
               <div className="text-base font-semibold mb-2">Игровой оверлей (Dynamic Island)</div>
               <div className="text-sm text-white/50 mb-5">Компактный островок с обложкой поверх всех окон и игр</div>
               
-              <div className="bg-[#141414] rounded-xl border border-[#2a2a2a] p-5">
+              <div>
                 <SettingsToggle 
                   title="Включить оверлей" 
                   description="Показывать мини-плеер поверх остальных окон" 
