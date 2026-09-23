@@ -797,11 +797,11 @@ export function SettingsView({ profileData, onProfileSave }) {
 
         {/* Tab Content: Кастомизация */}
         {activeTab === "customization" && (
-          <div className="animate-[fadeIn_0.3s_ease-out] max-w-3xl">
+          <div className="animate-[fadeIn_0.3s_ease-out] max-w-3xl flex flex-col">
             <div className="text-2xl font-bold mt-2.5">Кастомизация</div>
             <div className="text-sm text-white/50 mt-1 mb-8">Настройте внешний вид и элементы интерфейса</div>
 
-            <div className="mb-8">
+            <div className="mb-8 order-2">
               <div className="text-base font-semibold mb-2">Панель навигации</div>
               <div className="text-sm text-white/50 mb-5">Выберите положение и режим работы меню навигации</div>
 
@@ -864,7 +864,7 @@ export function SettingsView({ profileData, onProfileSave }) {
               </div>
             </div>
 
-            <div className="mb-8 mt-12">
+            <div className="mb-8 order-1">
               <div className="text-base font-semibold mb-2">Игровой оверлей (Dynamic Island)</div>
               <div className="text-sm text-white/50 mb-5">Компактный островок с обложкой поверх всех окон и игр</div>
               
