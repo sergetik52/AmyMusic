@@ -674,6 +674,41 @@ export function SettingsView({ profileData, onProfileSave }) {
                     checked={Boolean(settings.crossfadeEnabled)} 
                     onChange={(v) => updateField("crossfadeEnabled", v)} 
                   />
+                  {settings.crossfadeEnabled && (
+                    <div className="mt-1 border-t border-white/[0.08] pt-4 animate-[fadeIn_0.2s_ease-out]">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <div className="text-sm font-semibold">Начинать переход за</div>
+                          <div className="text-xs text-white/45 mt-1">до конца текущего трека</div>
+                        </div>
+                        <span className="text-xs font-semibold text-white/70 bg-white/[0.08] px-2 py-1 rounded-md">
+                          {Number(settings.crossfadeSeconds) || 4} сек
+                        </span>
+                      </div>
+                      <div className="relative h-5 flex items-center">
+                        <div className="absolute left-0 right-0 h-1 rounded-full bg-white/10 pointer-events-none">
+                          <div
+                            className="h-full rounded-full bg-white/55 transition-[width] duration-150"
+                            style={{ width: `${(((Number(settings.crossfadeSeconds) || 4) - 1) / 11) * 100}%` }}
+                          />
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="12"
+                          step="1"
+                          value={Number(settings.crossfadeSeconds) || 4}
+                          onChange={(event) => updateField("crossfadeSeconds", Number(event.target.value))}
+                          aria-label="Начало кроссфейда до конца трека"
+                          className="relative z-10 w-full h-5 appearance-none bg-transparent cursor-pointer accent-white"
+                        />
+                      </div>
+                      <div className="flex justify-between text-[11px] text-white/30 mt-1">
+                        <span>1 сек</span>
+                        <span>12 сек</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
