@@ -174,6 +174,73 @@ button {
   isolation: isolate;
 }
 
+.waveform-bar {
+  display: block;
+  flex: 1 1 0%;
+  min-width: 1px;
+  height: var(--wave-height);
+  max-height: 54px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  transform: scaleY(1);
+  transform-origin: center;
+  transition: background-color 180ms ease, opacity 180ms ease;
+}
+
+.waveform-bar-played {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.waveform-playing .waveform-bar {
+  animation: waveformPulse 900ms ease-in-out infinite alternate;
+  animation-delay: var(--wave-delay);
+}
+
+@keyframes waveformPulse {
+  from { transform: scaleY(0.78); }
+  to { transform: scaleY(1.18); }
+}
+
+.wave-control {
+  display: grid;
+  height: 34px;
+  width: 34px;
+  place-items: center;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.72);
+  transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.wave-control:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.wave-control:active,
+.wave-play:active {
+  transform: scale(0.92);
+}
+
+.wave-control img {
+  width: 18px;
+  height: 18px;
+  filter: brightness(0) invert(1);
+  opacity: 0.8;
+}
+
+.wave-play {
+  display: grid;
+  height: 42px;
+  width: 42px;
+  place-items: center;
+  border-radius: 999px;
+  background: #f4f4f4;
+  transition: background-color 180ms ease, transform 180ms ease;
+}
+
+.wave-play:hover { background: #fff; }
+.wave-play img { width: 19px; height: 19px; filter: brightness(0); }
+
 
 .player-seek-slider {
   position: absolute;

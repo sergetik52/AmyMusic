@@ -2703,74 +2703,142 @@ function BottomPlayerScrubBar({ trackPalette, seek }) {
   );
 }
 
-function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, isKaraokeOpen }) {
-  const { seek, trackPalette, next, previous } = useAudioPlayer();
-    const touchStartRef = useRef(null);
+function buildWaveform(track, count = 180) {
+  const source = `${track?.id || "empty"}:${track?.title || "track"}:${track?.artist || "artist"}`;
+  let seed = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    seed = (seed * 31 + source.charCodeAt(index)) >>> 0;
+  }
 
-  const handleTouchStart = (e) => {
-    if (e.touches && e.touches.length === 1) {
-      touchStartRef.current = {
-        x: e.touches[0].clientX,
-        y: e.touches[0].clientY,
-        time: Date.now()
-      };
+  return Array.from({ length: count }, (_, index) => {
+    seed = (1664525 * seed + 1013904223) >>> 0;
+    const beat = Math.abs(Math.sin(index * 0.29 + (seed % 97) / 23));
+    const variation = 0.45 + ((seed % 100) / 100) * 0.55;
+    return Math.max(5, Math.round((8 + beat * 43) * variation));
+  });
+}
+
+function WaveformPlayer({ onOpenFull }) {
+  const {
+    currentTrack,
+    isPlaying,
+    isLoading,
+    effectiveVolume,
+    togglePlay,
+    next,
+    previous,
+    seek,
+    setVolume,
+    toggleMute
+  } = useAudioPlayer();
+  const { currentTime, duration } = useAudioTime();
+  const [showVolume, setShowVolume] = useState(false);
+  const touchStartRef = useRef(null);
+  const bars = useMemo(() => buildWaveform(currentTrack), [currentTrack?.id, currentTrack?.title, currentTrack?.artist]);
+  const progress = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0;
+  const playedBars = Math.round(progress * bars.length);
+
+  const handleSeek = (event) => {
+    if (!duration) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    seek(percent * duration);
+  };
+
+  const handleTouchStart = (event) => {
+    if (event.touches?.length === 1) {
+      touchStartRef.current = { x: event.touches[0].clientX, y: event.touches[0].clientY, time: Date.now() };
     }
   };
 
-  const handleTouchEnd = (e) => {
-    if (!touchStartRef.current || !e.changedTouches || e.changedTouches.length === 0) return;
-    const touchEnd = e.changedTouches[0];
-    const deltaX = touchEnd.clientX - touchStartRef.current.x;
-    const deltaY = touchEnd.clientY - touchStartRef.current.y;
-    const deltaTime = Date.now() - touchStartRef.current.time;
+  const handleTouchEnd = (event) => {
+    if (!touchStartRef.current || !event.changedTouches?.length) return;
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    const touchDuration = Date.now() - touchStartRef.current.time;
     touchStartRef.current = null;
-
-    if (deltaTime > 600) return;
-
-    // Swipe UP opens full player
-    if (deltaY < -35 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
-      onOpenFull?.();
-      return;
-    }
-
-    // Horizontal swipe switches tracks
+    if (touchDuration > 600) return;
     if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
-      if (deltaX < 0) {
-        next();
-      } else {
-        previous();
-      }
+      deltaX < 0 ? next() : previous();
     }
   };
 
-  
   return (
-    <div className="group/player relative z-30 w-full select-none">
-      {/* Main player box */}
-      <div
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        className="relative z-10 w-full rounded-[var(--player-radius,20px)] max-sm:rounded-xl shadow-2xl max-sm:shadow-none transition-all duration-300"
-        style={{
-          "--player-accent": "#eeeeee",
-          "--player-accent-muted": "#8d8d8d",
-          "--player-accent-soft": "rgba(255,255,255,.08)",
-          backgroundColor: "rgba(14,14,15,.96)",
-          border: "1px solid rgba(255,255,255,.09)",
-          boxShadow: "0 18px 55px rgba(0,0,0,.55)"
-        }}
-      >
-        <BottomPlayerScrubBar trackPalette={trackPalette} seek={seek} />
+    <div
+      className="group/wave relative z-30 h-[76px] w-full select-none overflow-hidden rounded-[var(--player-radius,24px)] bg-black"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onClick={handleSeek}
+      role="slider"
+      aria-label="Позиция трека"
+      aria-valuenow={Math.round(currentTime || 0)}
+      aria-valuemin="0"
+      aria-valuemax={Math.round(duration || 0)}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (!duration) return;
+        if (event.key === "ArrowLeft") seek(Math.max(0, currentTime - 5));
+        if (event.key === "ArrowRight") seek(Math.min(duration, currentTime + 5));
+      }}
+    >
+      <div className={`absolute inset-0 flex items-center gap-[3px] px-2 ${isPlaying ? "waveform-playing" : ""}`} aria-hidden="true">
+        {bars.map((height, index) => (
+          <span
+            key={`${currentTrack?.id || "empty"}-${index}`}
+            className={`waveform-bar ${index < playedBars ? "waveform-bar-played" : ""}`}
+            style={{ "--wave-height": `${height}px`, "--wave-delay": `${(index % 12) * 45}ms` }}
+          />
+        ))}
+      </div>
 
-        {/* Main player controls row */}
-        <div className="relative z-10 flex items-center justify-between gap-4 max-sm:gap-2 px-4 max-sm:px-2.5 py-2.5 max-sm:py-1.5">
-          <TrackInfo onOpenFull={onOpenFull} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
-          <PlayerControls />
-          <PlayerTools onOpenFull={onOpenFull} onToggleKaraoke={onToggleKaraoke} isKaraokeOpen={isKaraokeOpen} />
+      <button
+        type="button"
+        onClick={(event) => { event.stopPropagation(); onOpenFull?.(); }}
+        className="absolute left-3 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3 rounded-xl pr-3 text-left outline-none transition hover:bg-black/35 focus-visible:ring-2 focus-visible:ring-white/60"
+        aria-label="Открыть полный плеер"
+      >
+        <img src={currentTrack?.cover || "/logo.png"} alt="" className="h-14 w-14 rounded-xl border border-white/15 object-cover shadow-lg" />
+        <span className="min-w-0 max-w-[190px] max-md:max-w-[130px]">
+          <span className="block truncate text-[14px] font-semibold text-white">{currentTrack?.title || "Нет трека"}</span>
+          <span className="mt-0.5 block truncate text-[12px] text-white/48">{currentTrack?.artist || "Выберите трек"}</span>
+        </span>
+      </button>
+
+      <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100 group-focus-within/wave:opacity-100">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-xl bg-black/90 px-2 py-1.5 shadow-2xl ring-1 ring-white/10" onClick={(event) => event.stopPropagation()}>
+          <button type="button" className="wave-control" onClick={previous} aria-label="Предыдущий трек" title="Предыдущий трек">
+            <img src="/prev.svg" alt="" />
+          </button>
+          <button type="button" className="wave-play" onClick={togglePlay} aria-label={isPlaying ? "Пауза" : "Воспроизвести"} title={isPlaying ? "Пауза" : "Воспроизвести"}>
+            {isLoading ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-black/25 border-t-black" aria-hidden="true" />
+            ) : isPlaying ? (
+              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-black" aria-hidden="true"><path d="M6 5h4v14H6V5Zm8 0h4v14h-4V5Z" /></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-black" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z" /></svg>
+            )}
+          </button>
+          <button type="button" className="wave-control" onClick={next} aria-label="Следующий трек" title="Следующий трек">
+            <img src="/next.svg" alt="" />
+          </button>
+        </div>
+      </div>
+
+      <div className="absolute right-3 top-1/2 z-40 -translate-y-1/2" onClick={(event) => event.stopPropagation()} onMouseEnter={() => setShowVolume(true)} onMouseLeave={() => setShowVolume(false)}>
+        <button type="button" className="wave-control opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100 group-focus-within/wave:opacity-100" onClick={toggleMute} aria-label="Громкость" title="Громкость">
+          <img src={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"} alt="" />
+        </button>
+        <div className={`absolute bottom-11 right-0 rounded-xl bg-[#111]/95 p-3 shadow-2xl ring-1 ring-white/10 transition-all ${showVolume ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"}`}>
+          <input type="range" min="0" max="100" value={Math.round(effectiveVolume * 100)} onChange={(event) => setVolume(Number(event.target.value) / 100)} aria-label="Громкость" className="h-1 w-24 accent-white" />
         </div>
       </div>
     </div>
   );
+}
+
+function BottomPlayer({ onOpenFull }) {
+  return <WaveformPlayer onOpenFull={onOpenFull} />;
 }
 
 export function applyAppearanceSettings(appearance = {}) {
@@ -3085,15 +3153,10 @@ export default function App() {
           {renderContent()}
         </div>
         {true && (
-          <div className="relative z-40 flex shrink-0 flex-col gap-1 max-md:fixed max-md:bottom-14 max-md:left-2 max-md:right-2">
+          <div className="relative z-40 -mx-3 flex shrink-0 flex-col max-md:fixed max-md:bottom-14 max-md:left-2 max-md:right-2 max-md:mx-0">
             <BottomPlayer
               onOpenFull={() => setIsFullOpen(true)}
-              onOpenArtist={openArtist}
-              onOpenAlbum={openAlbum}
-              onToggleKaraoke={() => setIsMiniKaraokeOpen((v) => !v)}
-              isKaraokeOpen={isMiniKaraokeOpen}
             />
-            <p className="self-end pr-1 text-[10px] text-neutral-600 max-md:hidden">Copyright © 2026 AmyMusic. Все права НЕ защищены.</p>
           </div>
         )}
       </div>
