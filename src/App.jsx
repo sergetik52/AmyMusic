@@ -623,7 +623,7 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
           <button
             type="button"
             onClick={() => setActiveTab("settings")}
-            className="group flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
+            className="group relative top-2 flex w-full items-center gap-3.5 rounded-full py-2.5 px-[18px] text-left text-sm transition-all duration-500 ease-[cubic-bezier(0.33,1,0.68,1)] text-white/50 hover:text-white/80 overflow-hidden hover:bg-white/[0.04]"
             title={isCollapsed ? (profileData?.displayName || currentUser || "Local") : undefined}
           >
             <div className="relative h-9 w-9 shrink-0">
@@ -2724,9 +2724,13 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
     isPlaying,
     isLoading,
     effectiveVolume,
+    isShuffle,
+    repeatMode,
     togglePlay,
     next,
     previous,
+    toggleShuffle,
+    cycleRepeatMode,
     seek,
     setVolume
   } = useAudioPlayer();
@@ -2844,6 +2848,9 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
 
       <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100">
         <div className="pointer-events-auto flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+          <button type="button" className={`wave-control ${isShuffle ? "wave-control-active" : ""}`} onClick={toggleShuffle} aria-label="Перемешать треки" aria-pressed={isShuffle} title="Перемешать треки">
+            <img src="/shuffle.svg" alt="" />
+          </button>
           <button type="button" className="wave-control" onClick={previous} aria-label="Предыдущий трек" title="Предыдущий трек">
             <img src="/prev.svg" alt="" />
           </button>
@@ -2858,6 +2865,10 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
           </button>
           <button type="button" className="wave-control" onClick={next} aria-label="Следующий трек" title="Следующий трек">
             <img src="/next.svg" alt="" />
+          </button>
+          <button type="button" className={`wave-control ${repeatMode !== "off" ? "wave-control-active" : ""}`} onClick={cycleRepeatMode} aria-label="Повтор трека или плейлиста" aria-pressed={repeatMode !== "off"} title="Повтор">
+            <img src="/repeat.svg" alt="" />
+            {repeatMode === "one" && <span className="wave-control-badge">1</span>}
           </button>
         </div>
       </div>

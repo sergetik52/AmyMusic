@@ -197,6 +197,7 @@ button {
 }
 
 .wave-control {
+  position: relative;
   display: grid;
   height: 34px;
   width: 34px;
@@ -209,6 +210,26 @@ button {
 .wave-control:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
+}
+
+.wave-control-active {
+  color: var(--player-accent, #8341ef);
+}
+
+.wave-control-badge {
+  position: absolute;
+  margin-top: -12px;
+  margin-left: 12px;
+  display: grid;
+  height: 12px;
+  min-width: 12px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--player-accent, #8341ef);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .wave-control:active,
