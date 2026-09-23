@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AmyMusic Mini Player Prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #000;
+      --surface: #0d0d0e;
+      --surface-hover: #161618;
+      --line: rgba(255,255,255,.09);
+      --muted: rgba(255,255,255,.42);
+      --soft: rgba(255,255,255,.62);
+      --white: #f5f5f5;
+      --wave: #6e7e93;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      background: var(--bg);
+      color: var(--white);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .stage {
+      width: min(100%, 1160px);
+    }
+
+    .caption {
+      margin: 0 0 14px 4px;
+      color: rgba(255,255,255,.35);
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .player {
+      position: relative;
+      overflow: hidden;
+      min-height: 94px;
+      padding: 13px 16px 12px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--surface);
+      box-shadow: 0 18px 50px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.025);
+    }
+
+    .waveform {
+      position: absolute;
+      top: 8px;
+      left: 18px;
+      right: 18px;
+      height: 19px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      opacity: .9;
+      pointer-events: none;
+    }
+
+    .bar {
+      width: 2px;
+      min-height: 2px;
+      border-radius: 2px;
+      background: var(--wave);
+      opacity: .72;
+      transform-origin: center;
+      transition: background .2s ease, opacity .2s ease;
+    }
+
+    .bar.is-progress { background: #aab5c3; opacity: .95; }
+
+    .content {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
+      align-items: center;
+      gap: 20px;
+      min-height: 56px;
+      padding-top: 12px;
+    }
+
+    .track {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .cover {
+      width: 48px;
+      height: 48px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 13px;
+      background: #19191b;
+    }
+
+    .cover img { width: 100%; height: 100%; object-fit: cover; }
+    .track-copy { min-width: 0; }
+    .title, .artist { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .title { font-size: 14px; font-weight: 650; }
+    .artist { margin-top: 3px; color: var(--muted); font-size: 12px; }
+
+    button {
+      border: 0;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .controls, .tools {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .controls { justify-content: center; }
+    .tools { justify-content: flex-end; }
+
+    .icon-button {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--muted);
+      transition: background .18s ease, color .18s ease, transform .18s ease;
+    }
+
+    .icon-button:hover, .icon-button.active { background: var(--surface-hover); color: var(--white); }
+    .icon-button:active { transform: scale(.92); }
+    .icon-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+    .play {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      margin: 0 5px;
+      border-radius: 50%;
+      background: var(--white);
+      color: #080808;
+      transition: transform .18s ease, background .18s ease;
+    }
+
+    .play:hover { background: #fff; transform: scale(1.05); }
+    .play:active { transform: scale(.94); }
+    .play svg { width: 18px; height: 18px; fill: currentColor; }
+
+    .volume {
+      width: 88px;
+      height: 3px;
+      margin-left: 5px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: rgba(255,255,255,.13);
+    }
+
+    .volume span { display: block; width: 58%; height: 100%; border-radius: inherit; background: rgba(255,255,255,.75); }
+
+    .time {
+      display: none;
+      color: rgba(255,255,255,.35);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    @media (max-width: 760px) {
+      body { padding: 16px; }
+      .player { border-radius: 20px; padding-inline: 12px; }
+      .content { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+      .tools { display: none; }
+      .controls { justify-content: flex-end; }
+      .controls .icon-button:nth-child(1), .controls .icon-button:nth-child(2) { display: none; }
+    }
+
+    @media (max-width: 430px) {
+      .track { gap: 9px; }
+      .cover { width: 42px; height: 42px; border-radius: 11px; }
+      .title { font-size: 13px; }
+      .artist { font-size: 11px; }
+      .play { width: 38px; height: 38px; }
+      .controls { gap: 1px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <p class="caption">AmyMusic · mini player concept</p>
+    <section class="player" aria-label="Миниплеер">
+      <div class="waveform" id="waveform" aria-hidden="true"></div>
+
+      <div class="content">
+        <button class="track" type="button" aria-label="Открыть полный плеер">
+          <span class="cover"><img src="public/logo.png" alt="" /></span>
+          <span class="track-copy">
+            <span class="title">/godmode</span>
+            <span class="artist">Kai Angel</span>
+          </span>
+        </button>
+
+        <div class="controls" aria-label="Управление воспроизведением">
+          <button class="icon-button" type="button" aria-label="Предыдущий трек" title="Предыдущий трек">
+            <svg viewBox="0 0 24 24"><path d="M6 5v14M18 6 9 12l9 6V6Z" /></svg>
+          </button>
+          <button class="play" id="play" type="button" aria-label="Воспроизвести" title="Воспроизвести">
+            <svg id="playIcon" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z" /></svg>
+          </button>
+          <button class="icon-button" type="button" aria-label="Следующий трек" title="Следующий трек">
+            <svg viewBox="0 0 24 24"><path d="M18 5v14M6 6l9 6-9 6V6Z" /></svg>
+          </button>
+        </div>
+
+        <div class="tools" aria-label="Дополнительные действия">
+          <button class="icon-button" type="button" aria-label="Повтор" title="Повтор">
+            <svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3" /></svg>
+          </button>
+          <button class="icon-button" type="button" aria-label="Перемешать" title="Перемешать">
+            <svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M4 4l5 5m3 6 2 2" /></svg>
+          </button>
+          <button class="icon-button" id="mute" type="button" aria-label="Выключить звук" title="Выключить звук">
+            <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4ZM17 9l4 6m0-6-4 6" /></svg>
+          </button>
+          <span class="volume" aria-label="Громкость"><span id="volumeValue"></span></span>
+          <span class="time" id="time">0:00 / 3:42</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const waveform = document.querySelector('#waveform');
+    const heights = [4,7,11,8,15,10,17,8,6,12,18,13,7,10,15,19,12,8,5,9,13,16,11,7,14,19,11,8,5,12,17,13,7,10,16,20,14,9,5,11,15,18,12,8,6,13,17,11,7,10,14,18,12,8,5,9,15,19,13,7,11,16,10,6,9,14,18,12,7,10,15,19,13,8,5,11,16,12,7,9,14,18,10,6,12,16,11,7,13,18,12,8,5,10,15,19,13,7,11,16,10,6,9,14,18,12,8,5,10,15,19,13,7,11,16,10,6,9,14,18,12,8,5,10,15,19,13,7,11,16,10,6,9,14,18,12,8,5,10,15,19,13,7,11,16,10,6,9,14,18,12,8];
+    heights.forEach((height, index) => {
+      const bar = document.createElement('span');
+      bar.className = 'bar' + (index < heights.length * .42 ? ' is-progress' : '');
+      bar.style.height = `${height}px`;
+      waveform.appendChild(bar);
+    });
+
+    const play = document.querySelector('#play');
+    const playIcon = document.querySelector('#playIcon');
+    const mute = document.querySelector('#mute');
+    const volumeValue = document.querySelector('#volumeValue');
+    let playing = false;
+    let muted = false;
+
+    play.addEventListener('click', () => {
+      playing = !playing;
+      play.setAttribute('aria-label', playing ? 'Пауза' : 'Воспроизвести');
+      play.title = playing ? 'Пауза' : 'Воспроизвести';
+      playIcon.innerHTML = playing
+        ? '<path d="M7 5h3v14H7V5Zm7 0h3v14h-3V5Z" />'
+        : '<path d="m8 5 11 7-11 7V5Z" />';
+      document.querySelectorAll('.bar').forEach((bar, index) => {
+        bar.style.transform = playing ? `scaleY(${.72 + ((index % 4) * .1)})` : 'scaleY(1)';
+      });
+    });
+
+    mute.addEventListener('click', () => {
+      muted = !muted;
+      mute.classList.toggle('active', muted);
+      mute.setAttribute('aria-label', muted ? 'Включить звук' : 'Выключить звук');
+      volumeValue.style.width = muted ? '0%' : '58%';
+    });
+  </script>
+</body>
+</html>
