@@ -179,8 +179,10 @@ button {
   flex: 1 1 0%;
   min-width: 1px;
   height: var(--wave-height);
-  max-height: 54px;
-  border-radius: 999px;
+  max-height: 86px;
+  border-radius: 9999px !important;
+  overflow: hidden;
+  clip-path: inset(0 round 9999px);
   background: rgba(255, 255, 255, 0.28);
   transform: none;
   transform-origin: bottom;

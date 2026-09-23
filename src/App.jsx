@@ -2791,12 +2791,12 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
         if (event.key === "ArrowRight") seek(Math.min(duration, currentTime + 5));
       }}
     >
-      <div className="absolute inset-x-0 bottom-0 flex h-1/2 items-end gap-[3px] overflow-hidden rounded-b-[var(--player-radius,24px)] px-2" aria-hidden="true">
+      <div className="absolute inset-x-0 bottom-0 flex h-4/5 items-end gap-[3px] overflow-hidden rounded-b-[var(--player-radius,24px)] px-2" aria-hidden="true">
         {bars.map((height, index) => (
           <span
             key={`${currentTrack?.id || "empty"}-${index}`}
             className={`waveform-bar ${index < playedBars ? "waveform-bar-played" : ""}`}
-            style={{ "--wave-height": `${height}px`, "--wave-delay": `${(index % 12) * 45}ms`, borderRadius: "999px" }}
+            style={{ "--wave-height": `${Math.round(height * 1.6)}px`, "--wave-delay": `${(index % 12) * 45}ms`, borderRadius: "9999px", overflow: "hidden", clipPath: "inset(0 round 9999px)" }}
           />
         ))}
       </div>
