@@ -2718,7 +2718,7 @@ function buildWaveform(track, count = 180) {
   });
 }
 
-function WaveformPlayer({ onOpenFull }) {
+function WaveformPlayer({ onOpenFull, onOpenArtist }) {
   const {
     currentTrack,
     isPlaying,
@@ -2728,8 +2728,7 @@ function WaveformPlayer({ onOpenFull }) {
     next,
     previous,
     seek,
-    setVolume,
-    toggleMute
+    setVolume
   } = useAudioPlayer();
   const { currentTime, duration } = useAudioTime();
   const [showVolume, setShowVolume] = useState(false);
@@ -2737,6 +2736,15 @@ function WaveformPlayer({ onOpenFull }) {
   const bars = useMemo(() => buildWaveform(currentTrack), [currentTrack?.id, currentTrack?.title, currentTrack?.artist]);
   const progress = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0;
   const playedBars = Math.round(progress * bars.length);
+  const trackArtists = useMemo(() => getTrackArtists(currentTrack), [currentTrack]);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setShowVolume(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const handleSeek = (event) => {
     if (!duration) return;
@@ -2769,6 +2777,7 @@ function WaveformPlayer({ onOpenFull }) {
       className="group/wave relative z-30 h-[76px] w-full select-none overflow-visible rounded-[var(--player-radius,24px)] bg-black"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onMouseLeave={() => setShowVolume(false)}
       onClick={handleSeek}
       role="slider"
       aria-label="Позиция трека"
@@ -2792,18 +2801,39 @@ function WaveformPlayer({ onOpenFull }) {
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={(event) => { event.stopPropagation(); onOpenFull?.(); }}
-        className="absolute left-3 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3 rounded-xl pr-3 text-left outline-none transition hover:bg-black/35 focus-visible:ring-2 focus-visible:ring-white/60"
-        aria-label="Открыть полный плеер"
-      >
-        <img src={currentTrack?.cover || "/logo.png"} alt="" className="h-14 w-14 rounded-xl border border-white/15 object-cover shadow-lg" />
-        <span className="min-w-0 max-w-[190px] max-md:max-w-[130px]">
-          <span className="block truncate text-[14px] font-semibold text-white">{currentTrack?.title || "Нет трека"}</span>
-          <span className="mt-0.5 block truncate text-[12px] text-white/48">{currentTrack?.artist || "Выберите трек"}</span>
-        </span>
-      </button>
+      <div className="absolute left-3 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3 rounded-xl pr-3 text-left">
+        <button
+          type="button"
+          onClick={(event) => { event.stopPropagation(); onOpenFull?.(); }}
+          className="flex min-w-0 items-center gap-3 rounded-xl outline-none transition hover:bg-black/35 focus-visible:ring-2 focus-visible:ring-white/60"
+          aria-label="Открыть полный плеер"
+        >
+          <img src={currentTrack?.cover || "/logo.png"} alt="" className="h-14 w-14 rounded-xl border border-white/15 object-cover shadow-lg" />
+          <span className="min-w-0 max-w-[190px] max-md:max-w-[130px]">
+            <span className="block truncate text-[14px] font-semibold text-white">{currentTrack?.title || "Нет трека"}</span>
+          </span>
+        </button>
+        <div className="flex min-w-0 max-w-[190px] max-md:max-w-[130px] items-center gap-1 overflow-hidden whitespace-nowrap text-[12px] text-white/48">
+          {trackArtists.length > 0 ? trackArtists.map((artist, index) => (
+            <React.Fragment key={`${artist.id || artist.name}-${index}`}>
+              {index > 0 && <span className="text-white/25">×</span>}
+              <button
+                type="button"
+                className="truncate rounded-md outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenArtist?.(artist);
+                }}
+                title={artist.name || artist.username}
+              >
+                {artist.name || artist.username}
+              </button>
+            </React.Fragment>
+          )) : (
+            <span className="truncate">Выберите трек</span>
+          )}
+        </div>
+      </div>
 
       <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100">
         <div className="pointer-events-auto flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
@@ -2825,20 +2855,20 @@ function WaveformPlayer({ onOpenFull }) {
         </div>
       </div>
 
-      <div className="absolute right-3 top-1/2 z-40 -translate-y-1/2" onClick={(event) => event.stopPropagation()} onMouseEnter={() => setShowVolume(true)} onMouseLeave={() => setShowVolume(false)}>
-        <button type="button" className="wave-control opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100" onClick={toggleMute} aria-label="Громкость" title="Громкость">
+      <div className="absolute right-3 top-1/2 z-40 -translate-y-1/2" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="wave-control opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100" onClick={() => setShowVolume((open) => !open)} aria-label="Громкость" title="Громкость">
           <img src={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"} alt="" />
         </button>
-        <div className={`absolute bottom-[calc(100%+8px)] right-0 rounded-xl bg-[#111]/95 p-3 shadow-2xl ring-1 ring-white/10 transition-all ${showVolume ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"}`}>
-          <input type="range" min="0" max="100" value={Math.round(effectiveVolume * 100)} onChange={(event) => setVolume(Number(event.target.value) / 100)} aria-label="Громкость" className="h-1 w-24 accent-white" />
+        <div className={`absolute right-full top-1/2 mr-2 flex h-9 origin-right -translate-y-1/2 items-center overflow-hidden rounded-full bg-black/80 px-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl transition-all duration-200 ${showVolume ? "pointer-events-auto w-32 translate-x-0 opacity-100" : "pointer-events-none w-0 translate-x-1 opacity-0"}`}>
+          <input type="range" min="0" max="100" value={Math.round(effectiveVolume * 100)} onChange={(event) => setVolume(Number(event.target.value) / 100)} aria-label="Громкость" className="h-1 w-full min-w-24 accent-white" />
         </div>
       </div>
     </div>
   );
 }
 
-function BottomPlayer({ onOpenFull }) {
-  return <WaveformPlayer onOpenFull={onOpenFull} />;
+function BottomPlayer({ onOpenFull, onOpenArtist }) {
+  return <WaveformPlayer onOpenFull={onOpenFull} onOpenArtist={onOpenArtist} />;
 }
 
 export function applyAppearanceSettings(appearance = {}) {
@@ -3156,6 +3186,7 @@ export default function App() {
           <div className="relative z-40 -mx-3 flex shrink-0 flex-col max-md:fixed max-md:bottom-14 max-md:left-2 max-md:right-2 max-md:mx-0">
             <BottomPlayer
               onOpenFull={() => setIsFullOpen(true)}
+              onOpenArtist={openArtist}
             />
           </div>
         )}
