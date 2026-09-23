@@ -793,6 +793,70 @@ export function SettingsView({ profileData, onProfileSave }) {
                 />
               </div>
             </div>
+
+            <div className="mb-8 mt-12">
+              <div className="text-base font-semibold mb-2">Игровой оверлей (Dynamic Island)</div>
+              <div className="text-sm text-white/50 mb-5">Компактный островок с обложкой поверх всех окон и игр</div>
+              
+              <div className="bg-[#141414] rounded-xl border border-[#2a2a2a] p-5">
+                <SettingsToggle 
+                  title="Включить оверлей" 
+                  description="Показывать мини-плеер поверх остальных окон" 
+                  checked={Boolean(settings.gameOverlayEnabled)} 
+                  onChange={(v) => { 
+                    updateField("gameOverlayEnabled", v); 
+                    isDesktop && window.amyMusicDesktop?.toggleOverlay?.(v); 
+                  }} 
+                  disabled={!isDesktop}
+                />
+
+                <div className={`transition-all duration-300 overflow-hidden ${settings.gameOverlayEnabled ? "max-h-[300px] opacity-100 mt-4 border-t border-[#2a2a2a] pt-4" : "max-h-0 opacity-0"}`}>
+                  <div className="flex flex-col gap-5">
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Размер свернутого режима</div>
+                      <div className="flex items-center gap-4">
+                        <input 
+                          type="range" 
+                          min="0.8" 
+                          max="1.5" 
+                          step="0.05"
+                          value={settings.overlayScale || 1.0}
+                          onChange={(e) => {
+                            const v = parseFloat(e.target.value);
+                            updateField("overlayScale", v);
+                            isDesktop && window.amyMusicDesktop?.resizeOverlayWindow?.(false, v, settings.overlayPosition || "top");
+                          }}
+                          className="flex-1 h-1.5 bg-[#333] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+                        />
+                        <div className="text-sm font-mono bg-[#222] px-2 py-1 rounded w-14 text-center">
+                          {Math.round((settings.overlayScale || 1.0) * 100)}%
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Расположение на экране</div>
+                      <select 
+                        value={settings.overlayPosition || "top"}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          updateField("overlayPosition", v);
+                          isDesktop && window.amyMusicDesktop?.resizeOverlayWindow?.(false, settings.overlayScale || 1.0, v);
+                        }}
+                        className="w-full bg-[#222] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/50 cursor-pointer"
+                      >
+                        <option value="top">Сверху по центру (По умолчанию)</option>
+                        <option value="bottom">Снизу по центру</option>
+                        <option value="top-left">Сверху слева</option>
+                        <option value="top-right">Сверху справа</option>
+                        <option value="bottom-left">Снизу слева</option>
+                        <option value="bottom-right">Снизу справа</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

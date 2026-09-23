@@ -741,7 +741,7 @@ function PlaylistView({
   );
 }
 
-export function CollectionView({ onOpenArtist, onOpenAlbum }) {
+export function CollectionView({ onOpenArtist, onOpenAlbum, initialPlaylistId }) {
   const {
     currentTrack,
     isPlaying,
@@ -764,35 +764,19 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
   } = useAudioPlayer();
   const [playlistTitle, setPlaylistTitle] = useState("");
   const [playlistCover, setPlaylistCover] = useState("");
-  const [activePlaylist, setActivePlaylist] = useState(null);
+  const [activePlaylist, setActivePlaylist] = useState(() => {
+    if (initialPlaylistId) {
+      const found = userPlaylists.find((p) => p.id === initialPlaylistId) || savedReleases.find((p) => String(p.id) === String(initialPlaylistId));
+      if (found) return found;
+    }
+    return null;
+  });
   const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
   const [isAddPlaylistOpen, setIsAddPlaylistOpen] = useState(false);
   const [trackWaveLoading, setTrackWaveLoading] = useState(false);
   const fileInputRef = React.useRef(null);
   const mobileLikedScrollRef = useRef(null);
   useHorizontalScroll(mobileLikedScrollRef, [likedTracks]);
-
-  // Open playlist from sidebar pin click
-  useEffect(() => {
-    const handler = (e) => {
-      const plId = e.detail;
-      const found = userPlaylists.find((p) => p.id === plId) || savedReleases.find((p) => String(p.id) === String(plId));
-      if (found) {
-        openPlaylist(found);
-      }
-    };
-    window.addEventListener("amymusic:open-pinned-playlist", handler);
-    return () => window.removeEventListener("amymusic:open-pinned-playlist", handler);
-  }, [userPlaylists, savedReleases]);
-
-  // Open artist from sidebar pin click
-  useEffect(() => {
-    const handler = (e) => {
-      if (onOpenArtist) onOpenArtist(e.detail);
-    };
-    window.addEventListener("amymusic:open-pinned-artist", handler);
-    return () => window.removeEventListener("amymusic:open-pinned-artist", handler);
-  }, [onOpenArtist]);
 
   const scrollLikedLeft = () => {
     if (mobileLikedScrollRef.current) {
@@ -1007,6 +991,39 @@ export function CollectionView({ onOpenArtist, onOpenAlbum }) {
       setIsPlaylistLoading(false);
     }
   };
+
+  // Update playlist if initialPlaylistId changes after mount
+  useEffect(() => {
+    if (initialPlaylistId) {
+      const found = userPlaylists.find((p) => p.id === initialPlaylistId) || savedReleases.find((p) => String(p.id) === String(initialPlaylistId));
+      if (found) {
+        openPlaylist(found);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPlaylistId]);
+
+  // Open playlist from sidebar pin click (legacy event listener if needed)
+  useEffect(() => {
+    const handler = (e) => {
+      const plId = e.detail;
+      const found = userPlaylists.find((p) => p.id === plId) || savedReleases.find((p) => String(p.id) === String(plId));
+      if (found) {
+        openPlaylist(found);
+      }
+    };
+    window.addEventListener("amymusic:open-pinned-playlist", handler);
+    return () => window.removeEventListener("amymusic:open-pinned-playlist", handler);
+  }, [userPlaylists, savedReleases, openPlaylist]);
+
+  // Open artist from sidebar pin click
+  useEffect(() => {
+    const handler = (e) => {
+      if (onOpenArtist) onOpenArtist(e.detail);
+    };
+    window.addEventListener("amymusic:open-pinned-artist", handler);
+    return () => window.removeEventListener("amymusic:open-pinned-artist", handler);
+  }, [onOpenArtist]);
 
   const openLikedTracks = () => {
     setActivePlaylist({

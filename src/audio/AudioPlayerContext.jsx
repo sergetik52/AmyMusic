@@ -967,63 +967,103 @@ export function AudioProvider({ children }) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    // Also clear background interval
+    if (bgAnalysisIntervalRef.current) {
+      clearInterval(bgAnalysisIntervalRef.current);
+      bgAnalysisIntervalRef.current = null;
+    }
     setAudioEnergy({ bass: 0, mids: 0, treble: 0, level: 0 });
   }, []);
 
   const isWindowFocusedRef = useRef(true);
+  const bgAnalysisIntervalRef = useRef(null);
+
+  // Single analysis tick — shared by both RAF and setInterval
+  const runAnalysisTick = useCallback(() => {
+    const analyser = analyserRef.current;
+    const data = frequencyDataRef.current;
+    if (!analyser || !data) return;
+
+    analyser.getByteFrequencyData(data);
+    const bass = averageRange(data, 1, 12);
+    const mids = averageRange(data, 12, 70);
+    const treble = averageRange(data, 70, data.length);
+    const level = Math.min(1, bass * 0.58 + mids * 0.3 + treble * 0.18);
+
+    setAudioEnergy({
+      bass: Number(bass.toFixed(2)),
+      mids: Number(mids.toFixed(2)),
+      treble: Number(treble.toFixed(2)),
+      level: Number(level.toFixed(2))
+    });
+  }, []);
 
   const startAudioAnalysis = useCallback(() => {
     if (animationFrameRef.current) return;
-    if (document.hidden || !isWindowFocusedRef.current) return;
 
     const tick = (time) => {
-      const analyser = analyserRef.current;
-      const data = frequencyDataRef.current;
-
-      if (!document.hidden && isWindowFocusedRef.current && analyser && data && time - lastAnalysisAtRef.current > 66) {
-        analyser.getByteFrequencyData(data);
-        const bass = averageRange(data, 1, 12);
-        const mids = averageRange(data, 12, 70);
-        const treble = averageRange(data, 70, data.length);
-        const level = Math.min(1, bass * 0.58 + mids * 0.3 + treble * 0.18);
-
-        setAudioEnergy({
-          bass: Number(bass.toFixed(2)),
-          mids: Number(mids.toFixed(2)),
-          treble: Number(treble.toFixed(2)),
-          level: Number(level.toFixed(2))
-        });
-        lastAnalysisAtRef.current = time;
-      }
-
       if (!document.hidden && isWindowFocusedRef.current) {
+        if (time - lastAnalysisAtRef.current > 66) {
+          runAnalysisTick();
+          lastAnalysisAtRef.current = time;
+        }
         animationFrameRef.current = requestAnimationFrame(tick);
       } else {
+        // Window lost focus — stop RAF, start background interval
         animationFrameRef.current = null;
+        if (!bgAnalysisIntervalRef.current) {
+          bgAnalysisIntervalRef.current = setInterval(runAnalysisTick, 120);
+        }
       }
     };
 
-    animationFrameRef.current = requestAnimationFrame(tick);
-  }, []);
+    // Clear any background interval before starting RAF
+    if (bgAnalysisIntervalRef.current) {
+      clearInterval(bgAnalysisIntervalRef.current);
+      bgAnalysisIntervalRef.current = null;
+    }
+
+    if (document.hidden || !isWindowFocusedRef.current) {
+      // Start in background mode directly
+      if (!bgAnalysisIntervalRef.current) {
+        bgAnalysisIntervalRef.current = setInterval(runAnalysisTick, 120);
+      }
+    } else {
+      animationFrameRef.current = requestAnimationFrame(tick);
+    }
+  }, [runAnalysisTick]);
 
   useEffect(() => {
     const handleFocus = () => {
       isWindowFocusedRef.current = true;
-      if (isPlayingRef.current) {
+      // Switch from background interval back to RAF
+      if (bgAnalysisIntervalRef.current) {
+        clearInterval(bgAnalysisIntervalRef.current);
+        bgAnalysisIntervalRef.current = null;
+      }
+      if (isPlayingRef.current && !animationFrameRef.current) {
         startAudioAnalysis();
       }
     };
 
     const handleBlur = () => {
       isWindowFocusedRef.current = false;
-      stopAudioAnalysis();
+      // RAF loop will notice and switch to background interval on next tick.
+      // But if RAF already stopped, start background interval now.
+      if (isPlayingRef.current && !bgAnalysisIntervalRef.current) {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+        bgAnalysisIntervalRef.current = setInterval(runAnalysisTick, 120);
+      }
     };
 
     const handleVisibility = () => {
-      if (document.hidden) {
-        stopAudioAnalysis();
-      } else if (isPlayingRef.current && isWindowFocusedRef.current) {
-        startAudioAnalysis();
+      if (!document.hidden && isPlayingRef.current) {
+        if (isWindowFocusedRef.current && !animationFrameRef.current) {
+          startAudioAnalysis();
+        }
       }
     };
 
@@ -1036,7 +1076,7 @@ export function AudioProvider({ children }) {
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [startAudioAnalysis, stopAudioAnalysis]);
+  }, [startAudioAnalysis, stopAudioAnalysis, runAnalysisTick]);
 
   useEffect(() => {
     if (!audioRefs.current[0]) {
@@ -2562,6 +2602,148 @@ export function AudioProvider({ children }) {
       clearDiscordStatus();
     }
   }, [isPlaying, currentTrack?.id, profileSettings?.discordRpcEnabled]);
+
+  // Refs for overlay broadcast — reading from refs avoids recreating the callback
+  // on every audioEnergy/currentTime change, preventing out-of-order async delivery
+  const currentTimeRef = useRef(currentTime);
+  const durationRef = useRef(duration);
+  const audioEnergyRef = useRef(audioEnergy);
+  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
+  useEffect(() => { durationRef.current = duration; }, [duration]);
+  useEffect(() => { audioEnergyRef.current = audioEnergy; }, [audioEnergy]);
+
+  // BROADCAST PLAYER STATE TO TAURI OVERLAY WINDOW
+  // Reads from refs so the callback is stable and only fires from the interval
+  const sendOverlayState = useCallback(async () => {
+    if (typeof window === "undefined") return;
+
+    const track = currentTrackRef.current;
+    const playing = isPlayingRef.current;
+    const time = currentTimeRef.current;
+    const dur = durationRef.current;
+    const vol = volumeRef.current;
+    const energy = audioEnergyRef.current;
+
+    let safeArtist = "AmyMusic";
+    if (track?.artist) {
+      if (typeof track.artist === "string") safeArtist = track.artist;
+      else if (typeof track.artist === "object") safeArtist = track.artist.name || track.artist.username || "AmyMusic";
+    } else if (track?.user && typeof track.user === "object") {
+      safeArtist = track.user.username || track.user.name || "AmyMusic";
+    }
+
+    let safeTitle = "Без названия";
+    if (track?.title) {
+      if (typeof track.title === "string") safeTitle = track.title;
+      else if (typeof track.title === "object") safeTitle = track.title.name || track.title.title || "Без названия";
+    }
+
+    let safeCover = "";
+    if (track?.cover && typeof track.cover === "string") safeCover = track.cover;
+    else if (track?.artwork_url && typeof track.artwork_url === "string") safeCover = track.artwork_url;
+    else if (track?.artistAvatar && typeof track.artistAvatar === "string") safeCover = track.artistAvatar;
+    if (safeCover.includes("large.jpg")) {
+      safeCover = safeCover.replace("large.jpg", "t500x500.jpg");
+    }
+
+    const payload = {
+      title: track ? safeTitle : "Нет трека",
+      artist: track ? safeArtist : "AmyMusic",
+      cover: safeCover,
+      isPlaying: !!playing,
+      currentTime: time || 0,
+      duration: dur || track?.duration || 100,
+      volume: vol !== undefined ? vol : 0.8,
+      audioEnergy: playing ? energy : { bass: 0, mids: 0, treble: 0, level: 0 },
+      timestamp: Date.now()
+    };
+
+    // 1. LocalStorage sync (instant & reliable across webviews)
+    try {
+      localStorage.setItem("amymusic_overlay_state", JSON.stringify(payload));
+    } catch (e) {}
+
+    // 2. Tauri Rust IPC broadcast
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("broadcast_overlay_state", { payload });
+    } catch (e) {
+      if (window.amyMusicDesktop?.broadcastOverlayState) {
+        window.amyMusicDesktop.broadcastOverlayState(payload).catch(() => {});
+      }
+    }
+
+    // 3. Tauri event emit
+    try {
+      const { emit } = await import("@tauri-apps/api/event");
+      await emit("overlay-player-state", payload);
+    } catch (e) {}
+  }, []); // Stable — reads everything from refs
+
+  useEffect(() => {
+    sendOverlayState();
+    const interval = setInterval(sendOverlayState, 200);
+    return () => clearInterval(interval);
+  }, [sendOverlayState]);
+
+  const lastCmdRef = useRef({ cmd: "", time: 0 });
+
+  // LISTEN TO COMMANDS & STATE REQUESTS FROM TAURI OVERLAY WINDOW
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const executeCmd = (cmd, value) => {
+      const now = Date.now();
+      // Debounce duplicate commands within 250ms
+      if (lastCmdRef.current.cmd === cmd && (now - lastCmdRef.current.time) < 250) {
+        return;
+      }
+      lastCmdRef.current = { cmd, time: now };
+
+      if (cmd === "togglePlayPause") {
+        if (isPlayingRef.current) pause();
+        else play();
+      } else if (cmd === "next") {
+        next();
+      } else if (cmd === "prev") {
+        previous();
+      } else if (cmd === "seek" && typeof value === "number") {
+        seek(value);
+      } else if (cmd === "volume" && typeof value === "number") {
+        setVolume(value);
+      }
+    };
+
+    const handleStorageCmd = (e) => {
+      if (e.key === "amymusic_overlay_cmd" && e.newValue) {
+        try {
+          const { cmd, value } = JSON.parse(e.newValue);
+          executeCmd(cmd, value);
+        } catch (err) {}
+      }
+    };
+    window.addEventListener("storage", handleStorageCmd);
+
+    let unlistenCmd = null;
+    let unlistenReq = null;
+
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen("overlay-player-cmd", (event) => {
+        if (!event || !event.payload) return;
+        executeCmd(event.payload.cmd, event.payload.value);
+      }).then(u => { unlistenCmd = u; });
+
+      listen("overlay-request-state", () => {
+        sendOverlayState();
+      }).then(u => { unlistenReq = u; });
+    }).catch(() => {});
+
+    return () => {
+      window.removeEventListener("storage", handleStorageCmd);
+      if (unlistenCmd) unlistenCmd();
+      if (unlistenReq) unlistenReq();
+    };
+  }, [play, pause, next, previous, seek, setVolume, sendOverlayState]);
 
   const controls = useMemo(
     () => [

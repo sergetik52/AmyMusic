@@ -17,6 +17,7 @@ import HomeView from "./components/HomeView";
 import { CollectionView } from "./components/CollectionView";
 import { ArtistView, AlbumView } from "./components/ArtistView";
 import { FullPlayerOverlay } from "./components/FullPlayerOverlay";
+import { GameOverlay } from "./components/GameOverlay";
 import { AudioProvider, useAudioPlayer } from "./audio/AudioPlayerContext";
 import { TrackMenuButton, TrackContextMenu } from "./components/TrackContextMenu";
 import { AvatarCropperModal } from "./components/AvatarCropperModal";
@@ -460,7 +461,7 @@ function formatDuration(seconds) {
   return `${mins}:${secs}`;
 }
 
-function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileSave }) {
+function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileSave, setCollectionInitialPlaylistId }) {
   const { playHistory, totalListenedSeconds } = useAudioPlayer();
   const [settings, setSettings] = useState(() => getProfileSettings());
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -552,8 +553,9 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
                         // Open artist view
                         window.dispatchEvent(new CustomEvent("amymusic:open-pinned-artist", { detail: pl.artistData }));
                       } else {
+                        setCollectionInitialPlaylistId(pl.id);
                         setActiveTab("collection");
-                        window.dispatchEvent(new CustomEvent("amymusic:open-pinned-playlist", { detail: pl.id }));
+                        setTimeout(() => setCollectionInitialPlaylistId(null), 100);
                       }
                     }}
                     title={pl.title}
@@ -2798,6 +2800,7 @@ export function applyAppearanceSettings(appearance = {}) {
 function WindowControls() {
   const [isDesktop, setIsDesktop] = useState(false);
   const [appVersion, setAppVersion] = useState("0.1.0");
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   useEffect(() => {
     setIsDesktop(typeof window !== "undefined" && !!window.__TAURI_INTERNALS__);
@@ -2806,6 +2809,18 @@ function WindowControls() {
         if (v) setAppVersion(v);
       }).catch(() => {});
     }
+
+    let unlisten = null;
+    if (typeof window !== "undefined" && window.__TAURI_INTERNALS__) {
+      import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+        const win = getCurrentWindow();
+        win.isFullscreen().then(setIsFullscreen).catch(() => {});
+        win.onResized(() => {
+          win.isFullscreen().then(setIsFullscreen).catch(() => {});
+        }).then(u => { unlisten = u; }).catch(() => {});
+      }).catch(() => {});
+    }
+    return () => { if (unlisten) unlisten(); };
   }, []);
 
   if (!isDesktop) {
@@ -2820,7 +2835,7 @@ function WindowControls() {
   return (
     <div 
       className="absolute left-0 right-0 top-0 h-[36px] bg-transparent z-[9999] flex items-center justify-between" 
-      style={{ WebkitAppRegion: "drag" }}
+      style={{ WebkitAppRegion: isFullscreen ? "no-drag" : "drag" }}
     >
       <div className="flex h-full items-center pl-3 gap-2 pointer-events-none select-none">
         <img
@@ -2864,6 +2879,7 @@ function WindowControls() {
 export default function App() {
   const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, contextMenuState, closeContextMenu, openContextMenu } = useAudioPlayer();
   const [activeTab, setActiveTab] = useState("wave");
+  const [collectionInitialPlaylistId, setCollectionInitialPlaylistId] = useState(null);
   const [previousTab, setPreviousTab] = useState("wave");
   const [activeArtist, setActiveArtist] = useState(null);
   const [activeAlbum, setActiveAlbum] = useState(null);
@@ -2900,6 +2916,14 @@ export default function App() {
   useEffect(() => subscribeProfileSettings(setMobileProfileSettings), []);
 
   useEffect(() => {
+    // Restore overlay on app launch if enabled in settings
+    if (profileSettings?.gameOverlayEnabled) {
+      if (typeof window !== "undefined" && window.amyMusicDesktop?.toggleOverlay) {
+        window.amyMusicDesktop.resizeOverlayWindow?.(false).catch(() => {});
+        window.amyMusicDesktop.toggleOverlay(true).catch(() => {});
+      }
+    }
+
     const openProfile = () => setIsMobileProfileOpen(true);
     window.addEventListener("amymusic:open-profile", openProfile);
     return () => window.removeEventListener("amymusic:open-profile", openProfile);
@@ -2950,7 +2974,7 @@ export default function App() {
           setIsFullOpen(true);
         }} onOpenCollection={() => setActiveTab("collection")} onOpenArtist={openArtist} />;
       case "collection":
-        return <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
+        return <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} initialPlaylistId={collectionInitialPlaylistId} />;
       case "settings":
         return <SettingsView profileData={profileData} onProfileSave={handleProfileSave} />;
       case "trends": return <TrendsPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
@@ -3051,6 +3075,7 @@ export default function App() {
         currentUser={currentUser}
         profileData={profileData}
         onProfileSave={handleProfileSave}
+        setCollectionInitialPlaylistId={setCollectionInitialPlaylistId}
       />
       <div className="flex min-w-0 min-h-0 flex-1 flex-col justify-between gap-3 max-md:gap-0 max-md:pb-24 max-md:h-full max-md:overflow-hidden">
         <div key={`${activeTab}-${activeArtist?.id || "none"}-${activeAlbum?.id || "noalbum"}-${activeTab === 'settings' ? 'static' : apiSettingsVersion}`} className="contents">
@@ -3143,11 +3168,49 @@ initNativeShell().catch((error) => {
   console.warn("[AmyMusic:native]", error);
 });
 
-createRoot(document.getElementById("root")).render(
-  <AppErrorBoundary>
+function RootApp() {
+  const [isOverlay, setIsOverlay] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.location.search.includes("overlay=true") || window.location.href.includes("overlay=true");
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && (window.__TAURI_INTERNALS__ || window.amyMusicDesktop)) {
+      import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+        const win = getCurrentWindow();
+        if (win && win.label === "overlay") {
+          setIsOverlay(true);
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOverlay) {
+      document.body.style.background = "transparent";
+      document.body.style.backgroundColor = "transparent";
+      const rootEl = document.getElementById("root");
+      if (rootEl) {
+        rootEl.style.background = "transparent";
+        rootEl.style.backgroundColor = "transparent";
+      }
+    }
+  }, [isOverlay]);
+
+  if (isOverlay) {
+    return <GameOverlay />;
+  }
+
+  return (
     <AudioProvider>
       <App />
     </AudioProvider>
+  );
+}
+
+createRoot(document.getElementById("root")).render(
+  <AppErrorBoundary>
+    <RootApp />
   </AppErrorBoundary>
 );
 

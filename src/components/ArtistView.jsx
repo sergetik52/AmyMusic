@@ -106,7 +106,7 @@ function TrackSquare({ track, onPlay }) {
   );
 }
 
-function AlbumCard({ album, onOpen, isSaved = false, onToggleSave }) {
+function AlbumCard({ album, onOpen, isSaved = false, onToggleSave, fallbackCover }) {
   const isSingle = album.kind === "single" || (album.trackCount || album.tracks?.length) === 1;
 
   return (
@@ -117,7 +117,12 @@ function AlbumCard({ album, onOpen, isSaved = false, onToggleSave }) {
         className="block w-full text-left"
       >
         <div className="relative aspect-square overflow-hidden rounded-2xl bg-white/[0.04]">
-          <img src={album.cover} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+          <img 
+            src={album.cover || fallbackCover || "/logo.png"} 
+            alt="" 
+            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = fallbackCover || "/logo.png"; }}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105" 
+          />
           <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/20" />
           {isSingle && (
             <div className="absolute top-2 left-2 rounded-md bg-[#8341EF]/90 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-md backdrop-blur-sm">
@@ -420,7 +425,7 @@ export function AlbumView({
                 key={track.id || `${album.id}-${index}`}
                 track={track}
                 index={index}
-                showCover={false}
+                showCover={album.kind === "playlist"}
                 showLike
                 isLiked={likedTrackIds.has(track.id)}
                 onToggleLike={onToggleLike}
@@ -896,6 +901,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
                 onOpen={openAlbum}
                 isSaved={savedReleaseIds.has(album.id)}
                 onToggleSave={toggleSavedRelease}
+                fallbackCover={profileAvatar}
               />
             ))}
           </HorizontalScrollSection>
@@ -910,6 +916,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
                 onOpen={openAlbum}
                 isSaved={savedReleaseIds.has(single.id)}
                 onToggleSave={toggleSavedRelease}
+                fallbackCover={profileAvatar}
               />
             ))}
           </HorizontalScrollSection>
@@ -924,6 +931,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
                 onOpen={openAlbum}
                 isSaved={savedReleaseIds.has(playlist.id)}
                 onToggleSave={toggleSavedRelease}
+                fallbackCover={profileAvatar}
               />
             ))}
           </HorizontalScrollSection>

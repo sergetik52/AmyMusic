@@ -62,6 +62,20 @@ export function initDesktopApi() {
       // Tray is handled in Rust, this might require a custom command or just ignore if it's always on
       return true;
     },
+    
+    // Helper for overlay
+    _getOverlayConfig: () => {
+      try {
+        const data = JSON.parse(window.localStorage.getItem("amymusic.profileSettings.v1"));
+        return {
+          scale: Number(data?.overlayScale) || 1.0,
+          position: data?.overlayPosition || "top"
+        };
+      } catch (e) {
+        return { scale: 1.0, position: "top" };
+      }
+    },
+
     showWindow: async () => {
       // Handled natively by tray click in Rust, but if called from JS:
       const { Window } = await import('@tauri-apps/api/window');
@@ -77,6 +91,19 @@ export function initDesktopApi() {
     getAppVersion: async () => await getVersion(),
     updateSmtc: async (info) => invoke('update_smtc', { info }),
     clearSmtc: async () => invoke('clear_smtc'),
+    toggleOverlay: async (enabled) => invoke('toggle_overlay_window', { enabled }),
+    isOverlayVisible: async () => invoke('is_overlay_visible'),
+    resizeOverlayWindow: async (expanded, forceScale, forcePosition) => {
+      const cfg = window.amyMusicDesktop._getOverlayConfig();
+      invoke('resize_overlay_window', { 
+        expanded, 
+        scale: forceScale !== undefined ? forceScale : cfg.scale,
+        position: forcePosition !== undefined ? forcePosition : cfg.position
+      });
+    },
+    broadcastOverlayState: async (payload) => invoke('broadcast_overlay_state', { payload }),
+    broadcastOverlayCmd: async (payload) => invoke('broadcast_overlay_cmd', { payload }),
+    requestOverlayState: async () => invoke('request_overlay_state'),
     
     // Auto-update shim (we bypass checkUpdate since Tauri updater is not used, we kept the custom one)
     // Wait, the custom one expects checkUpdate to return { hasUpdate, latestVersion, downloadUrl, releaseNotes }

@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AmyMusic In-Game Dynamic Island Overlay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background-color: #050608;
+      color: #ffffff;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      position: relative;
+    }
+
+    /* Game Viewport Container */
+    .game-viewport {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background-size: cover;
+      background-position: center top;
+      transition: background 0.3s ease;
+      z-index: 1;
+    }
+
+    .viewport-dota {
+      background: radial-gradient(circle at top, rgba(18, 20, 28, 0.6) 0%, rgba(4, 5, 8, 0.98) 100%),
+                  linear-gradient(180deg, #0c0e14 0%, #020304 100%);
+    }
+
+    /* Mock Dota 2 Top HUD Bar */
+    .hud-dota2-bar {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 840px;
+      height: 38px;
+      background: rgba(14, 16, 22, 0.95);
+      border-bottom-left-radius: 10px;
+      border-bottom-right-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-top: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      z-index: 2;
+    }
+
+    .hud-team {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .hud-hero-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #1e2230;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .hud-clock-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hud-clock {
+      font-weight: 700;
+      font-size: 13px;
+      color: #e2e8f0;
+    }
+
+    .hud-scores {
+      font-size: 10px;
+      font-weight: 700;
+      color: #64748b;
+    }
+
+    .hud-score-green { color: #22c55e; }
+    .hud-score-red { color: #ef4444; }
+
+    /* CS2 HUD Bar */
+    .hud-cs2-bar {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 580px;
+      height: 36px;
+      background: rgba(12, 14, 18, 0.9);
+      backdrop-filter: blur(10px);
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      z-index: 2;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .cs2-side {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .cs2-t { color: #f59e0b; }
+    .cs2-ct { color: #3b82f6; }
+
+    .cs2-timer {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 12px;
+      color: #f1f5f9;
+    }
+
+
+    /* DYNAMIC ISLAND CONTAINER */
+    .island-wrapper {
+      position: absolute;
+      top: 46px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+    }
+
+    .dynamic-island {
+      position: relative;
+      background: rgba(12, 13, 19, 0.96);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.92);
+      color: #ffffff;
+      cursor: pointer;
+      overflow: hidden;
+      
+      transition: 
+        width 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+        height 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+        border-radius 0.35s ease,
+        border-color 0.25s ease,
+        background 0.25s ease;
+      will-change: width, height, border-radius;
+    }
+
+    /* COMPACT STATE */
+    .dynamic-island.compact {
+      width: 270px;
+      height: 38px;
+      border-radius: 19px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px 0 6px;
+    }
+
+    .dynamic-island.compact:hover {
+      border-color: rgba(255, 255, 255, 0.25);
+      background: rgba(18, 20, 28, 0.98);
+      transform: scale(1.015);
+    }
+
+    .compact-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+      flex: 1;
+    }
+
+    .compact-cover {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: none;
+      flex-shrink: 0;
+      animation: spinCover 16s linear infinite;
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .compact-cover.paused {
+      animation-play-state: paused;
+    }
+
+    @keyframes spinCover {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .compact-details {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .compact-title {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #f8fafc;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+
+    .compact-artist {
+      font-size: 10px;
+      font-weight: 400;
+      color: #94a3b8;
+    }
+
+    .compact-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding-right: 2px;
+      flex-shrink: 0;
+    }
+
+    .equalizer-mini {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      height: 14px;
+    }
+
+    .eq-bar {
+      width: 2.5px;
+      background: #ffffff;
+      border-radius: 2px;
+      height: 14px;
+      transform-origin: center center;
+      animation: eqPulse 1.2s ease-in-out infinite alternate;
+    }
+
+    .eq-bar:nth-child(1) { animation-delay: 0.1s; }
+    .eq-bar:nth-child(2) { animation-delay: 0.3s; }
+    .eq-bar:nth-child(3) { animation-delay: 0.5s; }
+    .eq-bar:nth-child(4) { animation-delay: 0.2s; }
+
+    .paused .eq-bar {
+      animation-play-state: paused !important;
+      transform: scaleY(0.2) !important;
+      opacity: 0.35 !important;
+    }
+
+    @keyframes eqPulse {
+      0% { transform: scaleY(0.2); }
+      100% { transform: scaleY(1); }
+    }
+
+
+    /* EXPANDED STATE */
+    .dynamic-island.expanded {
+      width: 460px;
+      height: 164px;
+      border-radius: 26px;
+      padding: 16px 20px;
+      cursor: default;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: rgba(12, 13, 19, 0.96);
+      backdrop-filter: blur(32px);
+      -webkit-backdrop-filter: blur(32px);
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      position: relative;
+    }
+
+    /* 1. TOP ROW */
+    .expanded-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      height: 48px;
+      position: relative;
+    }
+
+    .top-left-group {
+      display: flex;
+      align-items: center;
+      height: 48px;
+      overflow: hidden;
+      flex: 1;
+    }
+
+    .expanded-cover-box {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+
+    .title-artist-group {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      height: 48px;
+      max-width: 260px;
+      margin-left: 14px;
+      overflow: hidden;
+    }
+
+    .expanded-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.25;
+    }
+
+    .expanded-artist {
+      font-size: 12px;
+      font-weight: 500;
+      color: #94a3b8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.25;
+      margin-top: 3px;
+    }
+
+    /* Beat Equalizer Bars */
+    .top-right-beat-bars {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3.5px;
+      height: 22px;
+      margin-left: auto;
+      flex-shrink: 0;
+      padding: 0 4px;
+      transition: opacity 0.25s ease;
+    }
+
+    .beat-bar-center {
+      width: 3px;
+      background: #ffffff;
+      border-radius: 3px;
+      height: 18px;
+      transform-origin: center center;
+      animation: beatCenterPulse 1.1s ease-in-out infinite alternate;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+
+    .beat-bar-center:nth-child(1) { animation-delay: 0.1s; }
+    .beat-bar-center:nth-child(2) { animation-delay: 0.35s; }
+    .beat-bar-center:nth-child(3) { animation-delay: 0.2s; }
+    .beat-bar-center:nth-child(4) { animation-delay: 0.45s; }
+    .beat-bar-center:nth-child(5) { animation-delay: 0.15s; }
+
+    .paused .beat-bar-center {
+      animation: none !important;
+      transform: scaleY(0.2) !important;
+      opacity: 0.35 !important;
+    }
+
+    @keyframes beatCenterPulse {
+      0% { transform: scaleY(0.2); opacity: 0.6; }
+      100% { transform: scaleY(1); opacity: 1; }
+    }
+
+
+    /* 2. MIDDLE ROW: FULL WIDTH PROGRESS TIME SLIDER */
+    .expanded-progress-row {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .progress-bar-track {
+      position: relative;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .progress-bar-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 24%;
+      background: #ffffff;
+      border-radius: 4px;
+    }
+
+    .progress-bar-thumb {
+      position: absolute;
+      top: 50%;
+      left: 24%;
+      transform: translate(-50%, -50%);
+      width: 10px;
+      height: 10px;
+      background: #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+      transition: transform 0.15s ease;
+    }
+
+    .progress-bar-track:hover .progress-bar-thumb {
+      transform: translate(-50%, -50%) scale(1.3);
+    }
+
+    .progress-time-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 500;
+      color: #94a3b8;
+    }
+
+
+    /* 3. BOTTOM ROW: MEDIA CONTROLS & CLICK TOGGLED VOLUME SLIDER (SLIDING RIGHT-TO-LEFT) */
+    .expanded-bottom-controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      width: 100%;
+      height: 36px;
+      margin-top: 2px;
+    }
+
+    .center-media-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 26px;
+      transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .center-media-controls.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-20px) scale(0.92);
+    }
+
+    .ctrl-btn {
+      background: none;
+      border: none;
+      color: #cbd5e1;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      outline: none;
+    }
+
+    .ctrl-btn:hover {
+      color: #ffffff;
+      transform: scale(1.15);
+    }
+
+    .ctrl-btn:active {
+      transform: scale(0.95);
+    }
+
+    /* Play / Pause Primary Button (NO BORDER OUTLINE) */
+    .ctrl-btn-primary {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      border: none; /* NO BORDER OUTLINE */
+      color: #ffffff;
+    }
+
+    .ctrl-btn-primary:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* VOLUME FLYOUT WRAPPER: Slide out smoothly from RIGHT to LEFT on CLICK, NO BORDER, PURE WHITE LINE */
+    .volume-flyout-wrapper {
+      position: absolute;
+      right: 36px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 0;
+      opacity: 0;
+      overflow: hidden;
+      pointer-events: none;
+      border: none;
+      background: transparent;
+      transform-origin: right center;
+      transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+    }
+
+    .volume-flyout-wrapper.active {
+      width: 350px;
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .volume-flyout-icon {
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .volume-flyout-track {
+      position: relative;
+      flex: 1;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .volume-flyout-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 80%;
+      background: #ffffff;
+      border-radius: 4px;
+    }
+
+    .volume-flyout-thumb {
+      position: absolute;
+      top: 50%;
+      left: 80%;
+      transform: translate(-50%, -50%);
+      width: 10px;
+      height: 10px;
+      background: #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+      transition: transform 0.15s ease;
+    }
+
+    .volume-flyout-track:hover .volume-flyout-thumb {
+      transform: translate(-50%, -50%) scale(1.3);
+    }
+
+    .volume-text-percent {
+      font-size: 11px;
+      font-weight: 700;
+      color: #e2e8f0;
+      min-width: 32px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .volume-trigger-group {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .volume-btn-trigger {
+      color: #94a3b8;
+    }
+
+    .volume-btn-trigger:hover, .volume-flyout-wrapper.active ~ .volume-trigger-group .volume-btn-trigger {
+      color: #ffffff;
+    }
+
+
+    /* Bottom Control Switcher Panel for Testing */
+    .demo-controls-panel {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      background: rgba(14, 15, 22, 0.9);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    }
+
+    .demo-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .demo-btn-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    .demo-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+
+    .demo-btn:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+    }
+
+    .demo-btn.active {
+      background: #ffffff;
+      border-color: transparent;
+      color: #000000;
+    }
+
+    .fade-in {
+      animation: fadeIn 0.2s ease forwards;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* TRACK SWITCHING ANIMATIONS */
+    .track-anim-target {
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+      will-change: transform, opacity;
+    }
+
+    .slide-out-next {
+      transform: translateX(-18px) scale(0.95);
+      opacity: 0;
+    }
+
+    .slide-out-prev {
+      transform: translateX(18px) scale(0.95);
+      opacity: 0;
+    }
+
+    .slide-in-prepare-next {
+      transform: translateX(18px) scale(0.95);
+      opacity: 0;
+    }
+
+    .slide-in-prepare-prev {
+      transform: translateX(-18px) scale(0.95);
+      opacity: 0;
+    }
+
+    .cover-pop {
+      animation: coverPop 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes coverPop {
+      0% { transform: scale(1); }
+      40% { transform: scale(0.82); opacity: 0.5; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Game Viewport -->
+  <div id="gameViewport" class="game-viewport viewport-dota">
+    
+    <!-- Dota 2 HUD Bar -->
+    <div id="dotaHud" class="hud-dota2-bar">
+      <div class="hud-team">
+        <div class="hud-hero-icon" style="background:#dc2626;">SF</div>
+        <div class="hud-hero-icon" style="background:#2563eb;">INV</div>
+        <div class="hud-hero-icon" style="background:#16a34a;">PUD</div>
+        <div class="hud-hero-icon" style="background:#d97706;">AM</div>
+        <div class="hud-hero-icon" style="background:#7c3aed;">PA</div>
+      </div>
+      <div class="hud-clock-container">
+        <div class="hud-clock">15 : 42</div>
+        <div class="hud-scores"><span class="hud-score-green">24</span> - <span class="hud-score-red">18</span></div>
+      </div>
+      <div class="hud-team">
+        <div class="hud-hero-icon" style="background:#db2777;">JUG</div>
+        <div class="hud-hero-icon" style="background:#0891b2;">AXE</div>
+        <div class="hud-hero-icon" style="background:#65a30d;">WR</div>
+        <div class="hud-hero-icon" style="background:#9333ea;">LINA</div>
+        <div class="hud-hero-icon" style="background:#475569;">ES</div>
+      </div>
+    </div>
+
+    <!-- CS2 HUD Bar -->
+    <div id="cs2Hud" class="hud-cs2-bar">
+      <div class="cs2-side cs2-t">T 9</div>
+      <div class="cs2-timer">⏱ 1:24</div>
+      <div class="cs2-side cs2-ct">11 CT</div>
+    </div>
+
+  </div>
+
+  <!-- Dynamic Island Overlay -->
+  <div class="island-wrapper">
+    <div id="dynamicIsland" class="dynamic-island compact" onclick="handleIslandClick(event)">
+      
+      <!-- COMPACT CONTENT -->
+      <div id="compactContent" class="compact-left fade-in" style="width: 100%;">
+        <div style="display: flex; align-items: center; gap: 8px; flex: 1; overflow: hidden;">
+          <div class="compact-cover" style="display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;">🎵</div>
+          <div class="compact-details">
+            <div id="compactTitle" class="compact-title">life was gone once you left</div>
+            <div id="compactArtist" class="compact-artist">Sewerslvt</div>
+          </div>
+        </div>
+
+        <div class="compact-right">
+          <div id="compactEq" class="equalizer-mini">
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EXPANDED CONTENT -->
+      <div id="expandedContent" style="display: none; width: 100%; height: 100%; flex-direction: column; justify-content: space-between;">
+        
+        <!-- 1. TOP ROW -->
+        <div class="expanded-top-row">
+          
+          <div class="top-left-group">
+            <div class="expanded-cover-box">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:rgba(255,255,255,0.9);">
+                <path d="M9 18V5l12-2v13"></path>
+                <circle cx="6" cy="18" r="3"></circle>
+                <circle cx="18" cy="16" r="3"></circle>
+              </svg>
+            </div>
+            
+            <div class="title-artist-group">
+              <div id="expandedTitle" class="expanded-title">life was gone once you left</div>
+              <div id="expandedArtist" class="expanded-artist">Sewerslvt</div>
+            </div>
+          </div>
+
+          <!-- Beat Bars -->
+          <div class="top-right-beat-bars" id="expandedBeatBars">
+            <div class="beat-bar-center"></div>
+            <div class="beat-bar-center"></div>
+            <div class="beat-bar-center"></div>
+            <div class="beat-bar-center"></div>
+            <div class="beat-bar-center"></div>
+          </div>
+
+        </div>
+
+        <!-- 2. MIDDLE ROW: FULL WIDTH PROGRESS SLIDER -->
+        <div class="expanded-progress-row">
+          <div class="progress-bar-track" id="progressTrack" onmousedown="startProgressDrag(event)">
+            <div id="progressFill" class="progress-bar-fill"></div>
+            <div id="progressThumb" class="progress-bar-thumb"></div>
+          </div>
+          <div class="progress-time-labels">
+            <span id="timeElapsed">0:05</span>
+            <span id="timeRemaining">-6:31</span>
+          </div>
+        </div>
+
+        <!-- 3. BOTTOM ROW: MEDIA CONTROLS & CLICK TOGGLED VOLUME SLIDER (SLIDING RIGHT-TO-LEFT) -->
+        <div class="expanded-bottom-controls-row">
+          
+          <!-- Media Controls (Hide when volume is active) -->
+          <div class="center-media-controls" id="centerMediaControls">
+            <button class="ctrl-btn" title="Предыдущий трек" onclick="prevTrack(event)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+            </button>
+
+            <!-- Play / Pause Button with NO BORDER -->
+            <button class="ctrl-btn ctrl-btn-primary" id="playPauseBtn" title="Пауза / Воспроизведение" onclick="togglePlayPause(event)">
+              <svg id="pauseIcon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              <svg id="playIcon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+
+            <button class="ctrl-btn" title="Следующий трек" onclick="nextTrack(event)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+            </button>
+          </div>
+
+          <!-- Volume Flyout (Slides RIGHT-TO-LEFT on CLICK, NO HOVER) -->
+          <div class="volume-flyout-wrapper" id="volumeFlyoutWrapper">
+            <div class="volume-flyout-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            </div>
+            <!-- Track with live mouse tracking -->
+            <div class="volume-flyout-track" id="volumeTrack" onmousedown="startVolumeDrag(event)">
+              <div id="volumeFill" class="volume-flyout-fill" style="width: 80%;"></div>
+              <div id="volumeThumb" class="volume-flyout-thumb" style="left: 80%;"></div>
+            </div>
+            <span class="volume-text-percent" id="volumePercent">80%</span>
+          </div>
+
+          <!-- Volume Trigger Icon (CLICK to Toggle ON/OFF, NO HOVER) -->
+          <div class="volume-trigger-group">
+            <button class="ctrl-btn volume-btn-trigger" title="Громкость" onclick="toggleVolumeSlider(event)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Bottom Control Switcher Panel for Testing -->
+  <div class="demo-controls-panel">
+    <div class="demo-title">Overlay Test</div>
+    
+    <div class="demo-btn-group">
+      <button class="demo-btn active" onclick="setHUD('dota', this)">HUD Dota 2</button>
+      <button class="demo-btn" onclick="setHUD('cs2', this)">HUD CS2</button>
+      <button class="demo-btn" onclick="setHUD('cyberpunk', this)">Wallpaper</button>
+    </div>
+
+    <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.12);"></div>
+
+    <div class="demo-btn-group">
+      <button class="demo-btn" onclick="toggleIslandState(true)">Развернуть</button>
+      <button class="demo-btn" onclick="toggleIslandState(false)">Свернуть</button>
+    </div>
+  </div>
+
+  <script>
+    let isExpanded = false;
+    let isPlaying = true;
+    let totalSeconds = 396;
+    let currentSeconds = 5;
+    let currentVolume = 80;
+    let isDraggingVolume = false;
+    let isDraggingProgress = false;
+    let isVolumeOpen = false;
+
+    const tracks = [
+      {
+        title: "life was gone once you left",
+        artist: "Sewerslvt",
+        totalSec: 396
+      },
+      {
+        title: "Влюблялась (Dora Remix)",
+        artist: "Дора",
+        totalSec: 165
+      },
+      {
+        title: "Cyberpunk City Nights",
+        artist: "Kishin & Synthwave",
+        totalSec: 200
+      }
+    ];
+    let trackIndex = 0;
+
+    function toggleIslandState(expand) {
+      if (typeof expand === 'boolean') {
+        isExpanded = expand;
+      } else {
+        isExpanded = !isExpanded;
+      }
+
+      const island = document.getElementById('dynamicIsland');
+      const compactContent = document.getElementById('compactContent');
+      const expandedContent = document.getElementById('expandedContent');
+
+      if (isExpanded) {
+        island.classList.remove('compact');
+        island.classList.add('expanded');
+        compactContent.style.display = 'none';
+        
+        setTimeout(() => {
+          expandedContent.style.display = 'flex';
+          expandedContent.classList.add('fade-in');
+        }, 80);
+      } else {
+        island.classList.remove('expanded');
+        island.classList.add('compact');
+        expandedContent.style.display = 'none';
+        expandedContent.classList.remove('fade-in');
+        closeVolumeSlider();
+
+        setTimeout(() => {
+          compactContent.style.display = 'flex';
+          compactContent.classList.add('fade-in');
+        }, 60);
+      }
+    }
+
+    function handleIslandClick(event) {
+      if (isExpanded) return;
+      toggleIslandState(true);
+    }
+
+    function togglePlayPause(event) {
+      if (event) event.stopPropagation();
+      isPlaying = !isPlaying;
+
+      const pauseIcon = document.getElementById('pauseIcon');
+      const playIcon = document.getElementById('playIcon');
+      const compactEq = document.getElementById('compactEq');
+      const dynamicIsland = document.getElementById('dynamicIsland');
+
+      if (isPlaying) {
+        pauseIcon.style.display = 'block';
+        playIcon.style.display = 'none';
+        compactEq.classList.remove('paused');
+        dynamicIsland.classList.remove('paused');
+      } else {
+        pauseIcon.style.display = 'none';
+        playIcon.style.display = 'block';
+        compactEq.classList.add('paused');
+        dynamicIsland.classList.add('paused');
+      }
+    }
+
+    function prevTrack(event) {
+      if (event) event.stopPropagation();
+      trackIndex = (trackIndex - 1 + tracks.length) % tracks.length;
+      switchTrackAnimated(trackIndex, 'prev');
+    }
+
+    function nextTrack(event) {
+      if (event) event.stopPropagation();
+      trackIndex = (trackIndex + 1) % tracks.length;
+      switchTrackAnimated(trackIndex, 'next');
+    }
+
+    function switchTrackAnimated(index, dir = 'next') {
+      const compactDetails = document.querySelector('.compact-details');
+      const titleArtistGroup = document.querySelector('.title-artist-group');
+      const compactCover = document.querySelector('.compact-cover');
+      const expandedCoverBox = document.querySelector('.expanded-cover-box');
+
+      const textTargets = [compactDetails, titleArtistGroup].filter(Boolean);
+      const coverTargets = [compactCover, expandedCoverBox].filter(Boolean);
+
+      const outClass = dir === 'next' ? 'slide-out-next' : 'slide-out-prev';
+      const prepClass = dir === 'next' ? 'slide-in-prepare-next' : 'slide-in-prepare-prev';
+
+      textTargets.forEach(el => {
+        el.classList.add('track-anim-target', outClass);
+      });
+      coverTargets.forEach(el => {
+        el.classList.add('cover-pop');
+      });
+
+      setTimeout(() => {
+        loadTrack(index);
+
+        textTargets.forEach(el => {
+          el.classList.remove(outClass);
+          el.classList.add(prepClass);
+        });
+
+        // Trigger reflow to restart transition smoothly
+        if (textTargets[0]) void textTargets[0].offsetWidth;
+
+        textTargets.forEach(el => {
+          el.classList.remove(prepClass);
+        });
+
+        setTimeout(() => {
+          textTargets.forEach(el => el.classList.remove('track-anim-target'));
+          coverTargets.forEach(el => el.classList.remove('cover-pop'));
+        }, 200);
+      }, 140);
+    }
+
+    function loadTrack(index) {
+      const t = tracks[index];
+      currentSeconds = 0;
+      totalSeconds = t.totalSec;
+
+      document.getElementById('compactTitle').textContent = t.title;
+      document.getElementById('compactArtist').textContent = t.artist;
+
+      document.getElementById('expandedTitle').textContent = t.title;
+      document.getElementById('expandedArtist').textContent = t.artist;
+
+      updateProgressUI();
+    }
+
+    function updateProgressUI() {
+      const pct = (currentSeconds / totalSeconds) * 100;
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressThumb').style.left = pct + '%';
+
+      const elapsedMin = Math.floor(currentSeconds / 60);
+      const elapsedSec = Math.floor(currentSeconds % 60).toString().padStart(2, '0');
+      document.getElementById('timeElapsed').textContent = `${elapsedMin}:${elapsedSec}`;
+
+      const remSecTotal = totalSeconds - currentSeconds;
+      const remMin = Math.floor(remSecTotal / 60);
+      const remSec = Math.floor(remSecTotal % 60).toString().padStart(2, '0');
+      document.getElementById('timeRemaining').textContent = `-${remMin}:${remSec}`;
+    }
+
+    function handleSeek(event) {
+      event.stopPropagation();
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, clickX / rect.width));
+
+      currentSeconds = pct * totalSeconds;
+      updateProgressUI();
+    }
+
+    // TOGGLE VOLUME SLIDER ON CLICK (NO HOVER!)
+    function toggleVolumeSlider(event) {
+      if (event) event.stopPropagation();
+      isVolumeOpen = !isVolumeOpen;
+
+      const controls = document.getElementById('centerMediaControls');
+      const wrapper = document.getElementById('volumeFlyoutWrapper');
+
+      if (isVolumeOpen) {
+        controls.classList.add('hidden');
+        wrapper.classList.add('active');
+      } else {
+        controls.classList.remove('hidden');
+        wrapper.classList.remove('active');
+      }
+    }
+
+    function closeVolumeSlider() {
+      isVolumeOpen = false;
+      const controls = document.getElementById('centerMediaControls');
+      const wrapper = document.getElementById('volumeFlyoutWrapper');
+      if (controls) controls.classList.remove('hidden');
+      if (wrapper) wrapper.classList.remove('active');
+    }
+
+    function updateVolumeFromMouse(e) {
+      const track = document.getElementById('volumeTrack');
+      if (!track) return;
+      const rect = track.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, clickX / rect.width));
+      currentVolume = Math.round(pct * 100);
+
+      document.getElementById('volumeFill').style.width = currentVolume + '%';
+      document.getElementById('volumeThumb').style.left = currentVolume + '%';
+      document.getElementById('volumePercent').textContent = currentVolume + '%';
+    }
+
+    function startVolumeDrag(e) {
+      if (e) e.stopPropagation();
+      isDraggingVolume = true;
+      updateVolumeFromMouse(e);
+    }
+
+    function updateProgressFromMouse(e) {
+      const track = document.getElementById('progressTrack');
+      if (!track) return;
+      const rect = track.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, clickX / rect.width));
+      currentSeconds = pct * totalSeconds;
+      updateProgressUI();
+    }
+
+    function startProgressDrag(e) {
+      if (e) e.stopPropagation();
+      isDraggingProgress = true;
+      updateProgressFromMouse(e);
+    }
+
+    document.addEventListener('mousemove', (e) => {
+      if (isDraggingVolume) {
+        updateVolumeFromMouse(e);
+      }
+      if (isDraggingProgress) {
+        updateProgressFromMouse(e);
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDraggingVolume) {
+        isDraggingVolume = false;
+      }
+      if (isDraggingProgress) {
+        isDraggingProgress = false;
+      }
+    });
+
+    setInterval(() => {
+      if (isPlaying && !isDraggingProgress) {
+        currentSeconds++;
+        if (currentSeconds >= totalSeconds) {
+          nextTrack();
+        } else {
+          updateProgressUI();
+        }
+      }
+    }, 1000);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        toggleIslandState(false);
+      } else if (e.key === ' ' && e.target === document.body) {
+        e.preventDefault();
+        togglePlayPause();
+      }
+    });
+
+    function setHUD(type, btn) {
+      const viewport = document.getElementById('gameViewport');
+      const dotaHud = document.getElementById('dotaHud');
+      const cs2Hud = document.getElementById('cs2Hud');
+      const islandWrapper = document.querySelector('.island-wrapper');
+
+      document.querySelectorAll('.demo-btn-group .demo-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+
+      if (type === 'dota') {
+        viewport.className = 'game-viewport viewport-dota';
+        dotaHud.style.display = 'flex';
+        cs2Hud.style.display = 'none';
+        islandWrapper.style.top = '46px';
+      } else if (type === 'cs2') {
+        viewport.className = 'game-viewport viewport-dota';
+        dotaHud.style.display = 'none';
+        cs2Hud.style.display = 'flex';
+        islandWrapper.style.top = '50px';
+      } else if (type === 'cyberpunk') {
+        viewport.className = 'game-viewport';
+        viewport.style.background = 'linear-gradient(rgba(10,12,20,0.5), rgba(10,12,20,0.9)), url("https://picsum.photos/seed/gaming/1920/1080") center/cover';
+        dotaHud.style.display = 'none';
+        cs2Hud.style.display = 'none';
+        islandWrapper.style.top = '20px';
+      }
+    }
+  </script>
+</body>
+</html>
