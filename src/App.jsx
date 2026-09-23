@@ -2703,7 +2703,7 @@ function BottomPlayerScrubBar({ trackPalette, seek }) {
   );
 }
 
-function buildWaveform(track, count = 120) {
+function buildWaveform(track, count = 180) {
   const source = `${track?.id || "empty"}:${track?.title || "track"}:${track?.artist || "artist"}`;
   let seed = 0;
   for (let index = 0; index < source.length; index += 1) {
@@ -2799,7 +2799,7 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
         {bars.map((height, index) => (
           <span
             key={`${currentTrack?.id || "empty"}-${index}`}
-            className={`waveform-bar ${index < playedBars ? "waveform-bar-played" : ""}`}
+            className={`waveform-bar ${index < playedBars ? "waveform-bar-played" : ""} ${isPlaying ? "" : "waveform-bar-paused"}`}
             style={{ "--wave-height": `${Math.round(height * 1.6)}px`, "--wave-delay": `${(index % 12) * 45}ms` }}
           />
         ))}

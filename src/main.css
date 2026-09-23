@@ -177,14 +177,19 @@ button {
 .waveform-bar {
   display: block;
   flex: 1 1 0%;
-  min-width: 3px;
+  min-width: 1px;
   height: var(--wave-height);
   max-height: 64px;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.2);
-  transform: none;
+  transform: scaleY(1);
   transform-origin: bottom;
-  transition: background-color 180ms ease, opacity 180ms ease;
+  transition: background-color 180ms ease, opacity 180ms ease, transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.waveform-bar-paused {
+  transform: scaleY(0.12);
 }
 
 .waveform-bar-played {
