@@ -94,7 +94,7 @@ function TrackSquare({ track, onPlay }) {
     <button
       type="button"
       onClick={() => onPlay(track)}
-      className="group w-40 shrink-0 text-left"
+      className="amy-release-card group w-40 shrink-0 text-left"
     >
       <div className="relative aspect-square overflow-hidden rounded-2xl bg-white/[0.04]">
         <img src={track.cover} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
@@ -110,7 +110,7 @@ function AlbumCard({ album, onOpen, isSaved = false, onToggleSave, fallbackCover
   const isSingle = album.kind === "single" || (album.trackCount || album.tracks?.length) === 1;
 
   return (
-    <div className="group w-40 shrink-0 text-left">
+    <div className="amy-release-card group w-40 shrink-0 text-left">
       <button
         type="button"
         onClick={() => onOpen(album)}
@@ -703,7 +703,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
   const isSubscribed = subscribedArtistIds.has(String(profile.id || profile.name));
 
   return (
-    <section className="flex-1 min-h-0 w-full overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#090909] text-white shadow-2xl pb-[140px] md:pb-12">
+    <section className="amy-artist-page flex-1 min-h-0 w-full overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#090909] text-white shadow-2xl pb-[140px] md:pb-12">
       <div className="relative min-h-[330px] max-md:min-h-0 overflow-hidden border-b border-white/[0.05] px-7 pb-7 pt-5 max-md:px-4 max-md:pb-3 max-md:pt-2">
         <div className="absolute inset-0 opacity-45 blur-3xl">
           <img
@@ -725,7 +725,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
             <svg className="h-6 w-6 fill-current rotate-90" viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"></path></svg>
           </button>
 
-          <div className="flex items-end gap-7 max-md:flex-col max-md:items-center max-md:text-center max-md:gap-4">
+          <div className="amy-artist-hero-content flex items-end gap-7 max-md:flex-col max-md:items-center max-md:text-center max-md:gap-4">
             <img
               src={profileAvatar}
               alt={profile.name}

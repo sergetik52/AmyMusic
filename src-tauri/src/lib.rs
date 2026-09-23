@@ -6,6 +6,114 @@ mod smtc;
 use tauri::{Manager, AppHandle, command, Emitter};
 use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
 use tauri_plugin_autostart::MacosLauncher;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+#[derive(Clone, Default)]
+struct OverlayRules {
+    enabled: bool,
+    mode: String,
+    apps: Vec<String>,
+}
+
+#[derive(Clone, Default)]
+struct OverlayRulesState {
+    rules: Arc<Mutex<OverlayRules>>,
+}
+
+fn normalized_process_name(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches('"')
+        .rsplit(['\\', '/'])
+        .next()
+        .unwrap_or(value)
+        .to_lowercase()
+}
+
+#[cfg(target_os = "windows")]
+fn foreground_process() -> Option<(String, String)> {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        GetCurrentProcessId, OpenProcess, QueryFullProcessImageNameW,
+        PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+    use windows::core::PWSTR;
+
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            return None;
+        }
+
+        let mut process_id = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut process_id));
+        if process_id == 0 || process_id == GetCurrentProcessId() {
+            return None;
+        }
+
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id).ok()?;
+        let mut buffer = [0u16; 1024];
+        let mut length = buffer.len() as u32;
+        let result = QueryFullProcessImageNameW(process, PROCESS_NAME_FORMAT(0), PWSTR(buffer.as_mut_ptr()), &mut length);
+        let _ = CloseHandle(process);
+        result.ok()?;
+
+        let path = String::from_utf16_lossy(&buffer[..length as usize]);
+        let name = path.rsplit(['\\', '/']).next().unwrap_or(&path).to_string();
+        Some((name, path))
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn foreground_process() -> Option<(String, String)> {
+    None
+}
+
+fn overlay_allowed(state: &OverlayRulesState) -> bool {
+    let Some((name, path)) = foreground_process() else {
+        return true;
+    };
+    let process_name = normalized_process_name(&name);
+    let process_path = normalized_process_name(&path);
+    let rules = state.rules.lock().map(|value| value.clone()).unwrap_or_default();
+    let matches = rules.apps.iter().any(|rule| {
+        let normalized = normalized_process_name(rule);
+        normalized == process_name || normalized == process_path
+    });
+
+    if rules.mode == "include" { matches } else { !matches }
+}
+
+fn apply_overlay_visibility(app: &AppHandle, state: &OverlayRulesState) {
+    if let Some(win) = app.get_webview_window("overlay") {
+        let enabled = state.rules.lock().map(|rules| rules.enabled).unwrap_or(false);
+        if enabled && overlay_allowed(state) {
+            let _ = win.show();
+            let _ = win.set_always_on_top(true);
+        } else {
+            let _ = win.hide();
+        }
+    }
+}
+
+#[command]
+fn get_foreground_app() -> serde_json::Value {
+    match foreground_process() {
+        Some((name, path)) => serde_json::json!({ "name": name, "path": path }),
+        None => serde_json::json!({ "name": "", "path": "" }),
+    }
+}
+
+#[command]
+fn set_overlay_rules(app: AppHandle, state: tauri::State<'_, OverlayRulesState>, mode: String, apps: Vec<String>) {
+    if let Ok(mut rules) = state.rules.lock() {
+        rules.mode = if mode == "include" { "include".to_string() } else { "exclude".to_string() };
+        rules.apps = apps.into_iter().map(|value| normalized_process_name(&value)).filter(|value| !value.is_empty()).collect();
+    }
+    apply_overlay_visibility(&app, &state);
+}
 
 #[command]
 fn broadcast_overlay_state(app: AppHandle, payload: serde_json::Value) {
@@ -89,15 +197,16 @@ fn apply_overlay_bounds(win: &tauri::WebviewWindow, expanded: bool, scale: f64, 
 }
 
 #[command]
-fn toggle_overlay_window(app: AppHandle, enabled: bool) {
-    if let Some(win) = app.get_webview_window("overlay") {
-        if enabled {
-            let _ = win.show();
-            let _ = win.set_always_on_top(true);
-        } else {
-            let _ = win.hide();
-        }
+fn set_overlay_window(app: &AppHandle, state: &OverlayRulesState, enabled: bool) {
+    if let Ok(mut rules) = state.rules.lock() {
+        rules.enabled = enabled;
     }
+    apply_overlay_visibility(app, state);
+}
+
+#[command]
+fn toggle_overlay_window(app: AppHandle, state: tauri::State<'_, OverlayRulesState>, enabled: bool) {
+    set_overlay_window(&app, &state, enabled);
 }
 
 #[command]
@@ -119,6 +228,7 @@ fn resize_overlay_window(app: AppHandle, expanded: bool, scale: f64, position: S
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(OverlayRulesState::default())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
@@ -127,6 +237,15 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_http::init())
         .setup(|app| {
+            let app_handle = app.handle().clone();
+            let overlay_rules = app.state::<OverlayRulesState>().inner().clone();
+            std::thread::spawn(move || {
+                loop {
+                    apply_overlay_visibility(&app_handle, &overlay_rules);
+                    std::thread::sleep(Duration::from_millis(500));
+                }
+            });
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -156,7 +275,8 @@ pub fn run() {
                         "toggle_overlay" => {
                             if let Some(win) = app_handle.get_webview_window("overlay") {
                                 let is_vis = win.is_visible().unwrap_or(false);
-                                toggle_overlay_window(app_handle.clone(), !is_vis);
+                                let overlay_state = app_handle.state::<OverlayRulesState>();
+                                set_overlay_window(&app_handle, &overlay_state, !is_vis);
                             }
                         }
                         "quit" => {
@@ -194,6 +314,8 @@ pub fn run() {
             smtc::update_smtc,
             smtc::clear_smtc,
             toggle_overlay_window,
+            set_overlay_rules,
+            get_foreground_app,
             is_overlay_visible,
             resize_overlay_window,
             broadcast_overlay_state,

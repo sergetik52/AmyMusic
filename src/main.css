@@ -174,6 +174,219 @@ button {
   isolation: isolate;
 }
 
+/* Product chrome: quiet surfaces keep the music artwork and the four primary
+   screens in focus while giving secondary workflows a consistent material. */
+.amy-settings-shell {
+  --settings-surface: rgba(255, 255, 255, 0.045);
+  --settings-surface-strong: rgba(255, 255, 255, 0.075);
+  --settings-line: rgba(255, 255, 255, 0.085);
+  background: #09090b !important;
+}
+
+.amy-settings-tabs {
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px;
+  border: 1px solid var(--settings-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.amy-settings-tab,
+.amy-settings-subtab {
+  border: 0;
+  color: rgba(255, 255, 255, 0.52);
+  cursor: pointer;
+  font-weight: 650;
+  transition: color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.amy-settings-tab {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.amy-settings-tab:hover,
+.amy-settings-subtab:hover {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.amy-settings-tab.is-active,
+.amy-settings-subtab.is-active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.11);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.amy-settings-subtabs {
+  border: 1px solid var(--settings-line);
+  border-radius: 14px;
+  background: var(--settings-surface);
+}
+
+.amy-settings-subtab {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.amy-settings-toggle-row {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+.amy-settings-toggle-row:last-child {
+  border-bottom: 0;
+}
+
+.amy-settings-switch {
+  position: relative;
+  width: 46px;
+  height: 27px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+
+.amy-settings-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32);
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 180ms ease;
+}
+
+.amy-settings-card,
+.amy-settings-proxy-card {
+  border-color: var(--settings-line) !important;
+  background: var(--settings-surface) !important;
+  box-shadow: none;
+}
+
+.amy-settings-card:hover,
+.amy-settings-proxy-card:hover {
+  background: var(--settings-surface-strong) !important;
+  transform: translateY(-1px);
+}
+
+.amy-settings-card:active,
+.amy-settings-proxy-card:active,
+.amy-settings-switch:active {
+  transform: scale(0.98);
+}
+
+.amy-mini-player {
+  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.025), transparent 44%, rgba(255, 255, 255, 0.035));
+  backdrop-filter: blur(24px) saturate(125%);
+}
+
+.amy-mini-player .player-seek-wrap > div:first-child {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.amy-mini-player .player-seek-wrap > div:first-child > div {
+  background: var(--player-accent) !important;
+}
+
+.amy-queue-panel {
+  background: rgba(15, 15, 17, 0.96);
+  backdrop-filter: blur(28px) saturate(130%);
+}
+
+.amy-queue-row {
+  min-height: 58px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.amy-queue-row:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.amy-queue-row.is-current {
+  background: color-mix(in srgb, var(--player-accent) 15%, rgba(255, 255, 255, 0.06));
+  box-shadow: inset 2px 0 0 var(--player-accent);
+}
+
+.amy-artist-card,
+.amy-release-card {
+  border: 1px solid transparent;
+}
+
+.amy-artist-card:hover,
+.amy-release-card:hover {
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+.amy-release-card > button > div {
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+}
+
+.amy-artist-page .amy-artist-hero-content > img {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.48);
+}
+
+button:focus-visible,
+[role="button"]:focus-visible,
+[role="switch"]:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.88);
+  outline-offset: 3px;
+}
+
+@media (max-width: 768px) {
+  .amy-settings-shell {
+    padding: 20px 16px 96px;
+  }
+
+  .amy-settings-tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .amy-settings-tab {
+    flex: 1 0 auto;
+  }
+
+  .amy-mini-player {
+    border-radius: 14px !important;
+    border-color: rgba(255, 255, 255, 0.11);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .amy-settings-tab,
+  .amy-settings-subtab,
+  .amy-settings-card,
+  .amy-settings-proxy-card,
+  .amy-settings-switch,
+  .amy-settings-switch-thumb {
+    transition: none;
+  }
+}
+
 
 .player-seek-slider {
   position: absolute;

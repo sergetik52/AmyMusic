@@ -4,33 +4,38 @@ import { useAudioPlayer } from "../audio/AudioPlayerContext";
 
 function SettingsToggle({ title, description, checked, onChange, disabled }) {
   return (
-    <div className={`flex items-center justify-between py-4 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div className={`amy-settings-toggle-row ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div className="flex-1 pr-5">
-        <div className="text-base font-semibold mb-1.5">{title}</div>
-        <div className="text-sm text-white/50 leading-relaxed">{description}</div>
+        <div className="text-[15px] font-semibold mb-1">{title}</div>
+        <div className="text-[13px] text-white/48 leading-relaxed">{description}</div>
       </div>
-      <div
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={title}
         onClick={() => onChange(!checked)}
-        className={`w-12 h-6.5 rounded-full relative cursor-pointer transition-colors duration-300 shrink-0 border ${
+        className={`amy-settings-switch ${
           checked ? "bg-white border-white" : "bg-[#333] border-[#444]"
         }`}
-        style={{ height: '26px' }}
       >
         <div
-          className={`absolute top-[2px] left-[2px] w-5 h-5 rounded-full transition-transform duration-300 ${
+          className={`amy-settings-switch-thumb ${
             checked ? "translate-x-[22px] bg-black" : "translate-x-0 bg-white"
           }`}
         />
-      </div>
+      </button>
     </div>
   );
 }
 
 function SettingsCard({ icon, title, desc, active, onClick, extra }) {
   return (
-    <div
+    <button
+      type="button"
+      aria-pressed={active}
       onClick={onClick}
-      className={`flex flex-col items-center p-5 rounded-xl border text-center cursor-pointer transition-all duration-200 ${
+      className={`amy-settings-card ${
         active
           ? "bg-[#1f1f1f] border-white"
           : "bg-[#141414] border-[#2a2a2a] hover:border-[#555] hover:bg-[#1a1a1a]"
@@ -43,15 +48,17 @@ function SettingsCard({ icon, title, desc, active, onClick, extra }) {
         {title} {extra}
       </div>
       <div className="text-[13px] text-white/50">{desc}</div>
-    </div>
+    </button>
   );
 }
 
 function SettingsProxyCard({ icon, title, desc, active, onClick }) {
   return (
-    <div
+    <button
+      type="button"
+      aria-pressed={active}
       onClick={onClick}
-      className={`flex items-center gap-5 p-5 rounded-xl border cursor-pointer transition-all duration-200 ${
+      className={`amy-settings-proxy-card ${
         active
           ? "border-white"
           : "bg-[#141414] border-[#2a2a2a] hover:border-[#555] hover:bg-[#1a1a1a]"
@@ -64,7 +71,7 @@ function SettingsProxyCard({ icon, title, desc, active, onClick }) {
         <div className="text-[15px] font-semibold mb-1">{title}</div>
         <div className="text-[13px] text-white/50">{desc}</div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -89,6 +96,8 @@ export function SettingsView({ profileData, onProfileSave }) {
   const [updateProgress, setUpdateProgress] = useState(0);
   const [updateMessage, setUpdateMessage] = useState("");
   const [latestDownloadUrl, setLatestDownloadUrl] = useState("");
+  const [overlayAppInput, setOverlayAppInput] = useState("");
+  const [overlayAppStatus, setOverlayAppStatus] = useState("");
 
   useEffect(() => {
     if (isDesktop && window.amyMusicDesktop?.getAppVersion) {
@@ -264,6 +273,42 @@ export function SettingsView({ profileData, onProfileSave }) {
     saveProfileSettings(nextSettings);
   };
 
+  const updateOverlayRules = (mode, apps) => {
+    const normalizedApps = [...new Set((apps || [])
+      .map((value) => String(value).trim().toLowerCase())
+      .filter(Boolean))].slice(0, 100);
+    const nextSettings = {
+      ...settings,
+      overlayAppMode: mode === "include" ? "include" : "exclude",
+      overlayAppRules: normalizedApps
+    };
+    saveProfileSettings(nextSettings);
+    window.amyMusicDesktop?.setOverlayRules?.(nextSettings.overlayAppMode, normalizedApps);
+  };
+
+  const addOverlayApp = (value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (!normalized) return;
+    const nextApps = [...(settings.overlayAppRules || []), normalized];
+    updateOverlayRules(settings.overlayAppMode || "exclude", nextApps);
+    setOverlayAppInput("");
+    setOverlayAppStatus("");
+  };
+
+  const addCurrentOverlayApp = async () => {
+    try {
+      const current = await window.amyMusicDesktop?.getForegroundApp?.();
+      if (current?.name) {
+        addOverlayApp(current.name);
+        setOverlayAppStatus(`Добавлено: ${current.name}`);
+      } else {
+        setOverlayAppStatus("Не удалось определить активное приложение");
+      }
+    } catch {
+      setOverlayAppStatus("Не удалось определить активное приложение");
+    }
+  };
+
   const updateProfileField = (field, value) => {
     setDraftProfile((current) => {
       const nextProfile = { ...current, [field]: value };
@@ -435,23 +480,21 @@ export function SettingsView({ profileData, onProfileSave }) {
           onCancel={() => setCroppingImageSrc(null)}
         />
       )}
-      <div className="flex justify-center w-full h-full overflow-y-auto custom-scrollbar px-5 py-10 bg-[#0b0b0b] text-white">
-        <div className="w-full max-w-[1200px]">
+      <div className="amy-settings-shell flex justify-center w-full h-full overflow-y-auto custom-scrollbar px-5 py-8 md:px-8 md:py-10 bg-[#0b0b0b] text-white">
+        <div className="w-full max-w-[1160px]">
           {/* Top Nav */}
-          <div className="flex gap-10 mb-8 border-b border-[#2a2a2a] overflow-x-auto no-scrollbar">
+          <div className="amy-settings-tabs flex gap-1 mb-8 overflow-x-auto no-scrollbar" role="tablist" aria-label="Разделы настроек">
             {["profile", "general", "customization", "integrations"].map((tab) => (
-              <div
+              <button
+                type="button"
                 key={tab}
+                role="tab"
+                aria-selected={activeTab === tab}
                 onClick={() => { setActiveTab(tab); setActiveSubTab(tab === "general" ? "main" : "proxy"); }}
-                className={`relative pb-4 text-xl font-semibold cursor-pointer whitespace-nowrap transition-colors ${
-                  activeTab === tab ? "text-white" : "text-white/50 hover:text-[#ccc]"
-                }`}
+                className={`amy-settings-tab ${activeTab === tab ? "is-active" : ""}`}
               >
                 {tab === "profile" ? "Профиль" : tab === "general" ? "Общие" : tab === "customization" ? "Кастомизация" : "Интеграции"}
-                {activeTab === tab && (
-                  <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-white pointer-events-none" />
-                )}
-              </div>
+              </button>
             ))}
           </div>
 
@@ -495,25 +538,26 @@ export function SettingsView({ profileData, onProfileSave }) {
         {activeTab === "general" && (
           <div className="animate-[fadeIn_0.3s_ease-out]">
             {/* Sub Nav */}
-            <div className="flex gap-2.5 bg-[#141414] p-1.5 rounded-full mb-10 w-fit max-w-full overflow-x-auto no-scrollbar relative">
+            <div className="amy-settings-subtabs flex gap-1.5 p-1.5 mb-9 w-fit max-w-full overflow-x-auto no-scrollbar relative" role="tablist" aria-label="Категории общих настроек">
               {[
                 { id: "main", icon: IconMain, label: "Основные" },
                 { id: "audio", icon: IconAudio, label: "Аудио" },
                 { id: "cache", icon: IconCache, label: "Кеш" },
                 { id: "binds", icon: IconBinds, label: "Бинды" },
               ].map((sub) => (
-                <div
+                <button
+                  type="button"
                   key={sub.id}
+                  role="tab"
+                  aria-selected={activeSubTab === sub.id}
                   onClick={() => setActiveSubTab(sub.id)}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-full text-[15px] font-semibold cursor-pointer whitespace-nowrap transition-all z-10 ${
-                    activeSubTab === sub.id ? "bg-white text-black" : "text-white/50 hover:text-[#ddd]"
-                  }`}
+                  className={`amy-settings-subtab ${activeSubTab === sub.id ? "is-active" : ""}`}
                 >
                   <div className={`w-[18px] h-[18px] ${activeSubTab === sub.id ? "text-black" : "text-inherit"}`}>
                     {sub.icon}
                   </div>
                   {sub.label}
-                </div>
+                </button>
               ))}
             </div>
 
@@ -810,7 +854,7 @@ export function SettingsView({ profileData, onProfileSave }) {
                   disabled={!isDesktop}
                 />
 
-                <div className={`transition-all duration-300 overflow-hidden ${settings.gameOverlayEnabled ? "max-h-[300px] opacity-100 mt-4 border-t border-[#2a2a2a] pt-4" : "max-h-0 opacity-0"}`}>
+                <div className={`transition-all duration-300 overflow-hidden ${settings.gameOverlayEnabled ? "max-h-[760px] opacity-100 mt-4 border-t border-[#2a2a2a] pt-4" : "max-h-0 opacity-0"}`}>
                   <div className="flex flex-col gap-5">
                     <div>
                       <div className="text-sm font-semibold mb-2">Размер свернутого режима</div>
@@ -852,6 +896,64 @@ export function SettingsView({ profileData, onProfileSave }) {
                         <option value="bottom-left">Снизу слева</option>
                         <option value="bottom-right">Снизу справа</option>
                       </select>
+                    </div>
+
+                    <div className="border-t border-white/[0.07] pt-4">
+                      <div className="text-sm font-semibold mb-1">Где показывать оверлей</div>
+                      <div className="text-xs text-white/45 mb-3">Фильтр применяется к активному окну Windows</div>
+                      <select
+                        value={settings.overlayAppMode || "exclude"}
+                        onChange={(e) => updateOverlayRules(e.target.value, settings.overlayAppRules || [])}
+                        className="w-full bg-[#222] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/50 cursor-pointer"
+                      >
+                        <option value="exclude">Во всех программах, кроме выбранных</option>
+                        <option value="include">Только в выбранных программах</option>
+                      </select>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(settings.overlayAppRules || []).map((appName) => (
+                          <span key={appName} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-white/75">
+                            {appName}
+                            <button
+                              type="button"
+                              onClick={() => updateOverlayRules(settings.overlayAppMode || "exclude", (settings.overlayAppRules || []).filter((item) => item !== appName))}
+                              className="text-white/35 hover:text-white transition"
+                              aria-label={`Удалить ${appName} из правил оверлея`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        {!(settings.overlayAppRules || []).length && (
+                          <span className="text-xs text-white/35">Список пуст</span>
+                        )}
+                      </div>
+
+                      <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={overlayAppInput}
+                          onChange={(e) => setOverlayAppInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOverlayApp(overlayAppInput); } }}
+                          placeholder="Например, discord.exe"
+                          className="min-w-0 flex-1 rounded-lg border border-[#333] bg-[#222] px-3 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addOverlayApp(overlayAppInput)}
+                          className="rounded-lg bg-white px-4 py-2.5 text-xs font-bold text-black transition hover:bg-white/85 active:scale-95"
+                        >
+                          Добавить
+                        </button>
+                        <button
+                          type="button"
+                          onClick={addCurrentOverlayApp}
+                          className="rounded-lg border border-white/15 bg-white/[0.05] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/10 active:scale-95"
+                        >
+                          Текущее окно
+                        </button>
+                      </div>
+                      {overlayAppStatus && <div className="mt-2 text-xs text-white/45">{overlayAppStatus}</div>}
                     </div>
                   </div>
                 </div>
