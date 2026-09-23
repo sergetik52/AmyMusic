@@ -2045,7 +2045,7 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
             />
             
             <div 
-              className={`absolute bottom-[84px] right-3 w-[calc(100vw-24px)] max-w-[390px] h-[min(560px,70vh)] max-h-[calc(100vh-112px)] rounded-2xl bg-[#101010]/[0.98] shadow-[0_20px_60px_rgba(0,0,0,.55)] flex flex-col border border-white/[0.09] transition-all duration-200 ease-out origin-bottom-right ${isQueueOpen ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-2 scale-95 opacity-0'}`}
+              className={`absolute left-3 bottom-[84px] w-[calc(100vw-24px)] max-w-[390px] h-[min(560px,70vh)] max-h-[calc(100vh-112px)] rounded-2xl bg-[#101010]/[0.98] shadow-[0_20px_60px_rgba(0,0,0,.55)] flex flex-col border border-white/[0.09] transition-all duration-200 ease-out origin-bottom-left ${isQueueOpen ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-2 scale-95 opacity-0'}`}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07]">

@@ -322,7 +322,7 @@ function ReleaseCard({ release, onOpen, onUnlike, showPin }) {
         onClick={() => onOpen(release)}
         className="w-full text-left disabled:cursor-default disabled:opacity-60"
       >
-        <div className="relative aspect-square overflow-hidden rounded-[var(--cover-radius,16px)] bg-white/[0.04]">
+        <div className="relative aspect-square overflow-hidden rounded-[var(--cover-radius,16px)] border border-white/[0.06] bg-[#0d0d0d] shadow-[0_12px_30px_rgba(0,0,0,.18)]">
           <img src={release.cover} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
           <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/25" />
           <div className="absolute bottom-2 right-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-black text-white/70">
@@ -431,7 +431,7 @@ function PlaylistView({
           container.scrollTop += 14;
         }
       }}
-      className="flex flex-1 min-h-0 select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none bg-[#090909] text-white pb-[140px] md:pb-16"
+      className="flex flex-1 min-h-0 select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none bg-black text-white pb-[140px] md:pb-16"
     >
       <div className="relative border-b border-white/[0.06] p-7 max-md:px-4 max-md:pb-3 max-md:pt-2">
         <div className="absolute inset-0 opacity-30 blur-3xl">
@@ -1101,7 +1101,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum, initialPlaylistId })
 
   if (isAddPlaylistOpen) {
     return (
-      <div className="flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none bg-[#090909] text-white animate-[slideUpFade_0.2s_ease-out_forwards]">
+      <div className="flex flex-1 select-none flex-col overflow-y-auto rounded-[17.76px] max-md:rounded-none bg-black text-white animate-[slideUpFade_0.2s_ease-out_forwards]">
         <div className="relative border-b border-white/[0.06] p-4 md:p-7 min-h-0 md:min-h-[315px]">
           <div className="absolute inset-0 opacity-30 blur-3xl">
             <img src={playlistCover || "/logo.png"} alt="" className="h-full w-full object-cover" />

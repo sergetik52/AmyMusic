@@ -4,15 +4,15 @@ import { useAudioPlayer } from "../audio/AudioPlayerContext";
 
 function SettingsToggle({ title, description, checked, onChange, disabled }) {
   return (
-    <div className={`flex items-center justify-between py-4 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div className={`flex items-center justify-between gap-5 rounded-xl border border-white/[0.06] bg-[#0d0d0d] px-4 py-3.5 my-2 transition-colors hover:border-white/[0.12] ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div className="flex-1 pr-5">
-        <div className="text-base font-semibold mb-1.5">{title}</div>
-        <div className="text-sm text-white/50 leading-relaxed">{description}</div>
+        <div className="text-[15px] font-semibold mb-1">{title}</div>
+        <div className="text-[13px] text-white/50 leading-relaxed">{description}</div>
       </div>
       <div
         onClick={() => onChange(!checked)}
         className={`w-12 h-6.5 rounded-full relative cursor-pointer transition-colors duration-300 shrink-0 border ${
-          checked ? "bg-white border-white" : "bg-[#333] border-[#444]"
+          checked ? "bg-white border-white" : "bg-[#2a2a2a] border-[#414141]"
         }`}
         style={{ height: '26px' }}
       >
@@ -31,9 +31,9 @@ function SettingsCard({ icon, title, desc, active, onClick, extra }) {
     <div
       onClick={onClick}
       className={`flex flex-col items-center p-5 rounded-xl border text-center cursor-pointer transition-all duration-200 ${
-        active
-          ? "bg-[#1f1f1f] border-white"
-          : "bg-[#141414] border-[#2a2a2a] hover:border-[#555] hover:bg-[#1a1a1a]"
+          active
+          ? "bg-white/[0.09] border-white/35"
+          : "bg-[#0d0d0d] border-white/[0.07] hover:border-white/20 hover:bg-white/[0.04]"
       }`}
     >
       <div className={`w-7 h-7 mb-3 transition-colors ${active ? "text-white" : "text-white/50"}`}>
@@ -53,8 +53,8 @@ function SettingsProxyCard({ icon, title, desc, active, onClick }) {
       onClick={onClick}
       className={`flex items-center gap-5 p-5 rounded-xl border cursor-pointer transition-all duration-200 ${
         active
-          ? "border-white"
-          : "bg-[#141414] border-[#2a2a2a] hover:border-[#555] hover:bg-[#1a1a1a]"
+          ? "bg-white/[0.09] border-white/35"
+          : "bg-[#0d0d0d] border-white/[0.07] hover:border-white/20 hover:bg-white/[0.04]"
       }`}
     >
       <div className={`w-6 h-6 shrink-0 transition-colors ${active ? "text-white" : "text-white/50"}`}>
@@ -451,22 +451,19 @@ export function SettingsView({ profileData, onProfileSave }) {
           onCancel={() => setCroppingImageSrc(null)}
         />
       )}
-      <div className="flex justify-center w-full h-full overflow-y-auto custom-scrollbar px-5 py-10 bg-[#0b0b0b] text-white">
+      <div className="flex justify-center w-full h-full overflow-y-auto custom-scrollbar px-5 py-8 md:px-8 md:py-10 bg-black text-white">
         <div className="w-full max-w-[1200px]">
           {/* Top Nav */}
-          <div className="flex gap-10 mb-8 border-b border-[#2a2a2a] overflow-x-auto no-scrollbar">
+          <div className="flex gap-1.5 mb-8 bg-[#111] p-1.5 rounded-full border border-white/[0.06] overflow-x-auto no-scrollbar w-fit max-w-full">
             {["profile", "general", "customization", "integrations"].map((tab) => (
               <div
                 key={tab}
                 onClick={() => { setActiveTab(tab); setActiveSubTab(tab === "general" ? "main" : "proxy"); }}
-                className={`relative pb-4 text-xl font-semibold cursor-pointer whitespace-nowrap transition-colors ${
-                  activeTab === tab ? "text-white" : "text-white/50 hover:text-[#ccc]"
+                className={`relative rounded-full px-5 py-2.5 text-[15px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${
+                  activeTab === tab ? "bg-white text-black" : "text-white/50 hover:text-white hover:bg-white/[0.06]"
                 }`}
               >
                 {tab === "profile" ? "Профиль" : tab === "general" ? "Общие" : tab === "customization" ? "Кастомизация" : "Интеграции"}
-                {activeTab === tab && (
-                  <div className="absolute bottom-[-1px] left-0 w-full h-[2px] bg-white pointer-events-none" />
-                )}
               </div>
             ))}
           </div>
