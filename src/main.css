@@ -175,22 +175,38 @@ button {
 }
 
 .waveform-bar {
+  position: relative;
   display: block;
   flex: 1 1 0%;
   min-width: 1px;
   height: var(--wave-height);
   max-height: 86px;
-  border-radius: 9999px !important;
-  overflow: hidden;
-  clip-path: inset(0 round 9999px);
-  background: rgba(255, 255, 255, 0.28);
+  border-radius: 0;
+  background: transparent;
   transform: none;
   transform-origin: bottom;
   transition: background-color 180ms ease, opacity 180ms ease;
 }
 
+.waveform-bar::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .waveform-bar-played {
-  background: rgba(255, 255, 255, 0.82);
+  background: transparent;
+}
+
+.waveform-bar-played::before {
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.waveform-title,
+.waveform-artist {
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.92), 0 0 2px rgba(0, 0, 0, 0.96);
 }
 
 .wave-control {

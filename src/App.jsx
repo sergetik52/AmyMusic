@@ -2796,7 +2796,7 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
           <span
             key={`${currentTrack?.id || "empty"}-${index}`}
             className={`waveform-bar ${index < playedBars ? "waveform-bar-played" : ""}`}
-            style={{ "--wave-height": `${Math.round(height * 1.6)}px`, "--wave-delay": `${(index % 12) * 45}ms`, borderRadius: "9999px", overflow: "hidden", clipPath: "inset(0 round 9999px)" }}
+            style={{ "--wave-height": `${Math.round(height * 1.6)}px`, "--wave-delay": `${(index % 12) * 45}ms` }}
           />
         ))}
       </div>
@@ -2814,12 +2814,12 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
           <button
             type="button"
             onClick={(event) => { event.stopPropagation(); onOpenFull?.(); }}
-            className="max-w-full truncate rounded-md text-left text-[14px] font-semibold text-white outline-none transition hover:text-white/80 focus-visible:ring-2 focus-visible:ring-white/60"
+            className="waveform-title max-w-full truncate rounded-md text-left text-[14px] font-semibold text-white outline-none transition hover:text-white/80 focus-visible:ring-2 focus-visible:ring-white/60"
             aria-label="Открыть полный плеер"
           >
             {currentTrack?.title || "Нет трека"}
           </button>
-          <div className="flex max-w-full items-center gap-1 overflow-hidden whitespace-nowrap text-[12px] text-white/48">
+          <div className="waveform-artist flex max-w-full items-center gap-1 overflow-hidden whitespace-nowrap text-[12px] text-white/48">
             {trackArtists.length > 0 ? trackArtists.map((artist, index) => (
               <React.Fragment key={`${artist.id || artist.name}-${index}`}>
                 {index > 0 && <span className="text-white/25">×</span>}
