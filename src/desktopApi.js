@@ -92,6 +92,8 @@ export function initDesktopApi() {
     updateSmtc: async (info) => invoke('update_smtc', { info }),
     clearSmtc: async () => invoke('clear_smtc'),
     toggleOverlay: async (enabled) => invoke('toggle_overlay_window', { enabled }),
+    getRunningApps: async () => invoke('get_running_apps'),
+    setOverlayFilter: async (enabled, mode, apps) => invoke('set_overlay_filter', { enabled, mode, apps }),
     isOverlayVisible: async () => invoke('is_overlay_visible'),
     resizeOverlayWindow: async (expanded, forceScale, forcePosition) => {
       const cfg = window.amyMusicDesktop._getOverlayConfig();

@@ -3,9 +3,165 @@ mod updater;
 mod network;
 mod smtc;
 
-use tauri::{Manager, AppHandle, command, Emitter};
+use serde::Serialize;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
+use tauri::{Manager, AppHandle, command, Emitter, State};
 use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
 use tauri_plugin_autostart::MacosLauncher;
+
+#[derive(Clone, Default)]
+struct OverlayFilterState {
+    enabled: bool,
+    mode: String,
+    apps: Vec<String>,
+}
+
+#[derive(Clone, Serialize)]
+struct RunningApp {
+    name: String,
+    pid: u32,
+}
+
+fn overlay_allowed(filter: &OverlayFilterState, foreground: Option<&str>) -> bool {
+    if !filter.enabled {
+        return false;
+    }
+    let name = foreground.unwrap_or_default().to_ascii_lowercase();
+    let selected = filter.apps.iter().any(|app| app.eq_ignore_ascii_case(&name));
+    match filter.mode.as_str() {
+        "include" => selected,
+        _ => !selected,
+    }
+}
+
+fn set_overlay_visibility(app: &AppHandle, visible: bool) {
+    if let Some(win) = app.get_webview_window("overlay") {
+        if visible {
+            let _ = win.show();
+            let _ = win.set_always_on_top(true);
+        } else {
+            let _ = win.hide();
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn foreground_process_name() -> Option<String> {
+    use windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            return None;
+        }
+        let mut pid = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid == 0 {
+            return None;
+        }
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok()?;
+        let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        let mut found = None;
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                if entry.th32ProcessID == pid {
+                    let len = entry.szExeFile.iter().position(|c| *c == 0).unwrap_or(entry.szExeFile.len());
+                    found = Some(String::from_utf16_lossy(&entry.szExeFile[..len]));
+                    break;
+                }
+                if Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        found
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn foreground_process_name() -> Option<String> { None }
+
+#[cfg(target_os = "windows")]
+fn running_apps() -> Vec<RunningApp> {
+    use std::collections::HashSet;
+    use windows::core::BOOL;
+    use windows::Win32::Foundation::{HWND, LPARAM};
+    use windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowThreadProcessId, IsWindowVisible};
+
+    unsafe extern "system" fn collect_window(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        if IsWindowVisible(hwnd).as_bool() {
+            let mut pid = 0;
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            if pid != 0 {
+                (*(lparam.0 as *mut HashSet<u32>)).insert(pid);
+            }
+        }
+        BOOL(1)
+    }
+
+    unsafe {
+        let mut visible_pids: HashSet<u32> = HashSet::new();
+        let _ = EnumWindows(Some(collect_window), LPARAM(&mut visible_pids as *mut _ as isize));
+        let snapshot = match CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok() {
+            Some(snapshot) => snapshot,
+            None => return Vec::new(),
+        };
+        let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        let mut result = Vec::new();
+        let mut seen = HashSet::new();
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                let len = entry.szExeFile.iter().position(|c| *c == 0).unwrap_or(entry.szExeFile.len());
+                let name = String::from_utf16_lossy(&entry.szExeFile[..len]);
+                let lower = name.to_ascii_lowercase();
+                if visible_pids.contains(&entry.th32ProcessID)
+                    && !name.is_empty()
+                    && lower != "amymusic.exe"
+                    && seen.insert(lower)
+                {
+                    result.push(RunningApp { name, pid: entry.th32ProcessID });
+                }
+                if Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        result.sort_by_key(|app| app.name.to_ascii_lowercase());
+        result
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn running_apps() -> Vec<RunningApp> { Vec::new() }
+
+#[command]
+fn get_running_apps() -> Vec<RunningApp> { running_apps() }
+
+#[command]
+fn set_overlay_filter(
+    app: AppHandle,
+    filter: State<'_, Arc<Mutex<OverlayFilterState>>>,
+    enabled: bool,
+    mode: String,
+    apps: Vec<String>,
+) {
+    if let Ok(mut current) = filter.lock() {
+        current.enabled = enabled;
+        current.mode = if mode == "include" { "include".into() } else { "exclude".into() };
+        current.apps = apps;
+        set_overlay_visibility(&app, overlay_allowed(&current, foreground_process_name().as_deref()));
+    }
+}
 
 #[command]
 fn broadcast_overlay_state(app: AppHandle, payload: serde_json::Value) {
@@ -89,15 +245,15 @@ fn apply_overlay_bounds(win: &tauri::WebviewWindow, expanded: bool, scale: f64, 
 }
 
 #[command]
-fn toggle_overlay_window(app: AppHandle, enabled: bool) {
-    if let Some(win) = app.get_webview_window("overlay") {
-        if enabled {
-            let _ = win.show();
-            let _ = win.set_always_on_top(true);
-        } else {
-            let _ = win.hide();
-        }
+fn toggle_overlay_window(
+    app: AppHandle,
+    filter: State<'_, Arc<Mutex<OverlayFilterState>>>,
+    enabled: bool,
+) {
+    if let Ok(mut current) = filter.lock() {
+        current.enabled = enabled;
     }
+    set_overlay_visibility(&app, enabled);
 }
 
 #[command]
@@ -119,6 +275,7 @@ fn resize_overlay_window(app: AppHandle, expanded: bool, scale: f64, position: S
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(Arc::new(Mutex::new(OverlayFilterState::default())))
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
@@ -156,7 +313,13 @@ pub fn run() {
                         "toggle_overlay" => {
                             if let Some(win) = app_handle.get_webview_window("overlay") {
                                 let is_vis = win.is_visible().unwrap_or(false);
-                                toggle_overlay_window(app_handle.clone(), !is_vis);
+                                let enabled = !is_vis;
+                                if let Some(filter) = app_handle.try_state::<Arc<Mutex<OverlayFilterState>>>() {
+                                    if let Ok(mut current) = filter.lock() {
+                                        current.enabled = enabled;
+                                    }
+                                }
+                                set_overlay_visibility(app_handle, enabled);
                             }
                         }
                         "quit" => {
@@ -176,6 +339,16 @@ pub fn run() {
                     _ => {}
                 })
                 .build(app)?;
+
+            let app_handle = app.handle().clone();
+            let filter = app.state::<Arc<Mutex<OverlayFilterState>>>().inner().clone();
+            thread::spawn(move || loop {
+                let allowed = filter.lock().ok().map(|state| {
+                    overlay_allowed(&state, foreground_process_name().as_deref())
+                }).unwrap_or(false);
+                set_overlay_visibility(&app_handle, allowed);
+                thread::sleep(Duration::from_millis(500));
+            });
 
             Ok(())
         })
@@ -198,7 +371,9 @@ pub fn run() {
             resize_overlay_window,
             broadcast_overlay_state,
             broadcast_overlay_cmd,
-            request_overlay_state
+            request_overlay_state,
+            get_running_apps,
+            set_overlay_filter
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

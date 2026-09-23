@@ -80,6 +80,8 @@ export function SettingsView({ profileData, onProfileSave }) {
   const [draftProfile, setDraftProfile] = useState(profileData || { displayName: "", avatarUrl: "" });
   const [croppingImageSrc, setCroppingImageSrc] = useState(null);
   const [localCacheSize, setLocalCacheSize] = useState("0 MB");
+  const [runningApps, setRunningApps] = useState([]);
+  const [overlayAppSearch, setOverlayAppSearch] = useState("");
   
   const isDesktop = Boolean(typeof window !== "undefined" && window.amyMusicDesktop);
 
@@ -135,6 +137,20 @@ export function SettingsView({ profileData, onProfileSave }) {
   };
 
   useEffect(() => subscribeProfileSettings(setSettings), []);
+
+  useEffect(() => {
+    if (!isDesktop || !settings.gameOverlayEnabled || !window.amyMusicDesktop?.getRunningApps) return;
+    window.amyMusicDesktop.getRunningApps().then((apps) => setRunningApps(Array.isArray(apps) ? apps : [])).catch(() => setRunningApps([]));
+  }, [isDesktop, settings.gameOverlayEnabled]);
+
+  const applyOverlayFilter = (nextSettings) => {
+    if (!isDesktop || !window.amyMusicDesktop?.setOverlayFilter) return;
+    window.amyMusicDesktop.setOverlayFilter(
+      Boolean(nextSettings.gameOverlayEnabled),
+      nextSettings.overlayFilterMode || "exclude",
+      nextSettings.overlayFilterApps || []
+    ).catch(() => {});
+  };
 
   useEffect(() => {
     if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
@@ -804,13 +820,15 @@ export function SettingsView({ profileData, onProfileSave }) {
                   description="Показывать мини-плеер поверх остальных окон" 
                   checked={Boolean(settings.gameOverlayEnabled)} 
                   onChange={(v) => { 
+                    const next = { ...settings, gameOverlayEnabled: v };
                     updateField("gameOverlayEnabled", v); 
                     isDesktop && window.amyMusicDesktop?.toggleOverlay?.(v); 
+                    applyOverlayFilter(next);
                   }} 
                   disabled={!isDesktop}
                 />
 
-                <div className={`transition-all duration-300 overflow-hidden ${settings.gameOverlayEnabled ? "max-h-[300px] opacity-100 mt-4 border-t border-[#2a2a2a] pt-4" : "max-h-0 opacity-0"}`}>
+                <div className={`transition-all duration-300 overflow-hidden ${settings.gameOverlayEnabled ? "max-h-[720px] opacity-100 mt-4 border-t border-[#2a2a2a] pt-4" : "max-h-0 opacity-0"}`}>
                   <div className="flex flex-col gap-5">
                     <div>
                       <div className="text-sm font-semibold mb-2">Размер свернутого режима</div>
@@ -852,6 +870,62 @@ export function SettingsView({ profileData, onProfileSave }) {
                         <option value="bottom-left">Снизу слева</option>
                         <option value="bottom-right">Снизу справа</option>
                       </select>
+                    </div>
+
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Где показывать оверлей</div>
+                      <select
+                        value={settings.overlayFilterMode || "exclude"}
+                        onChange={(e) => {
+                          const next = { ...settings, overlayFilterMode: e.target.value };
+                          updateField("overlayFilterMode", e.target.value);
+                          applyOverlayFilter(next);
+                        }}
+                        className="w-full bg-[#222] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/50 cursor-pointer"
+                      >
+                        <option value="exclude">Везде, кроме выбранных программ</option>
+                        <option value="include">Только в выбранных программах</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <div className="text-sm font-semibold mb-2">Выбранные программы</div>
+                      <input
+                        type="search"
+                        value={overlayAppSearch}
+                        onChange={(e) => setOverlayAppSearch(e.target.value)}
+                        placeholder="Поиск активного EXE процесса"
+                        className="w-full bg-[#222] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-white/50"
+                      />
+                      <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-[#2a2a2a] bg-[#111]">
+                        {runningApps
+                          .filter((app) => app?.name?.toLowerCase().includes(overlayAppSearch.trim().toLowerCase()))
+                          .map((app) => {
+                            const selected = (settings.overlayFilterApps || []).includes(app.name.toLowerCase());
+                            return (
+                              <button
+                                type="button"
+                                key={`${app.name}-${app.pid}`}
+                                onClick={() => {
+                                  const current = settings.overlayFilterApps || [];
+                                  const name = app.name.toLowerCase();
+                                  const apps = selected ? current.filter((item) => item !== name) : [...current, name];
+                                  const next = { ...settings, overlayFilterApps: apps };
+                                  updateField("overlayFilterApps", apps);
+                                  applyOverlayFilter(next);
+                                }}
+                                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-white/10"
+                              >
+                                <span className="truncate">{app.name}</span>
+                                <span className={`ml-3 text-xs ${selected ? "text-white" : "text-white/35"}`}>{selected ? "Выбрано" : "Выбрать"}</span>
+                              </button>
+                            );
+                          })}
+                        {!runningApps.length && <div className="px-3 py-3 text-sm text-white/40">Нет доступных окон</div>}
+                      </div>
+                      {!!(settings.overlayFilterApps || []).length && (
+                        <div className="mt-2 text-xs text-white/45">Выбрано: {(settings.overlayFilterApps || []).join(", ")}</div>
+                      )}
                     </div>
                   </div>
                 </div>

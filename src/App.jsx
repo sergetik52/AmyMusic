@@ -2918,6 +2918,11 @@ export default function App() {
       if (typeof window !== "undefined" && window.amyMusicDesktop?.toggleOverlay) {
         window.amyMusicDesktop.resizeOverlayWindow?.(false).catch(() => {});
         window.amyMusicDesktop.toggleOverlay(true).catch(() => {});
+        window.amyMusicDesktop.setOverlayFilter?.(
+          true,
+          profileSettings.overlayFilterMode || "exclude",
+          profileSettings.overlayFilterApps || []
+        ).catch(() => {});
       }
     }
 

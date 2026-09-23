@@ -28,6 +28,8 @@ export const defaultProfileSettings = {
   gameOverlayEnabled: false,
   overlayScale: 1.0,
   overlayPosition: "top",
+  overlayFilterMode: "exclude",
+  overlayFilterApps: [],
   crossfadeEnabled: false,
   audioCacheEnabled: true,
   crossfadeSeconds: 4,
@@ -104,6 +106,10 @@ export function saveProfileSettings(settings, silent = false) {
     gameOverlayEnabled: Boolean(settings?.gameOverlayEnabled),
     overlayScale: Number(settings?.overlayScale) || 1.0,
     overlayPosition: settings?.overlayPosition || "top",
+    overlayFilterMode: settings?.overlayFilterMode === "include" ? "include" : "exclude",
+    overlayFilterApps: Array.isArray(settings?.overlayFilterApps)
+      ? [...new Set(settings.overlayFilterApps.map((app) => String(app).trim().toLowerCase()).filter(Boolean))]
+      : [],
     audioOutputDevice: String(settings?.audioOutputDevice || defaultProfileSettings.audioOutputDevice),
     audioQuality: String(settings?.audioQuality || defaultProfileSettings.audioQuality),
     volumeNormalization: Boolean(settings?.volumeNormalization),
