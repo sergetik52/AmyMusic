@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useAudioPlayer, useAudioTime } from "../audio/AudioPlayerContext";
+import { useAudioPlayer, useAudioTime, useAudioEnergy } from "../audio/AudioPlayerContext";
 import { getCachedLyricsForTrack, getActiveLyricIndex, clearLyricsCacheForTrack } from "../services/lyricsApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { TrackContextMenu, TrackMenuButton } from "./TrackContextMenu";
@@ -284,7 +284,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   const {
     currentTrack,
     trackPalette,
-    audioEnergy,
     isPlaying,
     isLiked,
     isDisliked,
@@ -308,6 +307,9 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     likedTrackIds,
     clearHistory
   } = useAudioPlayer();
+
+  const { currentTime, duration, progress } = useAudioTime();
+  const audioEnergy = useAudioEnergy();
 
   const prevIndex = useRef(currentIndex);
   const slideClass = useRef("animate-slideInRight");
