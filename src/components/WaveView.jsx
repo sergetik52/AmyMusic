@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useAudioPlayer } from "../audio/AudioPlayerContext";
+import { useAudioPlayer, useAudioTime } from "../audio/AudioPlayerContext";
 import { getPersonalWaveTracks, getWaveTracks } from "../services/soundCloudApi";
 
 const dnaWavePaths = [
@@ -105,7 +105,8 @@ function shuffleWaveTracks(tracks) {
   return shuffled;
 }
 
-function WaveSeekBar({ currentTime, duration, progress, seek }) {
+function WaveSeekBar({ seek }) {
+  const { currentTime, duration, progress } = useAudioTime();
   const percent = Math.round((progress || 0) * 1000) / 10;
 
   return (
@@ -243,9 +244,6 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
     isLoading,
     queue,
     currentIndex,
-    currentTime,
-    duration,
-    progress,
     likedTracks,
     dislikedTrackIds,
     dislikedTracks,
@@ -510,9 +508,6 @@ export function WaveView({ requestId: _requestId = 0, onOpenFull }) {
         </div>
 
         <WaveSeekBar
-          currentTime={currentTime}
-          duration={duration}
-          progress={progress}
           seek={seek}
         />
 

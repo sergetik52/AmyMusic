@@ -18,7 +18,7 @@ import { CollectionView } from "./components/CollectionView";
 import { ArtistView, AlbumView } from "./components/ArtistView";
 import { FullPlayerOverlay } from "./components/FullPlayerOverlay";
 import { GameOverlay } from "./components/GameOverlay";
-import { AudioProvider, useAudioPlayer } from "./audio/AudioPlayerContext";
+import { AudioProvider, useAudioPlayer, useAudioTime } from "./audio/AudioPlayerContext";
 import { TrackMenuButton, TrackContextMenu } from "./components/TrackContextMenu";
 import { AvatarCropperModal } from "./components/AvatarCropperModal";
 import { EqualizerModal } from "./components/EqualizerModal";
@@ -1960,7 +1960,7 @@ function formatTime(seconds) {
 }
 
 function PlayerSeekBar() {
-  const { currentTime, duration, progress, seek } = useAudioPlayer();
+  const { seek } = useAudioPlayer();
   const percent = Math.round((progress || 0) * 1000) / 10;
 
   return (
@@ -2368,7 +2368,8 @@ function AlbumViewContainer({ album, onBack, onOpenArtist, onOpenAlbum }) {
 }
 
 function MiniKaraoke({ isOpen, onClose, onOpenFull }) {
-  const { currentTrack, currentTime, duration, seek, trackPalette } = useAudioPlayer();
+  const { currentTrack, seek, trackPalette } = useAudioPlayer();
+  const { currentTime, duration } = useAudioTime();
   const [lyricsState, setLyricsState] = useState({ status: "idle", lines: [] });
   const [lyricsOffset, setLyricsOffset] = useState(0);
   const lyricRefs = useRef([]);
@@ -2602,48 +2603,12 @@ function MiniKaraoke({ isOpen, onClose, onOpenFull }) {
   );
 }
 
-function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, isKaraokeOpen }) {
-  const { currentTime, duration, progress, seek, trackPalette, next, previous } = useAudioPlayer();
+
+function BottomPlayerScrubBar({ trackPalette, seek }) {
+  const { currentTime, duration, progress } = useAudioTime();
   const [hoverState, setHoverState] = useState({ visible: false, percent: 0, time: 0 });
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubPercent, setScrubPercent] = useState(null);
-  const touchStartRef = useRef(null);
-
-  const handleTouchStart = (e) => {
-    if (e.touches && e.touches.length === 1) {
-      touchStartRef.current = {
-        x: e.touches[0].clientX,
-        y: e.touches[0].clientY,
-        time: Date.now()
-      };
-    }
-  };
-
-  const handleTouchEnd = (e) => {
-    if (!touchStartRef.current || !e.changedTouches || e.changedTouches.length === 0) return;
-    const touchEnd = e.changedTouches[0];
-    const deltaX = touchEnd.clientX - touchStartRef.current.x;
-    const deltaY = touchEnd.clientY - touchStartRef.current.y;
-    const deltaTime = Date.now() - touchStartRef.current.time;
-    touchStartRef.current = null;
-
-    if (deltaTime > 600) return;
-
-    // Swipe UP opens full player
-    if (deltaY < -35 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
-      onOpenFull?.();
-      return;
-    }
-
-    // Horizontal swipe switches tracks
-    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
-      if (deltaX < 0) {
-        next();
-      } else {
-        previous();
-      }
-    }
-  };
 
   const rawPercent = currentTime > 0 && duration > 0 ? Math.min(100, Math.max(0, Math.round((progress || 0) * 1000) / 10)) : 0;
   const percent = isScrubbing && scrubPercent !== null ? scrubPercent : rawPercent;
@@ -2684,21 +2649,103 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, 
     setIsScrubbing(false);
     setScrubPercent(null);
   };
+  const formatTime = (secs) => {
+    if (!secs || isNaN(secs)) return "0:00";
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
 
   return (
-    <div className="group/player relative z-30 w-full select-none">
-      {/* Floating timing tooltip on hover */}
+    <>
       {hoverState.visible && duration > 0 && (
         <div
           className="pointer-events-none absolute -top-8 z-50 -translate-x-1/2 rounded-md bg-[#18181b]/95 px-2 py-0.5 text-[10.5px] font-mono font-semibold text-white shadow-xl border border-white/15 backdrop-blur-md whitespace-nowrap"
-          style={{
-            left: `${Math.max(4, Math.min(96, hoverState.percent))}%`
-          }}
+          style={{ left: `${Math.max(4, Math.min(96, hoverState.percent))}%` }}
         >
           {formatTime(hoverState.time)} <span className="text-white/40">/</span> {formatTime(duration)}
         </div>
       )}
 
+      <div className="absolute inset-[1px] overflow-hidden rounded-[calc(var(--player-radius,20px)-1px)] pointer-events-none z-0">
+        {percent > 0 && (
+          <div
+            className={`absolute inset-y-0 left-0 ${isScrubbing ? "transition-none" : "transition-[width] duration-200 ease-linear"}`}
+            style={{ width: `${percent}%`, backgroundColor: `color-mix(in srgb, var(--player-accent) 14%, transparent)` }}
+          />
+        )}
+        <div className="absolute top-0 left-0 right-0 h-[3px] group-hover/player:h-[5px] transition-all duration-200 bg-white/10">
+          {percent > 0 && (
+            <div className={`h-full bg-[var(--player-accent)] ${isScrubbing ? "transition-none" : "transition-[width] duration-200 ease-linear"}`} style={{ width: `${percent}%` }} />
+          )}
+        </div>
+      </div>
+
+      <div 
+        onMouseMove={handleSeekMouseMove}
+        onMouseLeave={handleSeekMouseLeave}
+        className="relative z-20 w-full h-[3px] group-hover/player:h-[5px] transition-all duration-200 cursor-pointer pointer-events-auto"
+      >
+        <input
+          type="range"
+          min="0"
+          max={duration || 100}
+          step="0.01"
+          value={isScrubbing && scrubPercent !== null ? (scrubPercent / 100) * (duration || 0) : (currentTime || 0)}
+          onChange={handleInputChange}
+          onPointerDown={handleInputPointerDown}
+          onPointerUp={handleInputPointerUp}
+          className="absolute inset-0 w-full opacity-0 cursor-pointer"
+          disabled={!duration}
+        />
+      </div>
+    </>
+  );
+}
+
+function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, isKaraokeOpen }) {
+  const { seek, trackPalette, next, previous } = useAudioPlayer();
+    const touchStartRef = useRef(null);
+
+  const handleTouchStart = (e) => {
+    if (e.touches && e.touches.length === 1) {
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        time: Date.now()
+      };
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!touchStartRef.current || !e.changedTouches || e.changedTouches.length === 0) return;
+    const touchEnd = e.changedTouches[0];
+    const deltaX = touchEnd.clientX - touchStartRef.current.x;
+    const deltaY = touchEnd.clientY - touchStartRef.current.y;
+    const deltaTime = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+
+    if (deltaTime > 600) return;
+
+    // Swipe UP opens full player
+    if (deltaY < -35 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
+      onOpenFull?.();
+      return;
+    }
+
+    // Horizontal swipe switches tracks
+    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      if (deltaX < 0) {
+        next();
+      } else {
+        previous();
+      }
+    }
+  };
+
+  
+  return (
+    <div className="group/player relative z-30 w-full select-none">
       {/* Main player box */}
       <div
         onTouchStart={handleTouchStart}
@@ -2712,57 +2759,7 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, 
           boxShadow: "0 22px 60px rgba(0,0,0,.55)"
         }}
       >
-        {/* Sub-pixel exact inner clipped container (inset 1px inside border, inner radius = outer radius - 1px) */}
-        <div className="absolute inset-[1px] overflow-hidden rounded-[calc(var(--player-radius,20px)-1px)] pointer-events-none z-0">
-          {/* Dynamic minimal background fill layer */}
-          {percent > 0 && (
-            <div
-              className={`absolute inset-y-0 left-0 ${
-                isScrubbing ? "transition-none" : "transition-[width] duration-200 ease-linear"
-              }`}
-              style={{
-                width: `${percent}%`,
-                backgroundColor: `color-mix(in srgb, var(--player-accent) 14%, transparent)`
-              }}
-            />
-          )}
-
-          {/* Top integrated progress bar line */}
-          <div className="absolute top-0 left-0 right-0 h-[3px] group-hover/player:h-[5px] transition-all duration-200 bg-white/10">
-            {percent > 0 && (
-              <div
-                className={`h-full bg-[var(--player-accent)] ${
-                  isScrubbing ? "transition-none" : "transition-[width] duration-200 ease-linear"
-                }`}
-                style={{ width: `${percent}%` }}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Top interactive hover & seek overlay */}
-        <div 
-          onMouseMove={handleSeekMouseMove}
-          onMouseLeave={handleSeekMouseLeave}
-          className="relative z-20 w-full h-[3px] group-hover/player:h-[5px] transition-all duration-200 cursor-pointer pointer-events-auto"
-        >
-          <input
-            type="range"
-            min="0"
-            max={Math.max(duration || 0, 1)}
-            step="0.1"
-            value={Math.min(currentTime || 0, duration || 0)}
-            onInput={handleInputChange}
-            onChange={handleInputChange}
-            onMouseDown={handleInputPointerDown}
-            onMouseUp={handleInputPointerUp}
-            onTouchStart={handleInputPointerDown}
-            onTouchEnd={handleInputPointerUp}
-            disabled={!duration}
-            aria-label="Перемотка трека"
-            className="player-seek-slider absolute top-0 bottom-0 left-0 right-0 h-4 z-30 opacity-0 cursor-pointer"
-          />
-        </div>
+        <BottomPlayerScrubBar trackPalette={trackPalette} seek={seek} />
 
         {/* Main player controls row */}
         <div className="relative z-10 flex items-center justify-between gap-4 max-sm:gap-2 px-4 max-sm:px-2.5 py-2.5 max-sm:py-1.5">

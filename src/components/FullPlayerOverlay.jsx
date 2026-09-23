@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useAudioPlayer } from "../audio/AudioPlayerContext";
+import { useAudioPlayer, useAudioTime } from "../audio/AudioPlayerContext";
 import { getCachedLyricsForTrack, getActiveLyricIndex, clearLyricsCacheForTrack } from "../services/lyricsApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { TrackContextMenu, TrackMenuButton } from "./TrackContextMenu";
@@ -289,9 +289,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     isLiked,
     isDisliked,
     toggleDislike,
-    currentTime,
-    duration,
-    progress,
     queue,
     currentIndex,
     repeatMode,

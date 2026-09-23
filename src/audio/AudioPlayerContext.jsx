@@ -94,6 +94,44 @@ async function getTrackAudioUrl(track, forceFresh = false) {
   return resolvedUrl;
 }
 
+
+const timeListeners = new Set();
+const energyListeners = new Set();
+
+let globalCurrentTime = 0;
+let globalDuration = 0;
+let globalAudioEnergy = { bass: 0, mids: 0, treble: 0, level: 0 };
+
+function setGlobalTime(time) {
+  globalCurrentTime = time;
+  timeListeners.forEach(fn => fn(globalCurrentTime, globalDuration));
+}
+
+function setGlobalEnergy(energy) {
+  globalAudioEnergy = energy;
+  energyListeners.forEach(fn => fn(globalAudioEnergy));
+}
+
+export function useAudioTime() {
+  const [state, setState] = useState({ currentTime: globalCurrentTime, duration: globalDuration, progress: globalDuration > 0 ? globalCurrentTime / globalDuration : 0 });
+  useEffect(() => {
+    const handler = (t, d) => setState({ currentTime: t, duration: d, progress: d > 0 ? t / d : 0 });
+    timeListeners.add(handler);
+    return () => timeListeners.delete(handler);
+  }, []);
+  return state;
+}
+
+export function useAudioEnergy() {
+  const [energy, setEnergy] = useState(globalAudioEnergy);
+  useEffect(() => {
+    const handler = (e) => setEnergy(e);
+    energyListeners.add(handler);
+    return () => energyListeners.delete(handler);
+  }, []);
+  return energy;
+}
+
 const AudioPlayerContext = createContext(null);
 
 export const EQUALIZER_FREQUENCIES = [
@@ -568,7 +606,18 @@ export function AudioProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [contextMenuState, setContextMenuState] = useState(null); // { track, x, y }
   const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    globalDuration = duration;
+    timeListeners.forEach(fn => fn(globalCurrentTime, globalDuration));
+  }, [duration]);
+
+
+  useEffect(() => {
+    globalDuration = duration;
+    timeListeners.forEach(fn => fn(globalCurrentTime, globalDuration));
+  }, [duration]);
+
   const [volume, setVolumeState] = useState(() => storedAudioState.volume ?? 0.74);
   const [isMuted, setIsMuted] = useState(() => storedAudioState.isMuted || false);
   const [isShuffle, setIsShuffle] = useState(() => storedAudioState.isShuffle || false);
@@ -586,12 +635,6 @@ export function AudioProvider({ children }) {
   const [totalListenedSeconds, setTotalListenedSeconds] = useState(() => storedAudioState.totalListenedSeconds || 0);
   const [playerSettings, setPlayerSettings] = useState(() => getPlayerRuntimeSettings());
   const [trackPalette, setTrackPalette] = useState(defaultPalette);
-  const [audioEnergy, setAudioEnergy] = useState({
-    bass: 0,
-    mids: 0,
-    treble: 0,
-    level: 0
-  });
   const [error, setError] = useState("");
   const [notifications, setNotifications] = useState([]);
   const [isFullOpen, setIsFullOpen] = useState(false);
@@ -972,7 +1015,7 @@ export function AudioProvider({ children }) {
       clearInterval(bgAnalysisIntervalRef.current);
       bgAnalysisIntervalRef.current = null;
     }
-    setAudioEnergy({ bass: 0, mids: 0, treble: 0, level: 0 });
+    setGlobalEnergy({ bass: 0, mids: 0, treble: 0, level: 0 });
   }, []);
 
   const isWindowFocusedRef = useRef(true);
@@ -990,7 +1033,7 @@ export function AudioProvider({ children }) {
     const treble = averageRange(data, 70, data.length);
     const level = Math.min(1, bass * 0.58 + mids * 0.3 + treble * 0.18);
 
-    setAudioEnergy({
+    setGlobalEnergy({
       bass: Number(bass.toFixed(2)),
       mids: Number(mids.toFixed(2)),
       treble: Number(treble.toFixed(2)),
@@ -1121,7 +1164,7 @@ export function AudioProvider({ children }) {
         setTotalListenedSeconds((s) => s + (now - prev));
       }
       lastTimeRef.current = now;
-      setCurrentTime(now);
+      setGlobalTime(now);
 
       // --- CROSSFADE LOGIC ---
       const crossfadeSettings = playerSettingsRef.current || {};
@@ -1583,24 +1626,13 @@ export function AudioProvider({ children }) {
     } catch (e) {}
   }, [isPlaying]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
-    if (duration > 0 && Number.isFinite(currentTime) && Number.isFinite(duration)) {
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: Math.max(duration, 1),
-          playbackRate: audioRef.current?.playbackRate || 1,
-          position: Math.min(Math.max(currentTime, 0), duration)
-        });
-      } catch (e) {}
-    }
-  }, [currentTime, duration]);
+  // MediaSession position state is now updated in the broadcast interval
 
   const next = useCallback(() => {
     if (queue.length <= 1) {
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
-        setCurrentTime(0);
+        setGlobalTime(0);
       }
       return;
     }
@@ -1620,13 +1652,13 @@ export function AudioProvider({ children }) {
   const previous = useCallback(() => {
     if (audioRef.current && audioRef.current.currentTime > 3) {
       audioRef.current.currentTime = 0;
-      setCurrentTime(0);
+      setGlobalTime(0);
       return;
     }
     if (queue.length <= 1) {
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
-        setCurrentTime(0);
+        setGlobalTime(0);
       }
       return;
     }
@@ -1685,7 +1717,7 @@ export function AudioProvider({ children }) {
 
       loadedTrackIdRef.current = String(track.id);
       loadedStreamUrlRef.current = streamUrl;
-      setCurrentTime(0);
+      setGlobalTime(0);
 
       if (track && track.id && track.id !== "empty") {
         setPlayHistory((prevHistory) => [
@@ -1859,7 +1891,7 @@ export function AudioProvider({ children }) {
     }
 
     if (String(nextTrack.id) !== String(loadedTrackIdRef.current)) {
-      setCurrentTime(0);
+      setGlobalTime(0);
     }
 
     const shouldPlay = pendingAutoplayRef.current || isPlayingRef.current;
@@ -1977,7 +2009,7 @@ export function AudioProvider({ children }) {
       ["seekto", (details) => {
         if (details.seekTime !== undefined && audioRef.current && Number.isFinite(details.seekTime)) {
           audioRef.current.currentTime = details.seekTime;
-          setCurrentTime(details.seekTime);
+          setGlobalTime(details.seekTime);
         }
       }],
       ["seekforward", () => {
@@ -2032,7 +2064,7 @@ export function AudioProvider({ children }) {
       ].slice(0, 100));
 
       if (String(track.id) !== String(loadedTrackIdRef.current)) {
-        setCurrentTime(0);
+        setGlobalTime(0);
       }
 
       try {
@@ -2052,7 +2084,7 @@ export function AudioProvider({ children }) {
     const audio = audioRef.current;
     if (!audio) return;
     audio.currentTime = Math.min(Math.max(seconds, 0), duration || seconds);
-    setCurrentTime(audio.currentTime);
+    setGlobalTime(audio.currentTime);
   }, [duration]);
 
   const lastVolumeRef = useRef(volume > 0 ? volume : 0.7);
@@ -2555,7 +2587,7 @@ export function AudioProvider({ children }) {
       useEffect(() => {
     if (profileSettings?.discordRpcEnabled !== false && isPlaying && currentTrack) {
       const nowMs = Date.now();
-      const startTimestamp = nowMs - Math.floor((currentTime || 0) * 1000);
+      const startTimestamp = nowMs - Math.floor((globalCurrentTime || 0) * 1000);
       const endTimestamp = currentTrack.duration
         ? startTimestamp + Math.floor(currentTrack.duration * 1000)
         : undefined;
@@ -2587,11 +2619,11 @@ export function AudioProvider({ children }) {
           album: currentTrack.album || null,
           cover_url: currentTrack.cover || null,
           duration: currentTrack.duration || null,
-          position: currentTime || null,
+          position: globalCurrentTime || null,
           is_playing: isPlaying,
         }).catch(() => {});
       }
-      updateDiscordStatus(currentTrack, isPlaying, currentTime);
+      updateDiscordStatus(currentTrack, isPlaying, globalCurrentTime);
     } else {
       if (typeof window !== "undefined" && window.amyMusicDesktop?.setDiscordActivity) {
         window.amyMusicDesktop.setDiscordActivity(null);
@@ -2605,13 +2637,8 @@ export function AudioProvider({ children }) {
 
   // Refs for overlay broadcast — reading from refs avoids recreating the callback
   // on every audioEnergy/currentTime change, preventing out-of-order async delivery
-  const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
-  const audioEnergyRef = useRef(audioEnergy);
-  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
   useEffect(() => { durationRef.current = duration; }, [duration]);
-  useEffect(() => { audioEnergyRef.current = audioEnergy; }, [audioEnergy]);
-
   // BROADCAST PLAYER STATE TO TAURI OVERLAY WINDOW
   // Reads from refs so the callback is stable and only fires from the interval
   const sendOverlayState = useCallback(async () => {
@@ -2619,10 +2646,10 @@ export function AudioProvider({ children }) {
 
     const track = currentTrackRef.current;
     const playing = isPlayingRef.current;
-    const time = currentTimeRef.current;
+    const time = globalCurrentTime;
     const dur = durationRef.current;
     const vol = volumeRef.current;
-    const energy = audioEnergyRef.current;
+    const energy = globalAudioEnergy;
 
     let safeArtist = "AmyMusic";
     if (track?.artist) {
@@ -2639,6 +2666,19 @@ export function AudioProvider({ children }) {
     }
 
     let safeCover = "";
+    // Update MediaSession position state here to avoid React re-renders
+    if (typeof window !== "undefined" && "mediaSession" in navigator) {
+      if (dur > 0 && Number.isFinite(time) && Number.isFinite(dur)) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: Math.max(dur, 1),
+            playbackRate: 1, // simplified
+            position: Math.min(Math.max(time, 0), dur)
+          });
+        } catch (e) {}
+      }
+    }
+
     if (track?.cover && typeof track.cover === "string") safeCover = track.cover;
     else if (track?.artwork_url && typeof track.artwork_url === "string") safeCover = track.artwork_url;
     else if (track?.artistAvatar && typeof track.artistAvatar === "string") safeCover = track.artistAvatar;
@@ -2812,12 +2852,9 @@ export function AudioProvider({ children }) {
       currentTrack,
       currentIndex,
       trackPalette,
-      audioEnergy,
       isPlaying,
       isLoading,
       duration,
-      currentTime,
-      progress: duration > 0 ? currentTime / duration : 0,
       volume,
       effectiveVolume: isMuted ? 0 : volume,
       isMuted,
@@ -2886,10 +2923,8 @@ export function AudioProvider({ children }) {
     }),
     [
       controls,
-      audioEnergy,
       cycleRepeatMode,
       currentIndex,
-      currentTime,
       currentTrack,
       trackPalette,
       duration,
