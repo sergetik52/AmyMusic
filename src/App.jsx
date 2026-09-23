@@ -2796,7 +2796,7 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
           <span
             key={`${currentTrack?.id || "empty"}-${index}`}
             className={`waveform-bar ${index < playedBars ? "waveform-bar-played" : ""}`}
-            style={{ "--wave-height": `${height}px`, "--wave-delay": `${(index % 12) * 45}ms` }}
+            style={{ "--wave-height": `${height}px`, "--wave-delay": `${(index % 12) * 45}ms`, borderRadius: "999px" }}
           />
         ))}
       </div>
@@ -2805,33 +2805,40 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
         <button
           type="button"
           onClick={(event) => { event.stopPropagation(); onOpenFull?.(); }}
-          className="flex min-w-0 items-center gap-3 rounded-xl outline-none transition hover:bg-black/35 focus-visible:ring-2 focus-visible:ring-white/60"
+          className="flex shrink-0 items-center rounded-xl outline-none transition hover:bg-black/35 focus-visible:ring-2 focus-visible:ring-white/60"
           aria-label="Открыть полный плеер"
         >
           <img src={currentTrack?.cover || "/logo.png"} alt="" className="h-14 w-14 rounded-xl border border-white/15 object-cover shadow-lg" />
-          <span className="min-w-0 max-w-[190px] max-md:max-w-[130px]">
-            <span className="block truncate text-[14px] font-semibold text-white">{currentTrack?.title || "Нет трека"}</span>
-          </span>
         </button>
-        <div className="flex min-w-0 max-w-[190px] max-md:max-w-[130px] items-center gap-1 overflow-hidden whitespace-nowrap text-[12px] text-white/48">
-          {trackArtists.length > 0 ? trackArtists.map((artist, index) => (
-            <React.Fragment key={`${artist.id || artist.name}-${index}`}>
-              {index > 0 && <span className="text-white/25">×</span>}
-              <button
-                type="button"
-                className="truncate rounded-md outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenArtist?.(artist);
-                }}
-                title={artist.name || artist.username}
-              >
-                {artist.name || artist.username}
-              </button>
-            </React.Fragment>
-          )) : (
-            <span className="truncate">Выберите трек</span>
-          )}
+        <div className="flex min-w-0 max-w-[190px] max-md:max-w-[130px] flex-col items-start gap-0.5 overflow-hidden">
+          <button
+            type="button"
+            onClick={(event) => { event.stopPropagation(); onOpenFull?.(); }}
+            className="max-w-full truncate rounded-md text-left text-[14px] font-semibold text-white outline-none transition hover:text-white/80 focus-visible:ring-2 focus-visible:ring-white/60"
+            aria-label="Открыть полный плеер"
+          >
+            {currentTrack?.title || "Нет трека"}
+          </button>
+          <div className="flex max-w-full items-center gap-1 overflow-hidden whitespace-nowrap text-[12px] text-white/48">
+            {trackArtists.length > 0 ? trackArtists.map((artist, index) => (
+              <React.Fragment key={`${artist.id || artist.name}-${index}`}>
+                {index > 0 && <span className="text-white/25">×</span>}
+                <button
+                  type="button"
+                  className="max-w-full truncate rounded-md outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenArtist?.(artist);
+                  }}
+                  title={artist.name || artist.username}
+                >
+                  {artist.name || artist.username}
+                </button>
+              </React.Fragment>
+            )) : (
+              <span className="truncate">Выберите трек</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -2859,8 +2866,9 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
         <button type="button" className="wave-control opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100" onClick={() => setShowVolume((open) => !open)} aria-label="Громкость" title="Громкость">
           <img src={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"} alt="" />
         </button>
-        <div className={`absolute right-full top-1/2 mr-2 flex h-9 origin-right -translate-y-1/2 items-center overflow-hidden rounded-full bg-black/80 px-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl transition-all duration-200 ${showVolume ? "pointer-events-auto w-32 translate-x-0 opacity-100" : "pointer-events-none w-0 translate-x-1 opacity-0"}`}>
-          <input type="range" min="0" max="100" value={Math.round(effectiveVolume * 100)} onChange={(event) => setVolume(Number(event.target.value) / 100)} aria-label="Громкость" className="h-1 w-full min-w-24 accent-white" />
+        <div className={`absolute right-full top-1/2 mr-2 flex h-9 origin-right -translate-y-1/2 items-center gap-2 overflow-hidden rounded-full bg-black/80 px-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl transition-all duration-200 ${showVolume ? "pointer-events-auto w-40 translate-x-0 opacity-100" : "pointer-events-none w-0 translate-x-1 opacity-0"}`}>
+          <input type="range" min="0" max="100" value={Math.round(effectiveVolume * 100)} onChange={(event) => setVolume(Number(event.target.value) / 100)} aria-label="Громкость" className="h-1 min-w-0 flex-1 appearance-none accent-white" />
+          <span className="w-7 shrink-0 text-right text-[11px] font-semibold tabular-nums text-white/75">{Math.round(effectiveVolume * 100)}%</span>
         </div>
       </div>
     </div>
