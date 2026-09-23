@@ -2703,7 +2703,7 @@ function BottomPlayerScrubBar({ trackPalette, seek }) {
   );
 }
 
-function buildWaveform(track, count = 180) {
+function buildWaveform(track, count = 120) {
   const source = `${track?.id || "empty"}:${track?.title || "track"}:${track?.artist || "artist"}`;
   let seed = 0;
   for (let index = 0; index < source.length; index += 1) {
