@@ -2703,7 +2703,7 @@ function BottomPlayerScrubBar({ trackPalette, seek }) {
   );
 }
 
-function buildWaveform(track, count = 180) {
+function buildWaveform(track, count = 120) {
   const source = `${track?.id || "empty"}:${track?.title || "track"}:${track?.artist || "artist"}`;
   let seed = 0;
   for (let index = 0; index < source.length; index += 1) {
@@ -2791,7 +2791,7 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
         if (event.key === "ArrowRight") seek(Math.min(duration, currentTime + 5));
       }}
     >
-      <div className="absolute inset-x-0 bottom-0 flex h-4/5 items-end gap-[3px] overflow-hidden rounded-b-[var(--player-radius,24px)] px-2" aria-hidden="true">
+      <div className="absolute inset-x-0 bottom-0 flex h-4/5 items-end gap-[2px] overflow-hidden rounded-b-[var(--player-radius,24px)] px-2" aria-hidden="true">
         {bars.map((height, index) => (
           <span
             key={`${currentTrack?.id || "empty"}-${index}`}

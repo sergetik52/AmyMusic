@@ -175,32 +175,19 @@ button {
 }
 
 .waveform-bar {
-  position: relative;
   display: block;
   flex: 1 1 0%;
-  min-width: 1px;
+  min-width: 3px;
   height: var(--wave-height);
-  max-height: 86px;
-  border-radius: 0;
-  background: transparent;
+  max-height: 64px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.2);
   transform: none;
   transform-origin: bottom;
   transition: background-color 180ms ease, opacity 180ms ease;
 }
 
-.waveform-bar::before {
-  position: absolute;
-  inset: 0;
-  content: "";
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-}
-
 .waveform-bar-played {
-  background: transparent;
-}
-
-.waveform-bar-played::before {
   background: rgba(255, 255, 255, 0.56);
 }
 
