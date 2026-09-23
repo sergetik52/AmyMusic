@@ -335,7 +335,7 @@ export function AlbumView({
   const releaseType = isSingle ? "Сингл" : album.kind === "playlist" ? "Плейлист" : "Альбом";
 
   return (
-    <section className="flex-1 overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#070707] text-white shadow-2xl pb-[140px] md:pb-12">
+    <section className="flex-1 overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-black text-white shadow-2xl pb-[140px] md:pb-12">
       <div className="relative min-h-[315px] max-md:min-h-0 overflow-hidden border-b border-white/[0.05] px-7 pb-7 pt-5 max-md:px-4 max-md:pb-3 max-md:pt-2">
         <div className="absolute inset-0 opacity-30 blur-3xl">
           <img src={album.cover} alt="" className="h-full w-full object-cover" />
@@ -450,7 +450,7 @@ function ArtistTracksView({ artist, tracks, isLoading, onBack, onPlayTrack, like
   const playableTracks = sortedTracks.filter((track) => track.streamUrl);
 
   return (
-    <section className="flex-1 overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#070707] text-white shadow-2xl">
+    <section className="flex-1 overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-black text-white shadow-2xl">
       <div className="sticky top-0 z-10 border-b border-white/[0.05] bg-[#070707]/92 px-7 py-5 max-md:px-4 max-md:py-2 backdrop-blur-xl">
         <button 
           type="button" 
@@ -689,7 +689,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
 
   if (isLoading && !tracks.length && !albums.length) {
     return (
-      <section className="flex-1 min-h-0 w-full overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#090909] text-white shadow-2xl flex flex-col items-center justify-center gap-4">
+      <section className="flex-1 min-h-0 w-full overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-black text-white shadow-2xl flex flex-col items-center justify-center gap-4">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-white/80" />
         <p className="text-sm font-bold tracking-widest uppercase text-white/40">Загрузка...</p>
       </section>
@@ -703,7 +703,7 @@ export function ArtistView({ artist, onBack, onOpenArtist, initialAlbum }) {
   const isSubscribed = subscribedArtistIds.has(String(profile.id || profile.name));
 
   return (
-    <section className="flex-1 min-h-0 w-full overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-[#090909] text-white shadow-2xl pb-[140px] md:pb-12">
+    <section className="flex-1 min-h-0 w-full overflow-y-auto rounded-[17.76px] max-md:rounded-none max-md:border-none border border-white/[0.04] bg-black text-white shadow-2xl pb-[140px] md:pb-12">
       <div className="relative min-h-[330px] max-md:min-h-0 overflow-hidden border-b border-white/[0.05] px-7 pb-7 pt-5 max-md:px-4 max-md:pb-3 max-md:pt-2">
         <div className="absolute inset-0 opacity-45 blur-3xl">
           <img

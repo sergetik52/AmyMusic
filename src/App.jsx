@@ -923,7 +923,7 @@ function SearchAlbumView({
   const tracks = album.tracks || [];
 
   return (
-    <section className="flex-1 overflow-y-auto rounded-[17.76px] border border-white/[0.04] bg-[#090909] text-white shadow-2xl">
+    <section className="flex-1 overflow-y-auto rounded-[17.76px] border border-white/[0.04] bg-black text-white shadow-2xl">
       <div className="relative min-h-[300px] max-md:min-h-0 overflow-hidden border-b border-white/[0.05] px-7 pb-7 pt-5 max-md:px-4 max-md:pb-3 max-md:pt-2">
         <div className="absolute inset-0 opacity-30 blur-3xl">
           <img src={album.cover} alt="" className="h-full w-full object-cover" />
