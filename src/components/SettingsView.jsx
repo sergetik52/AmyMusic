@@ -803,8 +803,30 @@ export function SettingsView({ profileData, onProfileSave }) {
 
             <div className="mb-8">
               <div className="text-base font-semibold mb-2">Панель навигации</div>
-              <div className="text-sm text-white/50 mb-5">Выберите режим работы бокового меню навигации</div>
+              <div className="text-sm text-white/50 mb-5">Выберите положение и режим работы меню навигации</div>
 
+              <div className="text-sm font-semibold mb-3">Положение панели</div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-7">
+                {[
+                  { value: "left", title: "Слева", desc: "Вертикальная панель слева", path: "M5 4h5v16H5zM12 7h7M12 12h7M12 17h7" },
+                  { value: "top", title: "Сверху", desc: "Горизонтальная панель сверху", path: "M4 5h16v5H4zM7 14h4M7 18h10" },
+                  { value: "right", title: "Справа", desc: "Вертикальная панель справа", path: "M14 4h5v16h-5zM5 7h7M5 12h7M5 17h7" }
+                ].map((item) => (
+                  <SettingsCard
+                    key={item.value}
+                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><path d={item.path} /></svg>}
+                    title={item.title}
+                    desc={item.desc}
+                    active={(settings.customization?.navigationPosition || "left") === item.value}
+                    onClick={() => {
+                      const currentCust = settings.customization || {};
+                      updateField("customization", { ...currentCust, navigationPosition: item.value });
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div className="text-sm font-semibold mb-3">Режим панели</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <SettingsCard
                   icon={

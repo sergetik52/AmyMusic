@@ -461,7 +461,7 @@ function formatDuration(seconds) {
   return `${mins}:${secs}`;
 }
 
-function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileSave, setCollectionInitialPlaylistId }) {
+function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileSave, setCollectionInitialPlaylistId, navigationPosition = "left" }) {
   const { playHistory, totalListenedSeconds } = useAudioPlayer();
   const [settings, setSettings] = useState(() => getProfileSettings());
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -469,7 +469,8 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
   const [isStaticExpanded, setIsStaticExpanded] = useState(false);
 
   const sidebarMode = settings.customization?.sidebarMode || "dynamic";
-  const isCollapsed = sidebarMode === "static" ? !isStaticExpanded : !isHovered;
+  const isTop = navigationPosition === "top";
+  const isCollapsed = isTop ? false : (sidebarMode === "static" ? !isStaticExpanded : !isHovered);
   const [pinnedPlaylists, setPinnedPlaylists] = useState(() => getPinnedPlaylists());
 
   useEffect(() => {
@@ -522,11 +523,11 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
   return (
     <>
       <aside
-        className={`hidden md:flex shrink-0 flex-col justify-center py-4 font-medium transition-all duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] relative z-20 ${isCollapsed ? "w-[72px] bg-transparent" : "w-[200px] bg-black/80 backdrop-blur-md rounded-r-2xl"}`}
+        className={`${isTop ? "hidden md:flex h-[72px] w-full shrink-0 flex-row items-center gap-3 px-3 py-2 bg-black/80 backdrop-blur-md rounded-b-2xl" : "hidden md:flex shrink-0 flex-col justify-center py-4"} font-medium transition-all duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] relative z-20 ${!isTop && (isCollapsed ? "w-[72px] bg-transparent" : `${navigationPosition === "right" ? "w-[200px] bg-black/80 backdrop-blur-md rounded-l-2xl" : "w-[200px] bg-black/80 backdrop-blur-md rounded-r-2xl"}`)}`}
         onMouseEnter={() => { if (sidebarMode === "dynamic") setIsHovered(true); }}
         onMouseLeave={() => { if (sidebarMode === "dynamic") setIsHovered(false); }}
       >
-        <nav className="flex flex-col gap-1 w-full">
+        <nav className={`${isTop ? "flex flex-1 flex-row items-center gap-1 min-w-0 overflow-x-auto no-scrollbar" : "flex flex-col gap-1 w-full"}`}>
           {sidebarMode === "static" && (
             <button
               type="button"
@@ -543,7 +544,7 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
           )}
             {/* Pinned playlists */}
             {pinnedPlaylists.length > 0 && (
-              <div className={`flex flex-col gap-1 w-full mb-2 pb-2 border-b border-white/[0.06] transition-all duration-300`}>
+              <div className={`${isTop ? "flex flex-row gap-1 shrink-0" : "flex flex-col gap-1 w-full mb-2 pb-2 border-b border-white/[0.06]"} transition-all duration-300`}>
                 {pinnedPlaylists.map((pl) => (
                   <button
                     key={pl.id}
@@ -584,7 +585,7 @@ function Sidebar({ activeTab, setActiveTab, currentUser, profileData, onProfileS
             ))}
           </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 mb-4 w-full space-y-2 overflow-hidden">
+        <div className={isTop ? "flex shrink-0 items-center gap-2" : "absolute bottom-0 left-0 right-0 mb-4 w-full space-y-2 overflow-hidden"}>
           {!isDesktop && (
             <a
               href="/api/download-app"
@@ -3003,6 +3004,9 @@ export default function App() {
   const [apiSettingsVersion, setApiSettingsVersion] = useState(0);
   const [isMiniKaraokeOpen, setIsMiniKaraokeOpen] = useState(false);
   const profileSettings = getProfileSettings();
+  const navigationPosition = ["left", "top", "right"].includes(profileSettings?.customization?.navigationPosition)
+    ? profileSettings.customization.navigationPosition
+    : "left";
 
   const [localProfile, setLocalProfile] = useState(() => ensureLocalProfile());
   const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false);
@@ -3188,16 +3192,19 @@ export default function App() {
   }
 
   return (
-    <main className="relative flex h-screen w-screen select-none gap-4 max-md:gap-0 overflow-hidden bg-black p-3 max-md:p-0 pt-[36px] max-md:pt-0 text-white max-md:flex-col">
+    <main className={`relative flex h-screen w-screen select-none overflow-hidden bg-black p-3 max-md:p-0 pt-[36px] max-md:pt-0 text-white max-md:flex-col ${navigationPosition === "top" ? "flex-col gap-3" : "flex-row gap-4 max-md:gap-0"}`}>
       <WindowControls />
-      <Sidebar 
-        activeTab={activeTab} 
-        setActiveTab={selectTab}
-        currentUser={currentUser}
-        profileData={profileData}
-        onProfileSave={handleProfileSave}
-        setCollectionInitialPlaylistId={setCollectionInitialPlaylistId}
-      />
+      {navigationPosition !== "right" && (
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={selectTab}
+          currentUser={currentUser}
+          profileData={profileData}
+          onProfileSave={handleProfileSave}
+          setCollectionInitialPlaylistId={setCollectionInitialPlaylistId}
+          navigationPosition={navigationPosition}
+        />
+      )}
       <div className="flex min-w-0 min-h-0 flex-1 flex-col justify-between gap-3 max-md:gap-0 max-md:pb-24 max-md:h-full max-md:overflow-hidden">
         <div key={`${activeTab}-${activeArtist?.id || "none"}-${activeAlbum?.id || "noalbum"}-${activeTab === 'settings' ? 'static' : apiSettingsVersion}`} className="contents">
           {renderContent()}
@@ -3211,6 +3218,17 @@ export default function App() {
           </div>
         )}
       </div>
+      {navigationPosition === "right" && (
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={selectTab}
+          currentUser={currentUser}
+          profileData={profileData}
+          onProfileSave={handleProfileSave}
+          setCollectionInitialPlaylistId={setCollectionInitialPlaylistId}
+          navigationPosition={navigationPosition}
+        />
+      )}
       <MiniKaraoke
         isOpen={isMiniKaraokeOpen}
         onClose={() => setIsMiniKaraokeOpen(false)}

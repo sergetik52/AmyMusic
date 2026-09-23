@@ -16,7 +16,8 @@ export const defaultProfileSettings = {
     cardHoverEffect: "glow" // "glow", "zoom", "flat"
   },
   customization: {
-    sidebarMode: "dynamic" // "dynamic" (как сейчас), "static" (можно закрывать и открывать)
+    sidebarMode: "dynamic", // "dynamic" (как сейчас), "static" (можно закрывать и открывать)
+    navigationPosition: "left" // "left", "top", "right"
   },
   displayName: "Local",
   avatarUrl: "",
@@ -86,7 +87,10 @@ export function saveProfileSettings(settings, silent = false) {
     ...settings,
     customization: {
       ...defaultProfileSettings.customization,
-      ...(settings?.customization || {})
+      ...(settings?.customization || {}),
+      navigationPosition: ["left", "top", "right"].includes(settings?.customization?.navigationPosition)
+        ? settings.customization.navigationPosition
+        : defaultProfileSettings.customization.navigationPosition
     },
     displayName: String(settings?.displayName || defaultProfileSettings.displayName).trim() || defaultProfileSettings.displayName,
     avatarUrl: String(settings?.avatarUrl || "").trim(),
