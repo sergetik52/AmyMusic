@@ -2766,7 +2766,7 @@ function WaveformPlayer({ onOpenFull }) {
 
   return (
     <div
-      className="group/wave relative z-30 h-[76px] w-full select-none overflow-hidden rounded-[var(--player-radius,24px)] bg-black"
+      className="group/wave relative z-30 h-[76px] w-full select-none overflow-visible rounded-[var(--player-radius,24px)] bg-black"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onClick={handleSeek}
@@ -2782,7 +2782,7 @@ function WaveformPlayer({ onOpenFull }) {
         if (event.key === "ArrowRight") seek(Math.min(duration, currentTime + 5));
       }}
     >
-      <div className="absolute inset-x-0 bottom-0 flex h-1/2 items-end gap-[3px] overflow-hidden px-2" aria-hidden="true">
+      <div className="absolute inset-x-0 bottom-0 flex h-1/2 items-end gap-[3px] overflow-hidden rounded-b-[var(--player-radius,24px)] px-2" aria-hidden="true">
         {bars.map((height, index) => (
           <span
             key={`${currentTrack?.id || "empty"}-${index}`}
@@ -2805,8 +2805,8 @@ function WaveformPlayer({ onOpenFull }) {
         </span>
       </button>
 
-      <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100 group-focus-within/wave:opacity-100">
-        <div className="pointer-events-auto flex items-center gap-1 rounded-xl bg-black/90 px-2 py-1.5 shadow-2xl ring-1 ring-white/10" onClick={(event) => event.stopPropagation()}>
+      <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100">
+        <div className="pointer-events-auto flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
           <button type="button" className="wave-control" onClick={previous} aria-label="Предыдущий трек" title="Предыдущий трек">
             <img src="/prev.svg" alt="" />
           </button>
@@ -2826,10 +2826,10 @@ function WaveformPlayer({ onOpenFull }) {
       </div>
 
       <div className="absolute right-3 top-1/2 z-40 -translate-y-1/2" onClick={(event) => event.stopPropagation()} onMouseEnter={() => setShowVolume(true)} onMouseLeave={() => setShowVolume(false)}>
-        <button type="button" className="wave-control opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100 group-focus-within/wave:opacity-100" onClick={toggleMute} aria-label="Громкость" title="Громкость">
+        <button type="button" className="wave-control opacity-0 transition-opacity duration-200 group-hover/wave:opacity-100" onClick={toggleMute} aria-label="Громкость" title="Громкость">
           <img src={effectiveVolume > 0 ? "/volume-plus.svg" : "/volume-mute.svg"} alt="" />
         </button>
-        <div className={`absolute bottom-11 right-0 rounded-xl bg-[#111]/95 p-3 shadow-2xl ring-1 ring-white/10 transition-all ${showVolume ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"}`}>
+        <div className={`absolute bottom-[calc(100%+8px)] right-0 rounded-xl bg-[#111]/95 p-3 shadow-2xl ring-1 ring-white/10 transition-all ${showVolume ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"}`}>
           <input type="range" min="0" max="100" value={Math.round(effectiveVolume * 100)} onChange={(event) => setVolume(Number(event.target.value) / 100)} aria-label="Громкость" className="h-1 w-24 accent-white" />
         </div>
       </div>
