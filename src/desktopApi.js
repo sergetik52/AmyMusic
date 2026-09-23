@@ -92,8 +92,6 @@ export function initDesktopApi() {
     updateSmtc: async (info) => invoke('update_smtc', { info }),
     clearSmtc: async () => invoke('clear_smtc'),
     toggleOverlay: async (enabled) => invoke('toggle_overlay_window', { enabled }),
-    setOverlayRules: async (mode, apps) => invoke('set_overlay_rules', { mode, apps }),
-    getForegroundApp: async () => invoke('get_foreground_app'),
     isOverlayVisible: async () => invoke('is_overlay_visible'),
     resizeOverlayWindow: async (expanded, forceScale, forcePosition) => {
       const cfg = window.amyMusicDesktop._getOverlayConfig();
@@ -246,3 +244,4 @@ if (typeof window !== "undefined") {
     }
   }, true);
 }
+

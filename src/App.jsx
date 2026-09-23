@@ -659,7 +659,7 @@ function ArtistCard({ artist, onClick }) {
     <button
       type="button"
       onClick={() => onClick(artist)}
-      className="amy-artist-card group flex w-36 shrink-0 flex-col items-center rounded-2xl p-3 text-center transition hover:bg-white/[0.04]"
+      className="group flex w-36 shrink-0 flex-col items-center rounded-2xl p-3 text-center transition hover:bg-white/[0.04]"
     >
       <div className="relative h-28 w-28 overflow-hidden rounded-full border border-white/10 bg-white/[0.04] shadow-xl">
         <img
@@ -2044,17 +2044,15 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
               onClick={() => setIsQueueOpen(false)}
             />
             
-             <div 
-               className={`amy-queue-panel relative w-[85%] md:w-[400px] h-full shadow-2xl flex flex-col border-l border-white/5 transition-transform duration-300 ease-out ${isQueueOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            <div 
+              className={`relative w-[85%] md:w-[400px] h-full bg-[#0a0a0a] shadow-2xl flex flex-col border-l border-white/5 transition-transform duration-300 ease-out ${isQueueOpen ? 'translate-x-0' : 'translate-x-full'}`}
               onClick={(e) => e.stopPropagation()}
             >
-               <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.06]">
-                 <div>
-                   <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">Следом</p>
-                   <h3 className="mt-1 text-[20px] font-bold text-white tracking-tight">Очередь</h3>
-                   <p className="mt-1 text-xs font-medium text-white/40">{Math.max(0, queue.length - Math.max(0, currentIndex))} треков</p>
-                 </div>
-                 <button type="button" onClick={() => setIsQueueOpen(false)} aria-label="Закрыть очередь" className="grid h-9 w-9 place-items-center rounded-full text-white/45 hover:text-white hover:bg-white/10 transition">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.04]">
+                <div>
+                  <h3 className="text-[20px] font-bold text-white tracking-tight">Очередь</h3>
+                </div>
+                <button onClick={() => setIsQueueOpen(false)} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-full transition">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
@@ -2062,7 +2060,7 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
               </div>
               
               <div
-                 className="flex-1 overflow-y-auto custom-scrollbar p-4"
+                className="flex-1 overflow-y-auto custom-scrollbar p-3"
                 onWheel={(e) => {
                   if (draggedQueueIndex !== null) {
                     e.currentTarget.scrollTop += e.deltaY;
@@ -2137,14 +2135,14 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
                           setDragOverQueueIndex(null);
                           setQueueDragPos(null);
                         }}
-                         className={`amy-queue-row group flex items-center justify-between rounded-xl p-2 transition duration-150 select-none cursor-pointer ${
-                           isDragging
-                             ? "opacity-25 scale-[0.98] border-2 border-dashed border-white/30"
+                        className={`group flex items-center justify-between rounded-xl p-2 transition duration-150 select-none cursor-pointer ${
+                          isDragging
+                            ? "opacity-25 scale-[0.98] border-2 border-dashed border-white/30"
                             : isDragOver && !isDragging
                               ? "bg-emerald-500/10 border-2 border-emerald-400 shadow-xl scale-[1.01]"
                               : isCurrent
-                                 ? "is-current border border-transparent"
-                                 : "border border-transparent"
+                                ? "bg-white/10 border border-transparent"
+                                : "hover:bg-white/5 border border-transparent"
                         }`}
                       >
                         <div 
@@ -2752,7 +2750,7 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, 
       <div
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        className="amy-mini-player relative z-10 w-full rounded-[var(--player-radius,20px)] max-sm:rounded-xl shadow-2xl max-sm:shadow-none transition-all duration-300"
+        className="relative z-10 w-full rounded-[var(--player-radius,20px)] max-sm:rounded-xl shadow-2xl max-sm:shadow-none transition-all duration-300"
         style={{
           "--player-accent": `color-mix(in srgb, ${trackPalette.line} 70%, #ffffff)`,
           "--player-accent-muted": `color-mix(in srgb, ${trackPalette.line} 45%, #8a8a8a)`,
@@ -2918,10 +2916,6 @@ export default function App() {
     // Restore overlay on app launch if enabled in settings
     if (profileSettings?.gameOverlayEnabled) {
       if (typeof window !== "undefined" && window.amyMusicDesktop?.toggleOverlay) {
-        Promise.resolve(window.amyMusicDesktop.setOverlayRules?.(
-          profileSettings.overlayAppMode || "exclude",
-          profileSettings.overlayAppRules || []
-        )).catch(() => {});
         window.amyMusicDesktop.resizeOverlayWindow?.(false).catch(() => {});
         window.amyMusicDesktop.toggleOverlay(true).catch(() => {});
       }
