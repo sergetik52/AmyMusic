@@ -2038,19 +2038,19 @@ function PlayerTools({ onOpenFull, onToggleKaraoke, isKaraokeOpen }) {
           active={isQueueOpen}
         />
         {createPortal(
-          <div className={`fixed inset-0 z-[99999] flex justify-end transition-all duration-300 ${isQueueOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+          <div className={`fixed inset-0 z-[99999] transition-all duration-200 ${isQueueOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
             <div 
-              className={`absolute inset-0 bg-black/40 transition-all duration-300 ease-out ${isQueueOpen ? 'backdrop-blur-md opacity-100' : 'backdrop-blur-none opacity-0'}`}
+              className={`absolute inset-0 bg-transparent transition-opacity duration-200 ${isQueueOpen ? 'opacity-100' : 'opacity-0'}`}
               onClick={() => setIsQueueOpen(false)}
             />
             
             <div 
-              className={`relative w-[85%] md:w-[400px] h-full bg-[#0a0a0a] shadow-2xl flex flex-col border-l border-white/5 transition-transform duration-300 ease-out ${isQueueOpen ? 'translate-x-0' : 'translate-x-full'}`}
+              className={`absolute bottom-[84px] right-3 w-[calc(100vw-24px)] max-w-[390px] h-[min(560px,70vh)] max-h-[calc(100vh-112px)] rounded-2xl bg-[#101010]/[0.98] shadow-[0_20px_60px_rgba(0,0,0,.55)] flex flex-col border border-white/[0.09] transition-all duration-200 ease-out origin-bottom-right ${isQueueOpen ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-2 scale-95 opacity-0'}`}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.04]">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07]">
                 <div>
-                  <h3 className="text-[20px] font-bold text-white tracking-tight">Очередь</h3>
+                  <h3 className="text-[18px] font-bold text-white tracking-tight">Очередь</h3>
                 </div>
                 <button onClick={() => setIsQueueOpen(false)} className="p-2 text-white/30 hover:text-white hover:bg-white/10 rounded-full transition">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -2752,11 +2752,12 @@ function BottomPlayer({ onOpenFull, onOpenArtist, onOpenAlbum, onToggleKaraoke, 
         onTouchEnd={handleTouchEnd}
         className="relative z-10 w-full rounded-[var(--player-radius,20px)] max-sm:rounded-xl shadow-2xl max-sm:shadow-none transition-all duration-300"
         style={{
-          "--player-accent": `color-mix(in srgb, ${trackPalette.line} 70%, #ffffff)`,
-          "--player-accent-muted": `color-mix(in srgb, ${trackPalette.line} 45%, #8a8a8a)`,
-          "--player-accent-soft": `color-mix(in srgb, ${trackPalette.line} 20%, transparent)`,
-          backgroundColor: `color-mix(in srgb, ${trackPalette.shadow} 45%, #121214)`,
-          boxShadow: "0 22px 60px rgba(0,0,0,.55)"
+          "--player-accent": "#eeeeee",
+          "--player-accent-muted": "#8d8d8d",
+          "--player-accent-soft": "rgba(255,255,255,.08)",
+          backgroundColor: "rgba(14,14,15,.96)",
+          border: "1px solid rgba(255,255,255,.09)",
+          boxShadow: "0 18px 55px rgba(0,0,0,.55)"
         }}
       >
         <BottomPlayerScrubBar trackPalette={trackPalette} seek={seek} />
