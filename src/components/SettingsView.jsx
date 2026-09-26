@@ -82,6 +82,7 @@ export function SettingsView({ profileData, onProfileSave }) {
   const [localCacheSize, setLocalCacheSize] = useState("0 MB");
   const [runningApps, setRunningApps] = useState([]);
   const [overlayAppSearch, setOverlayAppSearch] = useState("");
+  const [isOverlaySettingsOpen, setIsOverlaySettingsOpen] = useState(false);
   
   const isDesktop = Boolean(typeof window !== "undefined" && window.amyMusicDesktop);
 
@@ -801,6 +802,37 @@ export function SettingsView({ profileData, onProfileSave }) {
             <div className="text-2xl font-bold mt-2.5">Кастомизация</div>
             <div className="text-sm text-white/50 mt-1 mb-8">Настройте внешний вид и элементы интерфейса</div>
 
+            <div className="mb-8">
+              <div className="text-base font-semibold mb-2">Нижний миниплеер</div>
+              <div className="text-sm text-white/50 mb-5">Выберите внешний вид плеера в нижней части приложения</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+                <SettingsCard
+                  icon={
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                      <path d="M3 14h2v6H3zM7 10h2v10H7zM11 6h2v14h-2zM15 11h2v9h-2zM19 8h2v12h-2z" fill="currentColor" stroke="none" />
+                    </svg>
+                  }
+                  title="Волновой"
+                  desc="Текущий миниплеер с визуализацией волны"
+                  active={(settings.miniPlayerType || "waveform") === "waveform"}
+                  onClick={() => updateField("miniPlayerType", "waveform")}
+                />
+                <SettingsCard
+                  icon={
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                      <rect x="3" y="5" width="18" height="14" rx="3" />
+                      <rect x="5.5" y="7.5" width="4" height="4" rx="1" />
+                      <path d="M12 9h6M12 13h4" />
+                    </svg>
+                  }
+                  title="Классический"
+                  desc="Прежний компактный плеер с кнопками"
+                  active={settings.miniPlayerType === "classic"}
+                  onClick={() => updateField("miniPlayerType", "classic")}
+                />
+              </div>
+            </div>
+
             <div className="mb-8 order-2">
               <div className="text-base font-semibold mb-2">Панель навигации</div>
               <div className="text-sm text-white/50 mb-5">Выберите положение и режим работы меню навигации</div>
@@ -865,8 +897,20 @@ export function SettingsView({ profileData, onProfileSave }) {
             </div>
 
             <div className="mb-8 order-1">
-              <div className="text-base font-semibold mb-2">Игровой оверлей (Dynamic Island)</div>
-              <div className="text-sm text-white/50 mb-5">Компактный островок с обложкой поверх всех окон и игр</div>
+              <button
+                type="button"
+                onClick={() => setIsOverlaySettingsOpen((open) => !open)}
+                aria-expanded={isOverlaySettingsOpen}
+                className="flex w-full items-center justify-between gap-4 text-left mb-2"
+              >
+                <div>
+                  <div className="text-base font-semibold">Игровой оверлей (Dynamic Island)</div>
+                  <div className="text-sm text-white/50 mt-1">Компактный островок с обложкой поверх всех окон и игр</div>
+                </div>
+                <svg className={`h-5 w-5 shrink-0 text-white/45 transition-transform duration-200 ${isOverlaySettingsOpen ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
               
               <div>
                 <SettingsToggle 
@@ -882,8 +926,30 @@ export function SettingsView({ profileData, onProfileSave }) {
                   disabled={!isDesktop}
                 />
 
-                <div className={`transition-all duration-300 overflow-hidden ${settings.gameOverlayEnabled ? "max-h-[720px] opacity-100 mt-4 border-t border-[#2a2a2a] pt-4" : "max-h-0 opacity-0"}`}>
+                <div className={`transition-all duration-300 overflow-hidden ${settings.gameOverlayEnabled && isOverlaySettingsOpen ? "max-h-[720px] opacity-100 mt-4 border-t border-[#2a2a2a] pt-4" : "max-h-0 opacity-0 pointer-events-none"}`}>
                   <div className="flex flex-col gap-5">
+                    <SettingsToggle
+                      title="Разрешить перемещение"
+                      description="Перетаскивайте оверлей за значок с точками"
+                      checked={Boolean(settings.overlayDragEnabled)}
+                      onChange={(v) => {
+                        const next = {
+                          ...settings,
+                          overlayDragEnabled: v,
+                          overlayCustomPosition: v ? settings.overlayCustomPosition : null
+                        };
+                        saveProfileSettings(next);
+                        if (!v) {
+                          isDesktop && window.amyMusicDesktop?.resizeOverlayWindow?.(
+                            false,
+                            settings.overlayScale || 1.0,
+                            settings.overlayPosition || "top"
+                          );
+                        }
+                      }}
+                      disabled={!isDesktop || !settings.gameOverlayEnabled}
+                    />
+
                     <div>
                       <div className="text-sm font-semibold mb-2">Размер свернутого режима</div>
                       <div className="flex items-center gap-4">
@@ -896,7 +962,11 @@ export function SettingsView({ profileData, onProfileSave }) {
                           onChange={(e) => {
                             const v = parseFloat(e.target.value);
                             updateField("overlayScale", v);
-                            isDesktop && window.amyMusicDesktop?.resizeOverlayWindow?.(false, v, settings.overlayPosition || "top");
+                            isDesktop && window.amyMusicDesktop?.resizeOverlayWindow?.(
+                              false,
+                              v,
+                              settings.overlayDragEnabled ? undefined : (settings.overlayPosition || "top")
+                            );
                           }}
                           className="flex-1 h-1.5 bg-[#333] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
                         />
@@ -912,7 +982,11 @@ export function SettingsView({ profileData, onProfileSave }) {
                         value={settings.overlayPosition || "top"}
                         onChange={(e) => {
                           const v = e.target.value;
-                          updateField("overlayPosition", v);
+                          saveProfileSettings({
+                            ...settings,
+                            overlayPosition: v,
+                            overlayCustomPosition: null
+                          });
                           isDesktop && window.amyMusicDesktop?.resizeOverlayWindow?.(false, settings.overlayScale || 1.0, v);
                         }}
                         className="w-full bg-[#222] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/50 cursor-pointer"

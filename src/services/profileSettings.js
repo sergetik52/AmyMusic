@@ -27,10 +27,13 @@ export const defaultProfileSettings = {
   appLaunchOnStartup: false,
   appMinimizeToTray: false,
   gameOverlayEnabled: false,
+  overlayDragEnabled: false,
+  overlayCustomPosition: null,
   overlayScale: 1.0,
   overlayPosition: "top",
   overlayFilterMode: "exclude",
   overlayFilterApps: [],
+  miniPlayerType: "waveform",
   crossfadeEnabled: false,
   audioCacheEnabled: true,
   crossfadeSeconds: 4,
@@ -108,12 +111,22 @@ export function saveProfileSettings(settings, silent = false) {
     crossfadeSeconds: Math.min(12, Math.max(1, Number(settings?.crossfadeSeconds) || defaultProfileSettings.crossfadeSeconds)),
     discordRpcEnabled: settings?.discordRpcEnabled !== undefined ? Boolean(settings.discordRpcEnabled) : true,
     gameOverlayEnabled: Boolean(settings?.gameOverlayEnabled),
+    overlayDragEnabled: Boolean(settings?.overlayDragEnabled),
+    overlayCustomPosition: settings?.overlayCustomPosition
+      && Number.isFinite(Number(settings.overlayCustomPosition.x))
+      && Number.isFinite(Number(settings.overlayCustomPosition.y))
+      ? {
+          x: Math.round(Number(settings.overlayCustomPosition.x)),
+          y: Math.round(Number(settings.overlayCustomPosition.y))
+        }
+      : null,
     overlayScale: Number(settings?.overlayScale) || 1.0,
     overlayPosition: settings?.overlayPosition || "top",
     overlayFilterMode: settings?.overlayFilterMode === "include" ? "include" : "exclude",
     overlayFilterApps: Array.isArray(settings?.overlayFilterApps)
       ? [...new Set(settings.overlayFilterApps.map((app) => String(app).trim().toLowerCase()).filter(Boolean))]
       : [],
+    miniPlayerType: settings?.miniPlayerType === "classic" ? "classic" : "waveform",
     audioOutputDevice: String(settings?.audioOutputDevice || defaultProfileSettings.audioOutputDevice),
     audioQuality: String(settings?.audioQuality || defaultProfileSettings.audioQuality),
     volumeNormalization: Boolean(settings?.volumeNormalization),

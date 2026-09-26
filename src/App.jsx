@@ -2888,7 +2888,70 @@ function WaveformPlayer({ onOpenFull, onOpenArtist }) {
   );
 }
 
-function BottomPlayer({ onOpenFull, onOpenArtist }) {
+function ClassicBottomPlayer({ onOpenFull, onOpenArtist, onToggleKaraoke, isKaraokeOpen }) {
+  const { seek, trackPalette, next, previous } = useAudioPlayer();
+  const touchStartRef = useRef(null);
+
+  const handleTouchStart = (event) => {
+    if (event.touches?.length === 1) {
+      touchStartRef.current = { x: event.touches[0].clientX, y: event.touches[0].clientY, time: Date.now() };
+    }
+  };
+
+  const handleTouchEnd = (event) => {
+    if (!touchStartRef.current || !event.changedTouches?.length) return;
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    const touchDuration = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+    if (touchDuration > 600) return;
+    if (deltaY < -35 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
+      onOpenFull?.();
+      return;
+    }
+    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      deltaX < 0 ? next() : previous();
+    }
+  };
+
+  return (
+    <div className="group/player relative z-30 w-full select-none">
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="relative z-10 w-full rounded-[var(--player-radius,20px)] max-sm:rounded-xl shadow-2xl max-sm:shadow-none transition-all duration-300"
+        style={{
+          "--player-accent": "#eeeeee",
+          "--player-accent-muted": "#8d8d8d",
+          "--player-accent-soft": "rgba(255,255,255,.08)",
+          backgroundColor: "rgba(14,14,15,.96)",
+          border: "1px solid rgba(255,255,255,.09)",
+          boxShadow: "0 18px 55px rgba(0,0,0,.55)"
+        }}
+      >
+        <BottomPlayerScrubBar trackPalette={trackPalette} seek={seek} />
+        <div className="relative z-10 flex items-center justify-between gap-4 max-sm:gap-2 px-4 max-sm:px-2.5 py-2.5 max-sm:py-1.5">
+          <TrackInfo onOpenFull={onOpenFull} onOpenArtist={onOpenArtist} />
+          <PlayerControls />
+          <PlayerTools onOpenFull={onOpenFull} onToggleKaraoke={onToggleKaraoke} isKaraokeOpen={isKaraokeOpen} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BottomPlayer({ onOpenFull, onOpenArtist, onToggleKaraoke, isKaraokeOpen, variant = "waveform" }) {
+  if (variant === "classic") {
+    return (
+      <ClassicBottomPlayer
+        onOpenFull={onOpenFull}
+        onOpenArtist={onOpenArtist}
+        onToggleKaraoke={onToggleKaraoke}
+        isKaraokeOpen={isKaraokeOpen}
+      />
+    );
+  }
   return <WaveformPlayer onOpenFull={onOpenFull} onOpenArtist={onOpenArtist} />;
 }
 
@@ -3214,6 +3277,9 @@ export default function App() {
             <BottomPlayer
               onOpenFull={() => setIsFullOpen(true)}
               onOpenArtist={openArtist}
+              onToggleKaraoke={() => setIsMiniKaraokeOpen((value) => !value)}
+              isKaraokeOpen={isMiniKaraokeOpen}
+              variant={profileSettings?.miniPlayerType || "waveform"}
             />
           </div>
         )}

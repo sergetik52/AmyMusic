@@ -119,6 +119,11 @@ async function uploadToGitHub(token, owner, repo, tag, filePath, fileName) {
 }
 
 async function main() {
+  delete process.env.HTTP_PROXY;
+  delete process.env.HTTPS_PROXY;
+  delete process.env.http_proxy;
+  delete process.env.https_proxy;
+
   console.log('\x1b[35m=========================================\x1b[0m');
   console.log('\x1b[1m\x1b[35m  AmyMusic 1-Click Release & Deploy  \x1b[0m');
   console.log('\x1b[35m=========================================\x1b[0m');
@@ -163,7 +168,7 @@ async function main() {
     execSync('taskkill /F /IM AmyMusic.exe /T 2>nul', { stdio: 'ignore' });
   } catch {}
   
-  // Update tauri.conf.json version
+  // Update tauri.conf.json & Cargo.toml version
   const tauriConfPath = path.join(rootDir, 'src-tauri', 'tauri.conf.json');
   if (fs.existsSync(tauriConfPath)) {
     const tauriConf = JSON.parse(fs.readFileSync(tauriConfPath, 'utf8'));
@@ -171,41 +176,65 @@ async function main() {
     fs.writeFileSync(tauriConfPath, JSON.stringify(tauriConf, null, 2) + '\n', 'utf8');
   }
 
+  const cargoTomlPath = path.join(rootDir, 'src-tauri', 'Cargo.toml');
+  if (fs.existsSync(cargoTomlPath)) {
+    try {
+      let cargoToml = fs.readFileSync(cargoTomlPath, 'utf8');
+      cargoToml = cargoToml.replace(/^version\s*=\s*"[^"]+"/m, `version = "${newVersion}"`);
+      fs.writeFileSync(cargoTomlPath, cargoToml, 'utf8');
+    } catch (e) {
+      console.log('Note: Cargo.toml version update skipped or already updated:', e.message);
+    }
+  }
+
   run('npm run tauri:build');
 
-  const nsisDir = path.join(rootDir, 'src-tauri', 'target', 'release', 'bundle', 'nsis');
-  if (!fs.existsSync(nsisDir)) {
-    throw new Error(`Compiled installer not found at ${nsisDir}`);
-  }
-  
-  const setupFile = fs.readdirSync(nsisDir).find(f => f.endsWith('.exe') && !f.endsWith('-uninstaller.exe'));
-  if (!setupFile) {
-    throw new Error(`Compiled installer .exe not found in ${nsisDir}`);
-  }
-  
-  const setupFilePath = path.join(nsisDir, setupFile);
-  const fileName = `AmyMusic-${newVersion}-Setup.exe`;
-
-  // Copy installer to local downloads/
   const downloadsDir = path.join(rootDir, 'downloads');
   if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
-  fs.copyFileSync(setupFilePath, path.join(downloadsDir, fileName));
-  console.log(`✓ Copied ${fileName} to downloads/`);
 
-  // 3. Upload installer to GitHub Releases (if token available)
+  const filesToUpload = [];
+
+  const nsisDir = path.join(rootDir, 'src-tauri', 'target', 'release', 'bundle', 'nsis');
+  if (fs.existsSync(nsisDir)) {
+    const setupFile = fs.readdirSync(nsisDir).find(f => f.endsWith('.exe') && !f.endsWith('-uninstaller.exe'));
+    if (setupFile) {
+      const setupFilePath = path.join(nsisDir, setupFile);
+      const setupFileName = `AmyMusic-${newVersion}-Setup.exe`;
+      fs.copyFileSync(setupFilePath, path.join(downloadsDir, setupFileName));
+      console.log(`✓ Copied ${setupFileName} to downloads/`);
+      filesToUpload.push({ path: setupFilePath, name: setupFileName });
+    }
+  }
+
+  const standaloneExePath = path.join(rootDir, 'src-tauri', 'target', 'release', 'AmyMusic.exe');
+  if (fs.existsSync(standaloneExePath)) {
+    const standaloneFileName = `AmyMusic-${newVersion}-Portable.exe`;
+    fs.copyFileSync(standaloneExePath, path.join(downloadsDir, standaloneFileName));
+    fs.copyFileSync(standaloneExePath, path.join(rootDir, 'AmyMusic.exe'));
+    console.log(`✓ Copied ${standaloneFileName} to downloads/ and root directory`);
+    filesToUpload.push({ path: standaloneExePath, name: standaloneFileName });
+  }
+
+  if (filesToUpload.length === 0) {
+    throw new Error('No compiled .exe files found to release!');
+  }
+
+  // 3. Upload installer / exe to GitHub Releases (if token available)
   if (token) {
-    console.log('\n🐙 Step 3/5: Uploading release asset to GitHub...');
-    try {
-      await uploadToGitHub(token, 'sergetik52', 'AmyMusic', `v${newVersion}`, setupFilePath, fileName);
-    } catch (ghErr) {
-      console.error('⚠️ Failed to upload to GitHub Releases:', ghErr.message);
+    console.log('\n🐙 Step 3/5: Uploading release asset(s) to GitHub...');
+    for (const item of filesToUpload) {
+      try {
+        await uploadToGitHub(token, 'sergetik52', 'AmyMusic', `v${newVersion}`, item.path, item.name);
+      } catch (ghErr) {
+        console.error(`⚠️ Failed to upload ${item.name} to GitHub Releases:`, ghErr.message);
+      }
     }
   } else {
     console.log('\n🐙 Step 3/5: Skipping GitHub upload (no token provided)...');
   }
 
-  // 4. Local auto-commit and tag
-  console.log('\n🏷️ Step 4/5: Creating local Git commit & release tag (skipping GitHub push)...');
+  // 4. Local auto-commit, tag and push
+  console.log('\n🏷️ Step 4/5: Creating local Git commit, release tag & pushing to GitHub...');
   try {
     run('git add .');
     try {
@@ -218,8 +247,14 @@ async function main() {
     } catch (e) {
       console.log(`Tag v${newVersion} already exists locally.`);
     }
+    try {
+      run('git push origin main');
+      run(`git push origin v${newVersion}`);
+    } catch (e) {
+      console.log('⚠️ Failed to push to remote git repository:', e.message);
+    }
   } catch (gitErr) {
-    console.log('⚠️ Git commit skipped or git not in PATH.');
+    console.log('⚠️ Git commit skipped or git error:', gitErr.message);
   }
 
   // 5. Deploy web & backend to amymusic.ru server (Skipped - no server)

@@ -69,10 +69,12 @@ export function initDesktopApi() {
         const data = JSON.parse(window.localStorage.getItem("amymusic.profileSettings.v1"));
         return {
           scale: Number(data?.overlayScale) || 1.0,
-          position: data?.overlayPosition || "top"
+          position: data?.overlayPosition || "top",
+          dragEnabled: Boolean(data?.overlayDragEnabled),
+          customPosition: data?.overlayCustomPosition || null
         };
       } catch (e) {
-        return { scale: 1.0, position: "top" };
+        return { scale: 1.0, position: "top", dragEnabled: false, customPosition: null };
       }
     },
 
@@ -95,13 +97,42 @@ export function initDesktopApi() {
     getRunningApps: async () => invoke('get_running_apps'),
     setOverlayFilter: async (enabled, mode, apps) => invoke('set_overlay_filter', { enabled, mode, apps }),
     isOverlayVisible: async () => invoke('is_overlay_visible'),
+    startOverlayDragging: async () => {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      return getCurrentWindow().startDragging();
+    },
     resizeOverlayWindow: async (expanded, forceScale, forcePosition) => {
       const cfg = window.amyMusicDesktop._getOverlayConfig();
-      invoke('resize_overlay_window', { 
+      let overlayWindow = null;
+      let currentPosition = null;
+      if (forcePosition === undefined && cfg.dragEnabled) {
+        try {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+          overlayWindow = getCurrentWindow();
+          currentPosition = await overlayWindow.outerPosition();
+        } catch (e) {
+          // Fall back to the persisted position below if the native query fails.
+        }
+      }
+      await invoke('resize_overlay_window', {
         expanded, 
         scale: forceScale !== undefined ? forceScale : cfg.scale,
         position: forcePosition !== undefined ? forcePosition : cfg.position
       });
+      // Native resize applies the configured preset. Restore the last manually
+      // dragged position when free movement is enabled and no new preset was chosen.
+      if (forcePosition === undefined && cfg.dragEnabled && currentPosition && overlayWindow) {
+        await overlayWindow.setPosition(currentPosition);
+      } else if (forcePosition === undefined && cfg.dragEnabled
+        && Number.isFinite(Number(cfg.customPosition?.x))
+        && Number.isFinite(Number(cfg.customPosition?.y))) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const { PhysicalPosition } = await import('@tauri-apps/api/dpi');
+        await getCurrentWindow().setPosition(new PhysicalPosition(
+          Number(cfg.customPosition.x),
+          Number(cfg.customPosition.y)
+        ));
+      }
     },
     broadcastOverlayState: async (payload) => invoke('broadcast_overlay_state', { payload }),
     broadcastOverlayCmd: async (payload) => invoke('broadcast_overlay_cmd', { payload }),

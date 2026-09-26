@@ -3,10 +3,14 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": [
-    "main"
+    "main",
+    "overlay"
   ],
   "permissions": [
     "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-outer-position",
+    "core:window:allow-set-position",
     "http:default"
   ]
 }

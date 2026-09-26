@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "AmyMusic",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "identifier": "com.sergetik52.amymusic",
   "build": {
     "frontendDist": "../dist",
@@ -42,9 +42,6 @@
     ],
     "security": {
       "csp": null
-    },
-    "trayIcon": {
-      "iconPath": "icons/icon.ico"
     }
   },
   "bundle": {

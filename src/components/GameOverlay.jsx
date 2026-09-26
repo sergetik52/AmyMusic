@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { getProfileSettings, saveProfileSettings } from "../services/profileSettings";
 
 function toSafeString(val, fallback = "") {
   if (val === null || val === undefined) return fallback;
@@ -31,6 +32,7 @@ export function GameOverlay() {
   const [trackAnimClass, setTrackAnimClass] = useState("");
   const [overlayScale, setOverlayScale] = useState(1.0);
   const [overlayPosition, setOverlayPosition] = useState("top");
+  const [overlayDragEnabled, setOverlayDragEnabled] = useState(false);
 
   useEffect(() => {
     const loadSettings = () => {
@@ -40,6 +42,7 @@ export function GameOverlay() {
           const profile = JSON.parse(raw);
           setOverlayScale(Number(profile.overlayScale) || 1.0);
           setOverlayPosition(profile.overlayPosition || "top");
+          setOverlayDragEnabled(Boolean(profile.overlayDragEnabled));
         }
       } catch (e) {}
     };
@@ -47,6 +50,40 @@ export function GameOverlay() {
     window.addEventListener("storage", loadSettings);
     return () => window.removeEventListener("storage", loadSettings);
   }, []);
+
+  useEffect(() => {
+    if (!overlayDragEnabled || typeof window === "undefined" || !window.__TAURI_INTERNALS__) return;
+
+    let unlisten;
+    let mounted = true;
+    import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+      if (!mounted) return;
+      unlisten = await getCurrentWindow().onMoved(({ payload }) => {
+        const x = Number(payload?.x);
+        const y = Number(payload?.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        const profile = getProfileSettings();
+        if (!profile.overlayDragEnabled) return;
+        saveProfileSettings({
+          ...profile,
+          overlayCustomPosition: { x: Math.round(x), y: Math.round(y) }
+        }, true);
+      });
+    }).catch(() => {});
+
+    return () => {
+      mounted = false;
+      if (unlisten) unlisten();
+    };
+  }, [overlayDragEnabled]);
+
+  const handleOverlayDragStart = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!overlayDragEnabled) return;
+    const dragging = window.amyMusicDesktop?.startOverlayDragging?.();
+    dragging?.catch(() => {});
+  };
 
   const getTransformOrigin = () => {
     return "center";
@@ -435,6 +472,45 @@ export function GameOverlay() {
           }
         }}
       >
+        {overlayDragEnabled && (
+          <button
+            type="button"
+            data-tauri-drag-region
+            title="Переместить оверлей"
+            aria-label="Переместить оверлей"
+            onMouseDown={handleOverlayDragStart}
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: isExpanded ? "50%" : "auto",
+              right: isExpanded ? "auto" : 0,
+              bottom: isExpanded ? "auto" : 0,
+              width: isExpanded ? "64px" : "18px",
+              height: isExpanded ? "14px" : "auto",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 0,
+              border: 0,
+              background: "rgba(255, 255, 255, 0.08)",
+              borderRadius: isExpanded ? "0 0 8px 8px" : 0,
+              color: "rgba(255, 255, 255, 0.65)",
+              cursor: "grab",
+              transform: isExpanded ? "translateX(-50%)" : "none",
+              zIndex: 4
+            }}
+          >
+            <span
+              style={isExpanded
+                ? { width: "30px", height: "3px", borderRadius: "3px", background: "rgba(255, 255, 255, 0.7)" }
+                : { fontSize: "13px", lineHeight: 1, letterSpacing: "-3px", transform: "translateX(-1px)" }}
+            >
+              {isExpanded ? null : "⋮⋮"}
+            </span>
+          </button>
+        )}
+
         {/* Ambient Blurred Cover Overlay Background */}
         {playerState.cover && (
           <div
