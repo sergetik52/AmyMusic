@@ -1,0 +1,511 @@
+Ты — senior product designer и frontend engineer, специализирующийся на мобильных музыкальных PWA и интерфейсах в стиле iOS 26.
+
+Работай с существующим проектом AmyMusic.
+
+Стек:
+- React 18
+- Vite
+- Tailwind CSS
+- JSX/JavaScript
+- lucide-react
+- существующие компоненты находятся в src/components
+- мобильный layout: src/mobile/MobileLayout.jsx
+- глобальные стили: src/main.css
+- PWA: index.html и public/manifest.json
+
+Используй:
+- UI UX Pro Max для responsive UX, touch-first паттернов, accessibility и resilient layout;
+- shadcn/ui для Button, Input, Tabs, Sheet, Drawer, Dialog, ScrollArea, Skeleton, Separator и Toast;
+- Astryx как источник современных polished-компонентов и визуальных решений, если доступен MCP или каталог компонентов;
+- lucide-react и существующие SVG вместо emoji;
+- Apple Human Interface Guidelines для iOS-навигации, safe area, жестов, Dynamic Type, контрастности и Liquid Glass.
+
+Главная задача:
+
+Переработай мобильную версию AmyMusic так, чтобы она ощущалась как полноценное музыкальное приложение, установленное на телефон через PWA.
+
+Сохрани:
+- существующую бизнес-логику;
+- API;
+- аудиоплеер;
+- audio context;
+- callbacks;
+- маршрутизацию;
+- desktop-версию;
+- текущие theme presets;
+- существующие обложки и SVG.
+
+Не переписывай desktop UI. Изменения должны быть адаптивными и преимущественно относиться к мобильному layout.
+
+## Текущий проект
+
+Сейчас в проекте есть:
+
+- экран «Моя волна»;
+- экран поиска;
+- экран чартов;
+- экран коллекции;
+- история прослушивания;
+- любимые треки;
+- mini-player;
+- fullscreen player;
+- нижняя навигация из 4 вкладок;
+- PWA manifest с `display: standalone`;
+- `viewport-fit=cover`;
+- тёмная тема;
+- основной accent `#8341EF`.
+
+Текущая мобильная навигация находится в `src/mobile/MobileLayout.jsx`.
+
+Сейчас navigation bar реализован как полноширинная тёмная панель внизу экрана. Нужно заменить её на плавающий Liquid Glass dock в стиле современных iOS 26-приложений.
+
+При текущей проверке были обнаружены проблемы:
+
+- search filters создают горизонтальный overflow;
+- часть элементов слишком мелкая для комфортного touch-взаимодействия;
+- подписи tab bar слишком маленькие;
+- mini-player и navigation визуально сливаются;
+- safe-area учтена частично;
+- необходимо проверить клавиатуру, Dynamic Island, Android gesture navigation, landscape и узкие экраны 320–360 px.
+
+## Визуальное направление
+
+Создай стиль:
+
+- premium dark music app;
+- restrained Liquid Glass;
+- чёрный фон;
+- яркие обложки и waveform как основной визуальный контент;
+- glass только на плавающих функциональных слоях;
+- минимум декоративного шума;
+- никаких стандартных AI-интерфейсов с большим количеством фиолетовых градиентов;
+- никаких emoji вместо иконок;
+- никаких glass-карточек для каждого элемента списка.
+
+Сохрани визуальную основу AmyMusic:
+
+```text
+background: #090909
+surface: #141414
+elevated surface: #1c1c1c
+primary text: #ffffff
+secondary text: #a1a1aa
+accent: #8341EF
+Используй #8341EF только для:
+- активной вкладки;
+- primary play action;
+- progress;
+- selected state;
+- важных status indicators.
+Liquid Glass navigation dock
+Нижняя навигация должна выглядеть как floating Liquid Glass dock, а не как чёрная полоса от края до края.
+Структура:
+[ Liquid Glass mini-player ]
+
+      [ Поиск | Моя волна | Чарты | Коллекция ]
+Требования:
+- dock плавает над контентом;
+- отступает от левого, правого и нижнего края;
+- имеет скругление 24–28 px;
+- контент страницы визуально продолжается под ним;
+- последний элемент списка не скрывается под dock;
+- navigation и mini-player должны быть отдельными glass-поверхностями;
+- не объединять их в одну огромную панель.
+Базовый CSS-направление:
+.mobile-nav-dock {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(10px + env(safe-area-inset-bottom));
+
+  min-height: 64px;
+  padding: 6px;
+
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 26px;
+
+  background: rgba(20, 20, 24, 0.64);
+
+  backdrop-filter: blur(28px) saturate(1.45);
+  -webkit-backdrop-filter: blur(28px) saturate(1.45);
+
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+
+  z-index: 50;
+}
+Liquid Glass разрешён только для:
+- navigation dock;
+- mini-player;
+- fullscreen player;
+- sheets;
+- dialogs;
+- floating menus.
+Не использовать Liquid Glass на:
+- фоне страницы;
+- карточках треков;
+- списках;
+- album covers;
+- hero content;
+- каждом отдельном control.
+Navigation tabs
+Сохрани 4 вкладки:
+- Поиск;
+- Моя волна;
+- Чарты;
+- Коллекция.
+Для каждого tab:
+- минимальная touch-зона 44×44 px;
+- icon 21–23 px;
+- label 11–12 px;
+- aria-current="page" или aria-selected;
+- visible focus-visible состояние;
+- active state должен быть заметен не только цветом;
+- inactive state не должен выглядеть невидимым;
+- не использовать только opacity: 0.4;
+- не использовать больше 4–5 главных tabs;
+- tab bar используется только для навигации, не для действий.
+Активное состояние:
+.mobile-nav-item[data-active="true"] {
+  color: #ffffff;
+
+  background: color-mix(
+    in srgb,
+    var(--theme-accent) 24%,
+    transparent
+  );
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 4px 16px color-mix(
+      in srgb,
+      var(--theme-accent) 24%,
+      transparent
+    );
+}
+Liquid Glass mini-player
+Mini-player должен быть отдельной стеклянной карточкой над navigation dock:
+[ cover ] [ title / artist ] [ like ] [ play ]
+Требования:
+- располагается на 8–12 px выше navigation dock;
+- скругление 18–22 px;
+- cover 48–56 px;
+- play button минимум 44×44 px;
+- tap по track area открывает fullscreen player;
+- title и artist максимум в 2 строки;
+- на ширине 320–360 px оставить только cover, title/artist и play;
+- secondary controls перенести в Sheet/Drawer;
+- mini-player не должен сливаться визуально с tab bar;
+- пустое состояние показывает «Нет трека» и «Трек не загружен».
+Safe Area и viewport
+Добавь единые safe-area tokens:
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+Используй:
+.app-shell {
+  min-height: 100svh;
+  height: 100dvh;
+  padding-top: var(--safe-top);
+  padding-left: max(16px, var(--safe-left));
+  padding-right: max(16px, var(--safe-right));
+}
+
+.mobile-nav-dock {
+  left: max(12px, var(--safe-left));
+  right: max(12px, var(--safe-right));
+  bottom: calc(10px + var(--safe-bottom));
+}
+Требования:
+- не использовать только 100vh;
+- использовать 100dvh для текущей видимой высоты;
+- использовать 100svh как минимальную fallback-высоту;
+- учитывать safe area сверху, снизу, слева и справа;
+- не дублировать safe-area-inset-top;
+- не перекрывать home indicator;
+- корректно работать с Dynamic Island;
+- корректно работать с Android gesture navigation;
+- корректно работать в landscape;
+- корректно работать на foldable-устройствах;
+- фон glass dock должен доходить до safe area, а интерактивные элементы должны находиться внутри неё.
+Контент должен иметь нижний padding:
+padding-bottom: calc(
+  var(--mini-player-height) +
+  var(--nav-dock-height) +
+  32px +
+  env(safe-area-inset-bottom)
+);
+Responsive layout
+Обязательно проверить:
+- 320×568;
+- 360×800;
+- 375×812;
+- 390×844;
+- 430×932;
+- tablet width;
+- landscape;
+- iPhone с notch;
+- iPhone с Dynamic Island;
+- Android Chrome;
+- Android gesture navigation;
+- standalone PWA режим;
+- browser mode с адресной строкой;
+- увеличенный системный текст.
+Не допускай:
+- горизонтального overflow страницы;
+- обрезанных заголовков;
+- кнопок за пределами viewport;
+- наложения keyboard на input;
+- перекрытия последнего ряда mini-player;
+- слишком маленьких touch targets;
+- fixed heights, которые ломаются при увеличенном тексте.
+Scroll behavior
+При прокрутке:
+- контент визуально проходит под glass dock;
+- navigation dock остаётся доступным;
+- mini-player может компактно сворачиваться при scroll down;
+- при scroll up mini-player возвращается;
+- dock не должен исчезать полностью;
+- анимации должны быть короткими и отменяемыми;
+- при prefers-reduced-motion: reduce отключить transform-анимации;
+- добавить мягкий scroll-edge fade возле glass navigation.
+Экран поиска
+Исправь текущий горизонтальный overflow фильтров.
+Сделай:
+- shadcn Input;
+- search icon;
+- clear button;
+- placeholder «Что вы хотите послушать?»;
+- минимальная высота поля 44 px;
+- фильтры через shadcn Tabs или horizontal chip list;
+- scrollbar визуально скрыт;
+- body width не увеличивается;
+- horizontal scrolling происходит только внутри filter container;
+- длинные названия не ломают layout;
+- выбранный filter остаётся видимым;
+- loading state;
+- empty state;
+- error state;
+- debounce;
+- корректную работу при открытой клавиатуре.
+Для scroll-контейнера можно использовать:
+.search-filters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  max-width: 100%;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+
+.search-filters::-webkit-scrollbar {
+  display: none;
+}
+Экран «Моя волна»
+Сохрани текущий музыкальный hero:
+- заголовок может занимать 2 строки;
+- play button всегда доступна;
+- cover не меньше 72 px;
+- CTA «Настроить» минимум 44 px;
+- «История» и «Любимые треки» — полноценные tappable rows;
+- empty state должен объяснять следующий шаг;
+- artwork-derived background не должен ухудшать контраст текста;
+- не перегружать hero декоративными элементами.
+Экран чартов
+Сделай chart list touch-friendly:
+- высота строки 64–76 px;
+- cover 48–56 px;
+- номер чарта отдельной колонкой;
+- title и artist максимум 2 строки;
+- duration справа;
+- track menu отдельная кнопка 44×44 px;
+- tap по строке запускает трек;
+- рост/падение позиции обозначать не только цветом;
+- использовать icon или текстовое accessibility label;
+- длинные имена артистов не расширяют страницу;
+- secondary information показывать через progressive disclosure.
+Экран коллекции
+Сделай понятные состояния:
+- отдельная кнопка «Мне нравится»;
+- empty state с объяснением;
+- CTA «Создать плейлист»;
+- playlist cards с touch-зоной минимум 44 px;
+- горизонтальные carousel-контейнеры не расширяют body;
+- кнопки «Назад» и «Вперёд» с aria-label;
+- не использовать декоративные карточки без действия.
+Fullscreen player
+Реализуй fullscreen player как mobile-first sheet:
+- position: fixed;
+- inset: 0;
+- height: 100dvh;
+- safe-area-aware header;
+- drag handle;
+- кнопка Close/Back;
+- свайп вниз закрывает player;
+- закрытие через кнопку, swipe и Escape;
+- body не скроллится под sheet;
+- lyrics, queue и equalizer открываются отдельными sheets;
+- не показывать несколько конкурирующих modal layers;
+- основные playback controls не попадают под home indicator;
+- поддержать reduced motion.
+Typography
+Используй system font stack:
+font-family:
+  Inter,
+  ui-sans-serif,
+  system-ui,
+  -apple-system,
+  BlinkMacSystemFont,
+  "Segoe UI",
+  sans-serif;
+Правила:
+- основной текст 16–17 px;
+- secondary text минимум 12–13 px;
+- tab labels минимум 11–12 px;
+- page title 28–32 px;
+- section title 20–24 px;
+- card title 16–18 px;
+- не использовать thin font weight для маленького текста;
+- интерфейс должен переживать увеличение текста на 200%;
+- не фиксировать высоты там, где текст может увеличиваться;
+- длинные русские и английские названия должны переноситься или обрезаться с доступным полным значением.
+Accessibility
+Обеспечь:
+- контраст обычного текста минимум 4.5:1;
+- контраст крупного/bold текста минимум 3:1;
+- все icon-only buttons имеют aria-label;
+- состояние не передаётся только цветом;
+- работает keyboard focus;
+- VoiceOver/NVDA читают navigation и player;
+- есть альтернативы жестам;
+- свайп не является единственным способом закрытия;
+- кнопки имеют минимум 44×44 px;
+- content доступен при увеличенном системном тексте;
+- loading, empty, error и offline states доступны скринридеру.
+Liquid Glass accessibility fallback
+Для пользователей с отключённой прозрачностью или повышенной контрастностью:
+@media (prefers-reduced-transparency: reduce),
+       (prefers-contrast: more) {
+  .mobile-nav-dock,
+  .mobile-mini-player {
+    background: #17171b;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: rgba(255, 255, 255, 0.28);
+  }
+}
+Если браузер не поддерживает backdrop-filter, использовать непрозрачный fallback.
+Motion
+Используй:
+- tap feedback: 120–180 ms;
+- sheet transition: 220–300 ms;
+- короткие cancellable-анимации;
+- никакой постоянной декоративной пульсации без необходимости;
+- никакого motion как единственного способа передать состояние.
+При prefers-reduced-motion: reduce отключить:
+- parallax;
+- fluid blob animations;
+- масштабные переходы;
+- постоянные вращения;
+- morphing glass effects.
+PWA
+Проверь и улучши:
+- display: standalone;
+- viewport-fit=cover;
+- theme_color;
+- background_color;
+- id;
+- scope;
+- description;
+- maskable icons 192×192 и 512×512;
+- Android install flow через beforeinstallprompt;
+- ненавязчивую инструкцию установки на iOS Safari;
+- service worker и offline fallback;
+- отсутствие горизонтального overflow в standalone;
+- корректное восстановление после background;
+- корректный запуск с Home Screen.
+Не кэшируй аудиофайлы без отдельной стратегии.
+Keyboard и Visual Viewport
+Используй window.visualViewport:
+- search input всегда остаётся видимым;
+- keyboard не перекрывает field;
+- bottom sheet учитывает уменьшение viewport;
+- bottom dock может временно становиться компактнее во время ввода;
+- после закрытия клавиатуры layout возвращается без скачка;
+- fixed controls не перекрывают input.
+Foldables и landscape
+Если браузер поддерживает viewport segments:
+- не размещать важный контент через hinge;
+- не растягивать один player через физический сгиб;
+- в landscape разрешить двухколоночный full player;
+- сохранить доступность основных playback controls;
+- не уменьшать touch targets.
+Компоненты
+Используй существующую логику проекта.
+Предпочтительные shadcn-компоненты:
+- Button;
+- Input;
+- Tabs;
+- Sheet;
+- Drawer;
+- Dialog;
+- ScrollArea;
+- Separator;
+- Skeleton;
+- Toast;
+- DropdownMenu.
+Если shadcn ещё не настроен, не устанавливай лишние зависимости вслепую. Используй существующий Tailwind и lucide-react, добавляя только минимальную инфраструктуру.
+Не создавай второй независимый audio player state.
+Порядок работы
+1. Изучи:
+   - src/mobile/MobileLayout.jsx;
+   - src/main.css;
+   - src/App.jsx;
+   - index.html;
+   - public/manifest.json.
+2. Составь карту текущих мобильных экранов.
+3. Определи responsive tokens:
+   - colors;
+   - spacing;
+   - radius;
+   - safe areas;
+   - dock heights;
+   - typography;
+   - motion.
+4. Покажи ASCII wireframe для ширины 320 px и 430 px.
+5. Реализуй Liquid Glass mini-player и navigation dock.
+6. Исправь search overflow.
+7. Исправь safe-area и viewport behavior.
+8. Добавь accessibility fallback.
+9. Проверь все экраны и размеры.
+10. Убедись, что desktop layout не сломан.
+Acceptance criteria
+Работа считается завершённой, если:
+- navigation выглядит как floating Liquid Glass dock;
+- mini-player отделён от navigation;
+- dock имеет скругление, blur, translucent fill и subtle highlight;
+- dock учитывает safe area;
+- контент виден под dock;
+- нет горизонтального overflow на 320 px;
+- search filters не расширяют body;
+- все основные controls имеют минимум 44×44 px;
+- tab labels читаемы;
+- последний элемент списка не скрывается;
+- keyboard не перекрывает search input;
+- full player закрывается кнопкой и свайпом;
+- работают portrait и landscape;
+- работает reduced motion;
+- есть opaque fallback для reduced transparency;
+- присутствуют aria-label и focus-visible states;
+- PWA запускается в standalone режиме;
+- desktop layout не сломан.
+В финале перечисли:
+- изменённые файлы;
+- реализованные компоненты;
+- найденные и исправленные проблемы;
+- проверенные viewport;
+- оставшиеся ограничения.

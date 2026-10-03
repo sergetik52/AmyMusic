@@ -7,8 +7,14 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="AmyMusic" />
     <meta name="theme-color" content="#090909" />
+    <meta name="description" content="AmyMusic — музыка, чарты и личная коллекция" />
     <link rel="apple-touch-icon" href="/logo.png" />
     <link rel="manifest" href="/manifest.json" />
+    <script>
+      if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+      }
+    </script>
     <title>Amy Music</title>
   </head>
   <body>

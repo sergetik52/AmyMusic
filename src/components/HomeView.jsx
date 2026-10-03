@@ -52,7 +52,7 @@ function saveWaveSeeds(seeds) {
 }
 
 /* ═══ MAIN COMPONENT ═══ */
-export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist }) {
+export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist, mobileSearch = null }) {
   const {
     currentTrack,
     playHistory,
@@ -240,6 +240,9 @@ export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist }
           <div className="absolute inset-0 bg-gradient-to-br from-[#1a0030] via-[#0a0015] to-black" />
         )}
 
+        {/* On mobile the search belongs to the wave hero, above its title and controls. */}
+        {mobileSearch && <div className="mobile-wave-search-slot">{mobileSearch}</div>}
+
         {/* Decorative Wavy Line behind Play Button */}
         <div className="absolute inset-y-0 right-0 z-0 pointer-events-none flex items-center justify-end overflow-hidden w-[60%] max-w-[600px]">
           <svg className="w-[120%] h-[120%] opacity-30 mix-blend-overlay translate-x-[10%]" viewBox="0 0 500 500" preserveAspectRatio="xMaxYMid meet" fill="none" stroke="rgba(255, 255, 255, 0.4)" strokeWidth="32" strokeLinecap="round" strokeLinejoin="round">
@@ -303,7 +306,7 @@ export default function HomeView({ onStartWave, onOpenCollection, onOpenArtist }
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="p-4 md:p-6 space-y-5 pb-6 max-md:pb-28">
+      <div className="home-view__content p-4 md:p-6 space-y-5 pb-6 max-md:pb-28">
 
         {/* Wave Seed Modal */}
         {showSeedPicker && (

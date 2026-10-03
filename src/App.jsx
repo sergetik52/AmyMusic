@@ -1081,8 +1081,9 @@ const TabButton = ({ active, onClick, icon, label }) => (
   <button
     type="button"
     onClick={onClick}
+    aria-pressed={active}
     className={
-      "dotify-tab-btn flex items-center gap-2 rounded-full px-5 py-2 text-[14px] font-bold shrink-0 cursor-pointer transition-colors duration-300 " +
+      "dotify-tab-btn flex min-h-[44px] items-center gap-2 rounded-full px-5 py-2 text-[14px] font-bold shrink-0 cursor-pointer transition-colors duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white " +
       (active
         ? "bg-white text-black shadow-lg"
         : "bg-transparent text-white/60 hover:text-white hover:bg-white/10")
@@ -1093,7 +1094,7 @@ const TabButton = ({ active, onClick, icon, label }) => (
   </button>
 );
 
-function SearchPanel({ onOpenArtist }) {
+function SearchPanel({ onOpenArtist, onOpenAlbum = () => {}, openContextMenu = () => {}, embedded = false }) {
   const { playHistory, clearHistory, likedTracks, dislikedTrackIds, dislikedTracks, playTrack, savedReleaseIds, toggleSavedRelease } = useAudioPlayer();
   const [query, setQuery] = useState("");
   const [activeSearchTab, setActiveSearchTab] = useState("all");
@@ -1389,13 +1390,13 @@ function SearchPanel({ onOpenArtist }) {
   const dropdownItems = buildSuggestions();
 
   return (
-    <section className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-[#000000] relative">
+    <section className={`search-panel ${embedded ? "mobile-wave-search-panel" : "flex-1 h-full min-h-0 overflow-hidden"} flex flex-col bg-[#000000] relative`} data-embedded={embedded ? "true" : "false"}>
       
       {/* Search Header Area */}
-      <div className={`transition-all duration-700 ease-in-out shrink-0 w-full flex flex-col justify-center items-center ${hasSearched ? 'pt-4 md:pt-8 h-[auto]' : 'h-full pt-[8vh]'}`}>
+      <div data-searched={hasSearched ? "true" : "false"} className={`search-panel__header transition-all duration-700 ease-in-out shrink-0 w-full flex flex-col justify-center items-center ${hasSearched ? 'pt-4 md:pt-8 h-[auto]' : 'pt-[8vh]'}`}>
         
         {/* Typewriter Search Heading (Only when Idle) */}
-        {!hasSearched && <TypewriterHeading />}
+        {!hasSearched && !embedded && <TypewriterHeading />}
 
         {/* Search Bar Container */}
         <div className="relative w-full max-w-[600px] px-4 z-50">
@@ -1417,10 +1418,10 @@ function SearchPanel({ onOpenArtist }) {
                 if (hasSearched) setHasSearched(false);
               }}
               placeholder="Что вы хотите послушать?"
-              className="w-full bg-transparent text-[16px] text-white placeholder:text-white/40 focus:outline-none font-medium"
+              className="min-h-[44px] w-full min-w-0 bg-transparent text-[16px] text-white placeholder:text-white/40 focus:outline-none font-medium"
             />
             {query && (
-              <button type="button" onClick={() => { setQuery(""); setHasSearched(false); }} className="text-white/40 hover:text-white transition">
+              <button type="button" aria-label="Очистить поиск" onClick={() => { setQuery(""); setHasSearched(false); }} className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full text-white/55 hover:text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             )}
@@ -1469,7 +1470,7 @@ function SearchPanel({ onOpenArtist }) {
 
         {/* Tabs - Always visible */}
         <div className="mt-6 w-full px-4 transition-all duration-500 opacity-100 max-h-[100px]">
-          <div className="flex items-center justify-center gap-2 overflow-x-auto custom-scrollbar pb-2">
+          <div className="search-filters justify-start pb-2 md:justify-center">
             <TabButton active={activeSearchTab === "all"} onClick={() => setActiveSearchTab("all")} label="Все" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>} />
             <TabButton active={activeSearchTab === "tracks"} onClick={() => setActiveSearchTab("tracks")} label="Треки" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>} />
             <TabButton active={activeSearchTab === "playlists"} onClick={loadPlaylistsTab} label="Плейлисты" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>} />
@@ -1479,7 +1480,7 @@ function SearchPanel({ onOpenArtist }) {
         </div>
 
           {/* Recent Tracks Carousel (Only when Idle) */}
-          {!hasSearched && playHistory && playHistory.length > 0 && (
+          {!embedded && !hasSearched && playHistory && playHistory.length > 0 && (
             <div className="mt-8 w-full px-4 md:px-8 animate-slide-up-fade">
               <div ref={recentTracksScrollRef} className="flex gap-4 overflow-x-auto no-scrollbar pb-6 snap-x">
                 {playHistory.slice(0, 15).map((track, i) => (
@@ -1505,12 +1506,19 @@ function SearchPanel({ onOpenArtist }) {
               </div>
             </div>
           )}
+
+          {!embedded && !hasSearched && (
+            <div className="search-idle-note" aria-live="polite">
+              <span className="search-idle-note__mark" aria-hidden="true" />
+              <span>Найди трек, артиста или альбом</span>
+            </div>
+          )}
       </div>
 
       
         {/* Results Body */}
       {hasSearched && (
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 md:px-8 pb-32 animate-fade-in">
+        <div className="search-panel__results flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 md:px-8 pb-32 animate-fade-in">
           
           {/* ALL TAB LAYOUT */}
           {activeSearchTab === "all" && (
@@ -3158,9 +3166,14 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case "wave":
-        return <HomeView onStartWave={() => {
-          setIsFullOpen(true);
-        }} onOpenCollection={() => setActiveTab("collection")} onOpenArtist={openArtist} />;
+        return <HomeView
+          onStartWave={() => {
+            setIsFullOpen(true);
+          }}
+          onOpenCollection={() => setActiveTab("collection")}
+          onOpenArtist={openArtist}
+          mobileSearch={isMobile ? <SearchPanel embedded onOpenArtist={openArtist} onOpenAlbum={openAlbum} openContextMenu={openContextMenu} /> : null}
+        />;
       case "collection":
         return <CollectionView onOpenArtist={openArtist} onOpenAlbum={openAlbum} initialPlaylistId={collectionInitialPlaylistId} />;
       case "settings":
@@ -3176,7 +3189,7 @@ export default function App() {
             onOpenAlbum={openAlbum}
           />
         ) : (
-          <SearchPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />
+          <SearchPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} openContextMenu={openContextMenu} />
         );
       case "album":
         return activeAlbum ? (
@@ -3188,9 +3201,9 @@ export default function App() {
             onOpenAlbum={openAlbum}
           />
         ) : (
-          <SearchPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />
+          <SearchPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} openContextMenu={openContextMenu} />
         );
-      case "search": default: return <SearchPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} />;
+      case "search": default: return <SearchPanel onOpenArtist={openArtist} onOpenAlbum={openAlbum} openContextMenu={openContextMenu} />;
     }
   };
 

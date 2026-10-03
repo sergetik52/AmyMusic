@@ -298,7 +298,7 @@ export function TrackMenuButton({ track }) {
           e.stopPropagation();
           openContextMenu(e, track);
         }}
-        className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 text-white/50 hover:text-white transition active:scale-95"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-white/10 text-white/50 hover:text-white transition active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
         aria-label="Меню трека"
       >
         <img src="/menu/menu-item.svg" alt="Menu" className="h-5 w-5 brightness-200 opacity-60 hover:opacity-100 transition" />

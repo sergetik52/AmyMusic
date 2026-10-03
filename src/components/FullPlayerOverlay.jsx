@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useAudioPlayer, useAudioTime, useAudioEnergy } from "../audio/AudioPlayerContext";
+import { useAudioPlayer, useAudioTime } from "../audio/AudioPlayerContext";
 import { getCachedLyricsForTrack, getActiveLyricIndex, clearLyricsCacheForTrack } from "../services/lyricsApi";
 import { useEscapeKey } from "../utils/useEscapeKey";
 import { TrackContextMenu, TrackMenuButton } from "./TrackContextMenu";
@@ -309,7 +309,6 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   } = useAudioPlayer();
 
   const { currentTime, duration, progress } = useAudioTime();
-  const audioEnergy = useAudioEnergy();
 
   const prevIndex = useRef(currentIndex);
   const slideClass = useRef("animate-slideInRight");
@@ -391,10 +390,11 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     }
 
     if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      // Match the mobile player's requested direction: left = previous, right = next.
       if (deltaX < 0) {
-        next();
-      } else {
         previous();
+      } else {
+        next();
       }
     }
   };
@@ -442,6 +442,15 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 10);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
   }, []);
 
   const prevTrackIdRef = useRef(currentTrack?.id);
@@ -1055,7 +1064,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           e.preventDefault();
           setLyricsContextMenu({ x: e.clientX, y: e.clientY });
         }}
-        className={`fixed inset-0 z-[100] flex flex-col justify-between select-none text-white bg-[#090909] transition-opacity duration-300 ease-out overflow-hidden ${
+        className={`mobile-full-player fixed inset-0 z-[100] flex flex-col justify-between select-none text-white bg-[#090909] transition-opacity duration-300 ease-out overflow-hidden ${
           isVisible && !isClosing ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         style={{
@@ -1074,31 +1083,27 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
 
           <div className="absolute inset-0 filter blur-[80px] opacity-80 transform-gpu">
             <div
-              className="absolute -top-[20%] -left-[20%] h-[80vw] w-[80vw] rounded-full animate-fluid-blob-1 opacity-80 transition-transform duration-300 ease-out"
+              className="absolute -top-[20%] -left-[20%] h-[80vw] w-[80vw] rounded-full animate-fluid-blob-1 opacity-80 transition-colors duration-700 ease-out"
               style={{
-                backgroundColor: trackPalette?.base || "#2a0a4a",
-                transform: `scale(${1 + (audioEnergy?.bass || 0) * 0.22})`
+                backgroundColor: trackPalette?.base || "#2a0a4a"
               }}
             />
             <div
-              className="absolute -top-[10%] -right-[20%] h-[85vw] w-[85vw] rounded-full animate-fluid-blob-2 opacity-75 transition-transform duration-300 ease-out"
+              className="absolute -top-[10%] -right-[20%] h-[85vw] w-[85vw] rounded-full animate-fluid-blob-2 opacity-75 transition-colors duration-700 ease-out"
               style={{
-                backgroundColor: trackPalette?.line || "#9b5cff",
-                transform: `scale(${1 + (audioEnergy?.mids || 0) * 0.2})`
+                backgroundColor: trackPalette?.line || "#9b5cff"
               }}
             />
             <div
-              className="absolute top-[35%] left-[5%] h-[90vw] w-[90vw] rounded-full animate-fluid-blob-3 opacity-65 transition-transform duration-300 ease-out"
+              className="absolute top-[35%] left-[5%] h-[90vw] w-[90vw] rounded-full animate-fluid-blob-3 opacity-65 transition-colors duration-700 ease-out"
               style={{
-                backgroundColor: trackPalette?.bright || "#d8b4fe",
-                transform: `scale(${1 + (audioEnergy?.level || 0) * 0.25})`
+                backgroundColor: trackPalette?.bright || "#d8b4fe"
               }}
             />
             <div
-              className="absolute bottom-[-15%] right-[-15%] h-[95vw] w-[95vw] rounded-full animate-fluid-blob-1 opacity-75 transition-transform duration-300 ease-out"
+              className="absolute bottom-[-15%] right-[-15%] h-[95vw] w-[95vw] rounded-full animate-fluid-blob-1 opacity-75 transition-colors duration-700 ease-out"
               style={{
-                backgroundColor: trackPalette?.shadow || "#4c1d95",
-                transform: `scale(${1 + (audioEnergy?.bass || 0) * 0.28})`
+                backgroundColor: trackPalette?.shadow || "#4c1d95"
               }}
             />
           </div>
@@ -1112,7 +1117,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           <button
             type="button"
             onClick={handleClose}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 active:scale-95 shrink-0"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 active:scale-95 shrink-0"
             aria-label="Скрыть"
             title="Скрыть"
           >
@@ -1145,7 +1150,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
           <button
             type="button"
             onClick={() => setIsQueueModalOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 active:scale-95 shrink-0"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 active:scale-95 shrink-0"
             aria-label="Очередь"
             title="Очередь"
           >
