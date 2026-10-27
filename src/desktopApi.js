@@ -4,6 +4,26 @@ import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut';
 import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { listen } from '@tauri-apps/api/event';
 
+export async function openExternalUrl(url) {
+  if (typeof window === "undefined" || !url) return;
+  try {
+    if (isTauri()) {
+      await invoke("open_in_browser", { url });
+      return;
+    }
+  } catch (err) {
+    console.warn("open_in_browser invoke failed, trying shell open", err);
+  }
+  try {
+    if (isTauri()) {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      await open(url);
+      return;
+    }
+  } catch (e) {}
+  window.open(url, "_blank");
+}
+
 // Drop-in replacement for Electron's amyMusicDesktop
 export function initDesktopApi() {
   if (typeof window === 'undefined') return;
@@ -23,6 +43,9 @@ export function initDesktopApi() {
         urlStr.includes('music.yandex.ru') || 
         urlStr.includes('api.music.yandex.net') || 
         urlStr.includes('genius.com') || 
+        urlStr.includes('spotify.com') ||
+        urlStr.includes('api.spotify.com') ||
+        urlStr.includes('accounts.spotify.com') ||
         urlStr.includes('api.github.com')) {
       try {
         const options = init ? {
@@ -48,6 +71,7 @@ export function initDesktopApi() {
   };
 
   window.amyMusicDesktop = {
+    openExternal: async (url) => openExternalUrl(url),
     getAutoLaunch: async () => await isEnabled(),
     setAutoLaunch: async (enabled) => {
       if (enabled) await enable();

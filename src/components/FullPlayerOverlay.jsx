@@ -6,6 +6,9 @@ import { TrackContextMenu, TrackMenuButton } from "./TrackContextMenu";
 import { LyricsContextMenu } from "./LyricsContextMenu";
 import { getProfileSettings, saveProfileSettings, subscribeProfileSettings } from "../services/profileSettings";
 import { getYandexCachedArtistAvatar, fetchYandexArtistAvatar } from "../services/yandexMusicApi";
+import "@braccato/core/element";
+import "@braccato/core/styles/variables.css";
+import "@braccato/core/styles/lyrics.css";
 
 const BLANK_DRAG_IMAGE = typeof window !== "undefined" ? (() => {
   const img = new Image();
@@ -260,7 +263,7 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
     clearLyricsCacheForTrack(currentTrack, prefSource);
     setLyricsContextMenu(null);
     setLyricsState({ status: "loading", lines: [], error: "" });
-    getCachedLyricsForTrack(currentTrack, duration, null, prefSource)
+    getCachedLyricsForTrack(currentTrack, duration, null, prefSource, true)
       .then((nextLyricsState) => {
         setLyricsState(nextLyricsState);
       });
@@ -280,8 +283,10 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   const lyricsStageRef = useRef(null);
   const lyricRefs = useRef([]);
   const lyricWheelLockRef = useRef(false);
+  const braccatoRef = useRef(null);
   const [isAutoplay, setIsAutoplay] = useState(true);
   const {
+    audio,
     currentTrack,
     trackPalette,
     isPlaying,
@@ -440,6 +445,66 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
   const shouldShowSidePanel = shouldShowLyricsPanel || shouldShowQueuePanel;
 
   useEffect(() => {
+    if (braccatoRef.current && audio) {
+      braccatoRef.current.source = audio;
+      braccatoRef.current.currentTime = audio.currentTime;
+    }
+  }, [audio, lyricsSettings.textStyle, currentTrack?.id, lyricsSettings.preferredSource]);
+
+  useEffect(() => {
+    if (braccatoRef.current) {
+      if (lyricsState.status === "synced" && lyricsState.lines.length > 0) {
+        braccatoRef.current.lyrics = lyricsState.lines.map((line, i, arr) => {
+          const startTimeMs = (line.time || 0) * 1000;
+          const nextTimeMs = (arr[i+1]?.time || (line.time + 3)) * 1000;
+          const durationMs = Math.max(0, nextTimeMs - startTimeMs);
+          
+          let parts = [];
+          if (line.text.trim().length > 0) {
+            const rawWords = line.text.split(/(\s+)/).filter(w => w.length > 0);
+            
+            // Allow up to 8 seconds max for a line sweep, so it's smooth and not rushed
+            const activeDurationMs = Math.min(durationMs, 8000);
+            
+            const validWords = rawWords.filter(w => w.trim().length > 0);
+            const wordDurationMs = validWords.length > 0 ? activeDurationMs / validWords.length : activeDurationMs;
+            
+            let currentStartTime = startTimeMs;
+            
+            parts = rawWords.map(w => {
+              const isSpace = w.trim().length === 0;
+              const wDur = isSpace ? 0 : wordDurationMs;
+              const hasBracket = w.includes('(') || w.includes(')');
+              
+              const partObj = {
+                startTimeMs: currentStartTime,
+                durationMs: wDur,
+                words: hasBracket ? w.replace(/[()]/g, '').toUpperCase() : w,
+                explicit: hasBracket
+              };
+              currentStartTime += wDur;
+              return partObj;
+            });
+          }
+
+          return {
+            startTimeMs,
+            durationMs,
+            words: line.text || " ",
+            parts: parts.length > 0 ? parts : undefined
+          };
+        });
+        
+        if (audio) {
+          braccatoRef.current.currentTime = audio.currentTime;
+        }
+      } else {
+        braccatoRef.current.lyrics = null;
+      }
+    }
+  }, [lyricsState, lyricsSettings.textStyle, currentTrack?.id, audio, lyricsSettings.preferredSource]);
+
+  useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 10);
     return () => clearTimeout(timer);
   }, []);
@@ -455,6 +520,12 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
 
   const prevTrackIdRef = useRef(currentTrack?.id);
   const skipNextTransitionRef = useRef(false);
+  const prevTextStyleRef = useRef(lyricsSettings.textStyle);
+
+  if (prevTextStyleRef.current !== lyricsSettings.textStyle) {
+    skipNextTransitionRef.current = true;
+    prevTextStyleRef.current = lyricsSettings.textStyle;
+  }
 
   useEffect(() => {
     let isCancelled = false;
@@ -914,15 +985,18 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
         ref={lyricsStageRef}
         data-lyrics-container="true"
         data-no-swipe="true"
-        onWheel={handleLyricsWheel}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        onWheel={lyricsSettings.textStyle === "braccato" ? undefined : handleLyricsWheel}
+        onTouchStart={lyricsSettings.textStyle === "braccato" ? undefined : handleTouchStart}
+        onTouchMove={lyricsSettings.textStyle === "braccato" ? undefined : handleTouchMove}
+        onTouchEnd={lyricsSettings.textStyle === "braccato" ? undefined : handleTouchEnd}
         onContextMenu={(e) => {
           e.preventDefault();
           setLyricsContextMenu({ x: e.clientX, y: e.clientY });
         }}
-        className={isMobileLyrics ? "relative h-full w-full overflow-hidden px-3 touch-pan-y select-none" : "relative h-full w-full overflow-hidden px-12 touch-none select-none"}
+        className={isMobileLyrics 
+          ? `relative h-full w-full px-3 select-none ${lyricsSettings.textStyle === "braccato" ? "overflow-y-auto scrollbar-none" : "overflow-hidden touch-pan-y"}`
+          : `relative h-full w-full px-12 select-none ${lyricsSettings.textStyle === "braccato" ? "overflow-y-auto scrollbar-none" : "overflow-hidden touch-none"}`
+        }
       >
         <div
           key={lyricsSettings.displayMode}
@@ -940,11 +1014,11 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
                 }`
           }
           style={{ 
-            transform: `translateY(${lyricsOffset}px)`,
+            transform: lyricsSettings.textStyle === "braccato" ? "none" : `translateY(${lyricsOffset}px)`,
             transitionDuration: skipNextTransitionRef.current ? "0ms" : undefined
           }}
         >
-          {lyricsState.lines.length > 0 && (() => {
+          {lyricsState.lines.length > 0 && lyricsSettings.textStyle !== "braccato" && (() => {
             const introDist = isBeforeFirstLyric ? 0 : Math.abs(-1 - activeLyricIndex);
             const introBlur = introDist === 0 ? 0 : Math.min(10, introDist * 3);
             const introOpacity = introDist > 3 ? 0 : (introDist === 0 ? 1 : Math.max(0.1, 0.4 - introDist * 0.1));
@@ -968,7 +1042,33 @@ export function FullPlayerOverlay({ appearance, onClose, onOpenArtist, onOpenAlb
               </div>
             );
           })()}
-          {lyricsState.lines.map((line, index) => {
+          {lyricsSettings.textStyle === "braccato" ? (
+            <>
+              <style>{`
+                .blyrics-container .blyrics-explicit {
+                  color: rgba(255, 255, 255, 0.25) !important;
+                  font-size: 0.75em !important;
+                  text-transform: uppercase;
+                  font-style: italic;
+                }
+              `}</style>
+              <braccato-lyrics
+                key={`${currentTrack?.id}-${lyricsSettings?.preferredSource || "auto"}`}
+                ref={braccatoRef}
+                style={{ 
+                  display: "block",
+                  width: "100%",
+                  "--blyrics-lyric-active-color": "white",
+                  "--blyrics-lyric-inactive-color": "rgba(255, 255, 255, 0.3)",
+                  "--blyrics-padding-top": "40vh",
+                  "--blyrics-padding-bottom": "40vh",
+                  "--blyrics-font-size": isMobileLyrics ? "24px" : "36px",
+                  "--blyrics-padding": "1rem"
+                }}
+                class="blyrics-container"
+              ></braccato-lyrics>
+            </>
+          ) : lyricsState.lines.map((line, index) => {
             const activeIndex = isBeforeFirstLyric ? -1 : activeLyricIndex;
             const dist = Math.abs(index - activeIndex);
 

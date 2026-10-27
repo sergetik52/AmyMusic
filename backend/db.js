@@ -70,6 +70,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
         FOREIGN KEY (receiver_id) REFERENCES users(id)
       )
     `);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS lyrics_cache (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        artist TEXT NOT NULL,
+        track TEXT NOT NULL,
+        lrc_text TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(artist, track)
+      )
+    `);
   }
 });
 

@@ -272,14 +272,62 @@ fn resize_overlay_window(app: AppHandle, expanded: bool, scale: f64, position: S
     }
 }
 
+#[command]
+fn get_initial_cli_args() -> Vec<String> {
+    std::env::args().collect()
+}
+
+#[command]
+fn open_in_browser(app: AppHandle, url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("cmd")
+            .args(["/c", "start", "", &url])
+            .creation_flags(0x08000000)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        let _ = &app;
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        use tauri_plugin_shell::ShellExt;
+        app.shell().open(&url, None).map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn register_custom_protocol() {
+    if let Ok(exe_path) = std::env::current_exe() {
+        use std::os::windows::process::CommandExt;
+        let exe_str = exe_path.to_string_lossy().to_string();
+        let cmd = format!("\"{}\" \"%1\"", exe_str);
+        let script = format!(
+            "$path = 'HKCU:\\Software\\Classes\\amymusic'; \
+             New-Item -Path $path -Force | Out-Null; \
+             Set-ItemProperty -Path $path -Name '(default)' -Value 'URL:AmyMusic Protocol'; \
+             Set-ItemProperty -Path $path -Name 'URL Protocol' -Value ''; \
+             New-Item -Path \"$path\\shell\\open\\command\" -Force | Out-Null; \
+             Set-ItemProperty -Path \"$path\\shell\\open\\command\" -Name '(default)' -Value '{}'",
+            cmd.replace("\"", "`\"")
+        );
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .creation_flags(0x08000000)
+            .spawn();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
                 let _ = window.set_focus();
+                let _ = window.emit("cli-command", argv);
             }
         }))
         .manage(Arc::new(Mutex::new(OverlayFilterState::default())))
@@ -357,6 +405,9 @@ pub fn run() {
                 thread::sleep(Duration::from_millis(500));
             });
 
+            #[cfg(target_os = "windows")]
+            register_custom_protocol();
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -380,7 +431,9 @@ pub fn run() {
             broadcast_overlay_cmd,
             request_overlay_state,
             get_running_apps,
-            set_overlay_filter
+            set_overlay_filter,
+            get_initial_cli_args,
+            open_in_browser
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

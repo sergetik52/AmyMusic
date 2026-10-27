@@ -145,25 +145,39 @@ export function LyricsContextMenu({
       <div className="flex flex-col gap-3 px-1 text-[13px] font-semibold mb-4">
         {/* Source Mode */}
         {(() => {
-          const canSwitchSource = settings.preferredSource === "genius" || isKaraokeAvailable;
-          return (hasLyrics || isLoading) && canSwitchSource && (
+          return (hasLyrics || isLoading) && (
               <div className="flex items-center justify-between">
-                <span className="text-white/40">Источник</span>
-                {isLoading ? (
-                  <span className="text-white/60">Загрузка...</span>
-                ) : (
+                <span className="text-white/40 flex items-center gap-2">
+                  Источник
+                  {isLoading && (
+                    <svg className="animate-spin h-3 w-3 text-white/40" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  )}
+                </span>
+                <div className="flex items-center gap-1 bg-white/10 rounded-lg p-0.5">
                   <button 
-                    onClick={() => {
-                      const sources = ["auto", "genius"];
-                      const nextSource = sources[(sources.indexOf(settings.preferredSource || "auto") + 1) % sources.length];
-                      onUpdateSettings({ preferredSource: nextSource });
-                    }}
-                    className="text-white hover:text-white/80 transition"
+                    onClick={() => onUpdateSettings({ preferredSource: "auto" })}
+                    className={`px-2 py-0.5 rounded-md transition-all ${
+                      (settings.preferredSource === "auto" || !settings.preferredSource) 
+                        ? "bg-white/20 text-white shadow-sm" 
+                        : "text-white/50 hover:text-white/80"
+                    }`}
                   >
-                    {(settings.preferredSource === "auto" || !settings.preferredSource) && "Авто"}
-                    {settings.preferredSource === "genius" && "С разбором"}
+                    LRCLib
                   </button>
-                )}
+                  <button 
+                    onClick={() => onUpdateSettings({ preferredSource: "genius" })}
+                    className={`px-2 py-0.5 rounded-md transition-all ${
+                      settings.preferredSource === "genius" 
+                        ? "bg-white/20 text-white shadow-sm" 
+                        : "text-white/50 hover:text-white/80"
+                    }`}
+                  >
+                    Genius
+                  </button>
+                </div>
               </div>
             );
         })()}
@@ -184,15 +198,17 @@ export function LyricsContextMenu({
           <span className="text-white/40">Стиль текста</span>
           <button 
             onClick={() => {
-              const styles = ["normal", "blur", "scale"];
-              const nextStyle = styles[(styles.indexOf(settings.textStyle) + 1) % styles.length];
+              const currentStyle = settings.textStyle || "blur";
+              const styles = ["normal", "blur", "scale", "braccato"];
+              const nextStyle = styles[(styles.indexOf(currentStyle) + 1) % styles.length];
               onUpdateSettings({ textStyle: nextStyle });
             }}
             className="text-white hover:text-white/80 transition"
           >
+            {(!settings.textStyle || settings.textStyle === "blur") && "Размытие"}
             {settings.textStyle === "normal" && "Обычный"}
-            {settings.textStyle === "blur" && "Размытие"}
             {settings.textStyle === "scale" && "Масштаб"}
+            {settings.textStyle === "braccato" && "Braccato"}
           </button>
         </div>
 

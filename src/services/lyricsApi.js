@@ -194,6 +194,26 @@ async function fetchFromLRCLIB(title, artist, duration, signature, signal) {
   return null;
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 4000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  
+  const originalSignal = options.signal;
+  if (originalSignal) {
+      originalSignal.addEventListener('abort', () => controller.abort());
+      if (originalSignal.aborted) controller.abort();
+  }
+
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (err) {
+    clearTimeout(id);
+    throw err;
+  }
+}
+
 // ------------------------------------------------
 // Netease Fetcher
 // ------------------------------------------------
@@ -205,7 +225,7 @@ async function fetchFromNetease(title, artist, duration, signal) {
     try {
       // Search track
       const searchUrl = `${proxy}/search?keywords=${encodeURIComponent(q)}&type=1&limit=5`;
-      const searchRes = await fetch(searchUrl, { signal }).then(r => r.json());
+      const searchRes = await fetchWithTimeout(searchUrl, { signal }, 3500).then(r => r.json());
       const songs = searchRes?.result?.songs || [];
       if (!songs.length) continue;
 
@@ -231,7 +251,7 @@ async function fetchFromNetease(title, artist, duration, signal) {
       
       // Fetch lyric
       const lyricUrl = `${proxy}/lyric?id=${songId}`;
-      const lyricRes = await fetch(lyricUrl, { signal }).then(r => r.json());
+      const lyricRes = await fetchWithTimeout(lyricUrl, { signal }, 3500).then(r => r.json());
       
       const syncedLyrics = lyricRes?.lrc?.lyric || "";
       if (syncedLyrics && !syncedLyrics.includes("Pure music")) {
@@ -330,25 +350,35 @@ async function fetchFromGenius(title, signature, duration, signal) {
   for (const q of queryCandidates) {
     try {
       const searchUrl = `${baseUrl}/api/search/multi?per_page=5&q=${encodeURIComponent(q)}`;
-      const searchRes = await fetch(searchUrl, { signal }).then((r) => r.json());
+      const searchRes = await fetchWithTimeout(searchUrl, { signal }, 3500).then((r) => r.json());
 
       const songSection = searchRes?.response?.sections?.find((s) => s.type === "song");
       const hits = songSection?.hits || [];
       if (!hits.length) continue;
 
-      for (const hit of hits.slice(0, 3)) {
+      const hitPromises = hits.slice(0, 3).map(async (hit) => {
         const geniusUrl = hit.result?.url;
         const songId = hit.result?.id;
-        if (!geniusUrl) continue;
+        if (!geniusUrl) return null;
+        
+        // Skip translations/romanized versions unless the original title explicitly asks for them
+        const hitTitleLower = (hit.result?.title || "").toLowerCase();
+        const originalTitleLower = (title || "").toLowerCase();
+        const isTranslation = hitTitleLower.includes("translation") || hitTitleLower.includes("romanized") || hitTitleLower.includes("traduction") || hitTitleLower.includes("traducción");
+        const isOriginalAskingForTranslation = originalTitleLower.includes("translation") || originalTitleLower.includes("romanized");
+        
+        if (isTranslation && !isOriginalAskingForTranslation) {
+          return null;
+        }
 
         const proxiedUrl = geniusUrl.replace(/^https?:\/\/genius\.com/, baseUrl);
-        const html = await fetch(proxiedUrl, { signal }).then((r) => r.text());
+        const html = await fetchWithTimeout(proxiedUrl, { signal }, 3500).then((r) => r.text());
 
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, "text/html");
         const containerNodes = doc.querySelectorAll('[data-lyrics-container="true"]');
 
-        if (!containerNodes || !containerNodes.length) continue;
+        if (!containerNodes || !containerNodes.length) return null;
 
         const annotationIds = new Set();
 
@@ -385,13 +415,13 @@ async function fetchFromGenius(title, signature, duration, signal) {
           .replace(/&[a-z]+;/g, "")
           .trim();
 
-        if (!plainLyrics) continue;
+        if (!plainLyrics) return null;
 
         let annotations = {};
         if (songId && annotationIds.size > 0) {
           try {
             const refUrl = `${baseUrl}/api/referents?song_id=${songId}&per_page=50&text_format=html`;
-            const refRes = await fetch(refUrl, { signal }).then((r) => r.json());
+            const refRes = await fetchWithTimeout(refUrl, { signal }, 3500).then((r) => r.json());
             const referents = refRes?.response?.referents || [];
             for (const ref of referents) {
               const refId = String(ref.id);
@@ -432,6 +462,13 @@ async function fetchFromGenius(title, signature, duration, signal) {
           duration,
           "Genius"
         );
+      });
+
+      const settledResults = await Promise.allSettled(hitPromises);
+      for (const res of settledResults) {
+        if (res.status === 'fulfilled' && res.value) {
+          return res.value;
+        }
       }
     } catch (e) {
       console.warn(`Genius fetch failed for query "${q}"`, e);
@@ -444,7 +481,7 @@ async function fetchFromGenius(title, signature, duration, signal) {
 // ------------------------------------------------
 // Main Aggregator Fetch
 // ------------------------------------------------
-export async function fetchLyricsForTrack(track, signal, preferredSource = "auto") {
+export async function fetchLyricsForTrack(track, signal, preferredSource = "auto", forceRefresh = false) {
   const signature = getLyricsSignature(track);
   const duration = Math.round(track?.duration || signature.duration || 0);
   const title = signature.trackName;
@@ -475,31 +512,81 @@ export async function fetchLyricsForTrack(track, signal, preferredSource = "auto
     return { status: "empty", source: "Karaoke", lines: [] };
   }
 
-  // Auto behavior or fallback if requested source not found
-  const neteaseResult = await fetchFromNetease(title, artist, duration, signal);
-  if (neteaseResult && neteaseResult.status === "synced") {
-      console.log("[Lyrics Aggregator] Found synced lyrics on NetEase");
-      return neteaseResult;
-  }
+  // "auto" mode: Fetch Primary (Backend/LRCLIB/NetEase) and Genius in parallel
+  console.log("[Lyrics Aggregator] Running parallel primary and Genius fetches...");
+  
+  const primaryPromise = (async () => {
+    try {
+      const params = new URLSearchParams({ artist: artist || "", track: title || "" });
+      if (forceRefresh) params.append("refresh", "true");
+      const res = await fetch(`/api/lyrics?${params}`, { signal });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.lrc) {
+          return normalizeLyricsRecord({
+            syncedLyrics: data.lrc.includes('[') ? data.lrc : "",
+            plainLyrics: data.lrc.includes('[') ? "" : data.lrc,
+            trackName: title,
+            artistName: artist,
+            duration: duration
+          }, duration, "Backend");
+        }
+      }
+    } catch (err) { }
+    
+    const [lrclibRes, neteaseRes] = await Promise.allSettled([
+        fetchFromLRCLIB(title, artist, duration, signature, signal),
+        fetchFromNetease(title, artist, duration, signal)
+    ]);
+    
+    const lrclibResult = lrclibRes.status === "fulfilled" ? lrclibRes.value : null;
+    const neteaseResult = neteaseRes.status === "fulfilled" ? neteaseRes.value : null;
 
-  const lrclibResult = await fetchFromLRCLIB(title, artist, duration, signature, signal);
-  if (lrclibResult && lrclibResult.status === "synced") {
-      console.log(`[Lyrics Aggregator] Found synced lyrics on LRCLIB`);
-      return lrclibResult;
-  }
+    if (lrclibResult && lrclibResult.status === "synced") return lrclibResult;
+    if (neteaseResult && neteaseResult.status === "synced") return neteaseResult;
+    if (lrclibResult && lrclibResult.status !== "empty") return lrclibResult;
+    if (neteaseResult && neteaseResult.status !== "empty") return neteaseResult;
+    
+    return null;
+  })();
 
-  const geniusResult = await fetchFromGenius(title, signature, duration, signal);
-  if (geniusResult && geniusResult.status !== "empty") {
-      console.log(`[Lyrics Aggregator] Found plain lyrics on Genius`);
-      return geniusResult;
-  }
+  const geniusPromise = fetchFromGenius(title, signature, duration, signal);
 
-  if (lrclibResult && lrclibResult.status !== "empty") {
-      console.log(`[Lyrics Aggregator] Found plain lyrics on LRCLIB`);
-      return lrclibResult;
+  const [primaryRes, geniusRes] = await Promise.allSettled([primaryPromise, geniusPromise]);
+  
+  const primaryResult = primaryRes.status === "fulfilled" ? primaryRes.value : null;
+  const geniusResult = geniusRes.status === "fulfilled" ? geniusRes.value : null;
+
+  // Pre-cache Genius result if found so switching to it is instant
+  if (geniusResult && geniusResult.status !== "empty" && typeof window !== "undefined") {
+    try {
+      const key = getLyricsCacheKey(track, "genius");
+      localStorage.setItem(`amymusic_lyrics_${key}`, JSON.stringify({
+        status: geniusResult.status,
+        lines: geniusResult.lines || [],
+        source: geniusResult.source,
+        annotations: geniusResult.annotations || {},
+        error: ""
+      }));
+    } catch(e) {}
   }
   
-  if (neteaseResult && neteaseResult.status !== "empty") return neteaseResult;
+  // Also pre-cache Karaoke result if found
+  if (primaryResult && primaryResult.status !== "empty" && typeof window !== "undefined") {
+    try {
+      const key = getLyricsCacheKey(track, "karaoke");
+      localStorage.setItem(`amymusic_lyrics_${key}`, JSON.stringify({
+        status: primaryResult.status,
+        lines: primaryResult.lines || [],
+        source: primaryResult.source,
+        annotations: primaryResult.annotations || {},
+        error: ""
+      }));
+    } catch(e) {}
+  }
+
+  if (primaryResult && primaryResult.status !== "empty") return primaryResult;
+  if (geniusResult && geniusResult.status !== "empty") return geniusResult;
   
   return { status: "empty", source: "Aggregator", lines: [] };
 }
@@ -561,21 +648,26 @@ export function clearLyricsCacheForTrack(track, preferredSource = "auto") {
   }
 }
 
-export function getCachedLyricsForTrack(track, duration, signal, preferredSource = "auto") {
+export function getCachedLyricsForTrack(track, duration, signal, preferredSource = "auto", forceRefresh = false) {
   if (!track || !track.id || track.id === "empty") {
     return Promise.resolve({ status: "empty", lines: [], error: "" });
   }
 
   const key = getLyricsCacheKey(track, preferredSource);
 
+  // If forced refresh, ensure we don't return memory/disk cached versions
+  if (forceRefresh) {
+    clearLyricsCacheForTrack(track, preferredSource);
+  }
+
   // 1. Check RAM Cache
-  if (lyricsRequestCache.has(key)) {
+  if (!forceRefresh && lyricsRequestCache.has(key)) {
     return lyricsRequestCache.get(key);
   }
 
   // 2. Check Disk Cache (LocalStorage)
   const diskCached = loadLyricsFromLocalStorage(key);
-  if (diskCached && diskCached.status !== "empty") {
+  if (!forceRefresh && diskCached && diskCached.status !== "empty") {
       const diskPromise = Promise.resolve(diskCached);
       lyricsRequestCache.set(key, diskPromise);
       return diskPromise;
@@ -588,7 +680,8 @@ export function getCachedLyricsForTrack(track, duration, signal, preferredSource
       duration: track.duration || duration
     },
     signal,
-    preferredSource
+    preferredSource,
+    forceRefresh
   )
     .then((lyrics) => {
       const result = {

@@ -6,6 +6,7 @@ import { useEscapeKey } from "../utils/useEscapeKey";
 import { HorizontalScrollSection } from "./HorizontalScrollSection";
 import { useHorizontalScroll } from "../utils/useHorizontalScroll";
 import { TrackMenuButton } from "./TrackContextMenu";
+import { SpotifyTransferModal } from "./SpotifyTransferModal";
 
 const BLANK_DRAG_IMAGE = typeof window !== "undefined" ? (() => {
   const img = new Image();
@@ -773,6 +774,8 @@ export function CollectionView({ onOpenArtist, onOpenAlbum, initialPlaylistId })
   });
   const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
   const [isAddPlaylistOpen, setIsAddPlaylistOpen] = useState(false);
+  const [isSpotifyModalOpen, setIsSpotifyModalOpen] = useState(false);
+  const [spotifyInitialUrl, setSpotifyInitialUrl] = useState("");
   const [trackWaveLoading, setTrackWaveLoading] = useState(false);
   const fileInputRef = React.useRef(null);
   const mobileLikedScrollRef = useRef(null);
@@ -860,6 +863,15 @@ export function CollectionView({ onOpenArtist, onOpenAlbum, initialPlaylistId })
     setImportStatus("Получение данных из Яндекс Музыки...");
     setImportProgress(10);
     try {
+      if (/spotify\.com|spotify:playlist:/i.test(importUrl)) {
+        setSpotifyInitialUrl(importUrl);
+        setIsSpotifyModalOpen(true);
+        setImportUrl("");
+        setIsImporting(false);
+        setImportStatus("");
+        setImportProgress(0);
+        return;
+      }
       const isYandex = /music\.yandex\.[a-z.]+/i.test(importUrl);
 
       if (isYandex) {
@@ -1172,6 +1184,38 @@ export function CollectionView({ onOpenArtist, onOpenAlbum, initialPlaylistId })
 
         <div className="p-4 md:p-7">
           <div className="max-w-4xl">
+            <div className="mb-6">
+              <h3 className="mb-2.5 text-xs sm:text-sm font-bold text-white/50">Импорт через аккаунт</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setSpotifyInitialUrl("");
+                  setIsSpotifyModalOpen(true);
+                }}
+                className="flex items-center gap-3.5 rounded-2xl border border-[#1DB954]/30 bg-[#1DB954]/10 hover:bg-[#1DB954]/15 px-5 py-3.5 text-left transition active:scale-[0.98] w-full max-w-2xl"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1DB954] text-black shadow-md shadow-[#1DB954]/20">
+                  <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-white flex items-center gap-2">
+                    Перенести из Spotify
+                    <span className="rounded-full bg-[#1DB954]/20 px-2 py-0.5 text-[10px] font-bold text-[#1DB954]">
+                      Авторизация
+                    </span>
+                  </div>
+                  <div className="text-xs text-white/50 truncate">
+                    Перенос ваших плейлистов и любимых треков напрямую в AmyMusic
+                  </div>
+                </div>
+                <svg className="h-5 w-5 text-white/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
+            </div>
+
             <h3 className="mb-2.5 text-xs sm:text-sm font-bold text-white/50">Или перенести по ссылке из Яндекс Музыки</h3>
             <form
               onSubmit={(e) => {
@@ -1220,7 +1264,7 @@ export function CollectionView({ onOpenArtist, onOpenAlbum, initialPlaylistId })
           Лайки, плейлисты и сохранённые альбомы
         </p>
 
-        <div className="flex items-center gap-3 mt-5">
+        <div className="flex items-center gap-3 mt-5 flex-wrap justify-center">
           <button
             type="button"
             onClick={openLikedTracks}
@@ -1229,6 +1273,20 @@ export function CollectionView({ onOpenArtist, onOpenAlbum, initialPlaylistId })
           >
             <img src="/like.svg" alt="" className="h-4 w-4 opacity-80" />
             <span className="text-sm font-bold text-white/80">Мне нравится</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSpotifyInitialUrl("");
+              setIsSpotifyModalOpen(true);
+            }}
+            className="flex items-center gap-2.5 rounded-full bg-[#1DB954]/15 px-5 py-2.5 hover:bg-[#1DB954]/25 active:scale-95 transition border border-[#1DB954]/30 text-[#1DB954]"
+            title="Перенести плейлисты и треки из Spotify"
+          >
+            <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+            </svg>
+            <span className="text-sm font-bold">Импорт из Spotify</span>
           </button>
         </div>
       </div>
@@ -1417,6 +1475,11 @@ export function CollectionView({ onOpenArtist, onOpenAlbum, initialPlaylistId })
           ))}
         </HorizontalScrollSection>
       )}
+      <SpotifyTransferModal
+        isOpen={isSpotifyModalOpen}
+        onClose={() => setIsSpotifyModalOpen(false)}
+        initialUrl={spotifyInitialUrl}
+      />
       </div>
     </div>
   );

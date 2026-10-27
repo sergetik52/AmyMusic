@@ -446,6 +446,51 @@ function createApiProxyPlugin() {
   };
 }
 
+function createSpotifyProxyPlugin() {
+  return {
+    name: "amymusic-spotify-proxy",
+    configureServer(server) {
+      server.middlewares.use("/api/spotify/accounts", async (req, res) => {
+        const upstreamUrl = new URL(req.url || "/", "https://accounts.spotify.com");
+        try {
+          const response = await requestUpstream(upstreamUrl, req, null);
+          res.statusCode = response.statusCode;
+          Object.entries(response.headers).forEach(([key, value]) => {
+            if (!["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+              res.setHeader(key, value);
+            }
+          });
+          res.end(response.body);
+        } catch (error) {
+          console.error("[AmyMusic:spotify-accounts-proxy] failed", error);
+          res.statusCode = 502;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ error: "SPOTIFY_ACCOUNTS_PROXY_FAILED", message: error.message }));
+        }
+      });
+
+      server.middlewares.use("/api/spotify/api", async (req, res) => {
+        const upstreamUrl = new URL(req.url || "/", "https://api.spotify.com");
+        try {
+          const response = await requestUpstream(upstreamUrl, req, null);
+          res.statusCode = response.statusCode;
+          Object.entries(response.headers).forEach(([key, value]) => {
+            if (!["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+              res.setHeader(key, value);
+            }
+          });
+          res.end(response.body);
+        } catch (error) {
+          console.error("[AmyMusic:spotify-api-proxy] failed", error);
+          res.statusCode = 502;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ error: "SPOTIFY_API_PROXY_FAILED", message: error.message }));
+        }
+      });
+    }
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
@@ -454,11 +499,19 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       strictPort: true,
+      open: true,
       watch: {
         ignored: ["**/src-tauri/**"]
       }
     },
-    plugins: [react(), createSoundCloudProxyPlugin(env), createYandexProxyPlugin(), createGeniusProxyPlugin(), createApiProxyPlugin()]
+    plugins: [
+      react(),
+      createSoundCloudProxyPlugin(env),
+      createYandexProxyPlugin(),
+      createGeniusProxyPlugin(),
+      createApiProxyPlugin(),
+      createSpotifyProxyPlugin()
+    ]
   };
 });
 

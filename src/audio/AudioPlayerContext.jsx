@@ -74,8 +74,11 @@ async function getTrackAudioUrl(track, forceFresh = false) {
     track.streamUrl = null;
   }
 
-  if (track.source === "yandex" || String(track.id).startsWith("yandex_") || track.yandexId) {
-    // Force SoundCloud fallback for Yandex tracks as direct streaming from Yandex is disabled
+  if (
+    track.source === "yandex" || String(track.id).startsWith("yandex_") || track.yandexId ||
+    track.source === "spotify" || String(track.id).startsWith("spotify_") || String(track.id).startsWith("spotify-") || track.spotifyId
+  ) {
+    // Force SoundCloud fallback for Yandex and Spotify tracks
     const scStreamUrl = await resolveChartTrackViaSoundCloud(track);
     if (scStreamUrl) {
       track.streamUrl = scStreamUrl;
@@ -2243,6 +2246,25 @@ export function AudioProvider({ children }) {
     });
   }, [currentTrack, showNotification]);
 
+  const addTracksToLiked = useCallback((newTracks) => {
+    const list = (Array.isArray(newTracks) ? newTracks : [newTracks])
+      .map(normalizeStoredTrack)
+      .filter(Boolean);
+    if (!list.length) return;
+
+    setLikedTracks((existing) => {
+      const existingIds = new Set(existing.map((t) => String(t.id)));
+      const toAdd = list.filter((t) => !existingIds.has(String(t.id)));
+      return [...toAdd, ...existing];
+    });
+    setLikedTrackIds((ids) => {
+      const next = new Set(ids);
+      list.forEach((t) => next.add(String(t.id)));
+      return next;
+    });
+    showNotification(`Добавлено ${list.length} треков в Любимые`, "success");
+  }, [showNotification]);
+
   const toggleDislike = useCallback((trackId = currentTrack.id, track = currentTrack) => {
     // If trackId is an event object (e.g. from onClick direct binding), fallback to currentTrack
     const targetId = (trackId && typeof trackId === "object" && (trackId.nativeEvent || trackId.preventDefault)) 
@@ -2898,6 +2920,7 @@ export function AudioProvider({ children }) {
       updateUserPlaylist,
       removeTrackFromUserPlaylist,
       deleteUserPlaylist,
+      addTracksToLiked,
       showNotification,
       openTrackWave,
       contextMenuState,
@@ -2963,6 +2986,7 @@ export function AudioProvider({ children }) {
       updateUserPlaylist,
       removeTrackFromUserPlaylist,
       deleteUserPlaylist,
+      addTracksToLiked,
       userPlaylists,
       volume,
       showNotification,

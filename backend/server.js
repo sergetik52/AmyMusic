@@ -3,6 +3,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('./db');
+const { getLyrics } = require('./parsers');
 
 const app = express();
 app.use(cors());
@@ -219,6 +220,39 @@ app.get('/api/users/privacy', authenticateToken, (req, res) => {
 });
 
 // --- SYNC ROUTES ---
+app.get('/api/lyrics', async (req, res) => {
+  const { artist, track, refresh } = req.query;
+  if (!artist || !track) {
+    return res.status(400).json({ error: 'artist and track are required' });
+  }
+
+  // 1. Check cache (skip if refresh=true)
+  const checkCache = () => new Promise((resolve) => {
+    if (refresh === 'true') return resolve(null);
+    db.get(`SELECT lrc_text FROM lyrics_cache WHERE artist = ? AND track = ?`, [artist, track], (err, row) => {
+      resolve(row && row.lrc_text ? row.lrc_text : null);
+    });
+  });
+
+  const cachedLrc = await checkCache();
+  if (cachedLrc) {
+    return res.json({ source: 'cache', lrc: cachedLrc });
+  }
+
+  // 2. Fetch from parsers
+  const lrc = await getLyrics(artist, track);
+  
+  if (lrc) {
+    // 3. Cache it
+    db.run(`INSERT INTO lyrics_cache (artist, track, lrc_text) VALUES (?, ?, ?)
+            ON CONFLICT(artist, track) DO UPDATE SET lrc_text = excluded.lrc_text, updated_at = CURRENT_TIMESTAMP`,
+            [artist, track, lrc], () => {});
+    return res.json({ source: 'parser', lrc });
+  } else {
+    return res.status(404).json({ error: 'Lyrics not found' });
+  }
+});
+
 app.get('/api/sync/collections', authenticateToken, (req, res) => {
   db.get(`SELECT data FROM collections WHERE user_id = ?`, [req.user.id], (err, row) => {
     if (err) return res.status(500).json({ error: 'Database error' });

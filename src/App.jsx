@@ -55,6 +55,8 @@ import { getCachedLyricsForTrack, getActiveLyricIndex } from "./services/lyricsA
 import { useEscapeKey } from "./utils/useEscapeKey";
 import { MobileLayout } from "./mobile/MobileLayout";
 import { getPinnedPlaylists } from "./components/CollectionView";
+import { SpotifyTransferModal } from "./components/SpotifyTransferModal";
+import { handleSpotifyCallback } from "./services/spotifyApi";
 import "./main.css";
 
 function useIsMobile() {
@@ -3065,7 +3067,7 @@ function WindowControls() {
 }
 
 export default function App() {
-  const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, contextMenuState, closeContextMenu, openContextMenu } = useAudioPlayer();
+  const { isFullOpen, setIsFullOpen, isEqualizerOpen, setIsEqualizerOpen, contextMenuState, closeContextMenu, openContextMenu, togglePlay, next, previous } = useAudioPlayer();
   const [activeTab, setActiveTab] = useState("wave");
   const [collectionInitialPlaylistId, setCollectionInitialPlaylistId] = useState(null);
   const [previousTab, setPreviousTab] = useState("wave");
@@ -3074,6 +3076,45 @@ export default function App() {
   const [waveRequestId, setWaveRequestId] = useState(0);
   const [apiSettingsVersion, setApiSettingsVersion] = useState(0);
   const [isMiniKaraokeOpen, setIsMiniKaraokeOpen] = useState(false);
+  const [isSpotifyModalOpen, setIsSpotifyModalOpen] = useState(false);
+  const [spotifyInitialUrl, setSpotifyInitialUrl] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Check if opened as popup callback
+    const search = window.location.search;
+    if (search && search.includes("code=")) {
+      const params = new URLSearchParams(search);
+      const code = params.get("code");
+      const state = params.get("state") || "";
+
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage({ type: "SPOTIFY_AUTH_CALLBACK", code, state }, "*");
+        window.close();
+        return;
+      }
+
+      // If main window direct redirect
+      if (code) {
+        handleSpotifyCallback(code, state)
+          .then(() => {
+            window.history.replaceState({}, document.title, window.location.pathname);
+            setIsSpotifyModalOpen(true);
+          })
+          .catch((err) => {
+            console.error("Spotify direct callback failed", err);
+          });
+      }
+    }
+
+    const openListener = (e) => {
+      setSpotifyInitialUrl(e.detail?.url || "");
+      setIsSpotifyModalOpen(true);
+    };
+    window.addEventListener("amymusic:open-spotify-transfer", openListener);
+    return () => window.removeEventListener("amymusic:open-spotify-transfer", openListener);
+  }, []);
   const profileSettings = getProfileSettings();
   const navigationPosition = ["left", "top", "right"].includes(profileSettings?.customization?.navigationPosition)
     ? profileSettings.customization.navigationPosition
@@ -3104,6 +3145,51 @@ export default function App() {
   };
 
   useEffect(() => subscribeLocalProfile(setLocalProfile), []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || (!window.__TAURI_INTERNALS__ && !window.amyMusicDesktop)) return;
+    let unlisten;
+    const setupCli = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const { listen } = await import('@tauri-apps/api/event');
+        
+        const handleCliArgs = (args) => {
+          if (!Array.isArray(args) || args.length < 2) return;
+          for (let i = 1; i < args.length; i++) {
+            const raw = args[i];
+            if (typeof raw === "string" && (raw.includes("spotify-callback") || raw.startsWith("amymusic://"))) {
+              console.log("[Spotify DeepLink] Received args:", raw);
+              window.dispatchEvent(new CustomEvent("amymusic:spotify-deeplink", { detail: raw }));
+              return;
+            }
+          }
+          const cmd = args[args.length - 1];
+          if (!cmd) return;
+          const lowerCmd = cmd.toLowerCase();
+          
+          if (lowerCmd === 'play' || lowerCmd === 'pause' || lowerCmd === 'playpause') {
+            togglePlay();
+          } else if (lowerCmd === 'next') {
+            next();
+          } else if (lowerCmd === 'prev' || lowerCmd === 'previous') {
+            previous();
+          }
+        };
+
+        const args = await invoke('get_initial_cli_args');
+        handleCliArgs(args);
+
+        unlisten = await listen('cli-command', (event) => {
+          handleCliArgs(event.payload);
+        });
+      } catch (e) {
+        console.warn('Failed to setup CLI args listener', e);
+      }
+    };
+    setupCli();
+    return () => { if (unlisten) unlisten(); };
+  }, [togglePlay, next, previous]);
   useEffect(() => subscribeProfileSettings(setMobileProfileSettings), []);
 
   useEffect(() => {
@@ -3332,6 +3418,11 @@ export default function App() {
           onClose={closeContextMenu}
         />
       )}
+      <SpotifyTransferModal
+        isOpen={isSpotifyModalOpen}
+        onClose={() => setIsSpotifyModalOpen(false)}
+        initialUrl={spotifyInitialUrl}
+      />
 
     </main>
   );

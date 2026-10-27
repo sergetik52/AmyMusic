@@ -78,6 +78,14 @@ export function getProfileSettings() {
     customization: {
       ...defaultProfileSettings.customization,
       ...(stored?.customization || {})
+    },
+    lyricsSettings: {
+      ...defaultProfileSettings.lyricsSettings,
+      ...(stored?.lyricsSettings || {})
+    },
+    appearance: {
+      ...defaultProfileSettings.appearance,
+      ...(stored?.appearance || {})
     }
   };
 }
@@ -135,6 +143,14 @@ export function saveProfileSettings(settings, silent = false) {
     globalBinds: {
       ...defaultProfileSettings.globalBinds,
       ...(settings?.globalBinds || {})
+    },
+    lyricsSettings: {
+      ...defaultProfileSettings.lyricsSettings,
+      ...(settings?.lyricsSettings || {})
+    },
+    appearance: {
+      ...defaultProfileSettings.appearance,
+      ...(settings?.appearance || {})
     }
   };
 
